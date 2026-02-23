@@ -1,0 +1,31 @@
+repos:
+  # Formateador de Python
+  - repo: https://github.com/psf/black
+    rev: 23.3.0
+    hooks:
+      - id: black
+        language_version: python3
+
+  # Seguridad: evita subir secretos
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        stages: [pre-commit]
+
+  # Formateador de Markdown (docs)
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.6.0
+    hooks:
+      - id: prettier
+        types_or: [markdown, javascript, json, yaml]
+
+  # Checks automáticos de commit
+  - repo: local
+    hooks:
+      - id: commitlint
+        name: Conventional Commit lint
+        entry: npx --no-install commitlint --edit $1
+        language: node
+        stages: [commit-msg]
+        pass_filenames: false
