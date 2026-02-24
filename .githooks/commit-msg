@@ -2,25 +2,25 @@
 # commit-msg hook para validar Conventional Commits
 # Se ejecuta automáticamente cuando haces `git commit`
 
-# Leer el mensaje del commit (archivo temporal pasado por git)
+# Read the commit message (temporal file passed by git)
 commit_message=$(cat "$1")
 
-# Ignorar commits automáticos y merges/reverts
+# Ignore: merge commits, revert commits, pull request merges and fixup/squash commits
 case "$commit_message" in
   Merge\ *|Revert\ *|Pull\ *|fixup\!*|squash\!*)
     exit 0
     ;;
 esac
 
-# Expresión regular del formato esperado
+# Regular expression for the expected format
 conventional_regex='^(feat|fix|docs|style|refactor|test|chore)(\([a-z0-9_\-]+\))?: .{1,}$'
 
-# Validar
+# Validate
 if echo "$commit_message" | grep -Eq "$conventional_regex"; then
-    echo "✅ Commit message cumple con Conventional Commits."
+    echo "✅ Commit message follows Conventional Commits."
     exit 0
 else
-    echo "❌ Commit message inválido."
-    echo "El formato correcto es: type(scope): descripción — ej: feat(auth): añadir login" >&2
+    echo "❌ Invalid commit message."
+    echo "Correct format: type(scope): description — e.g.: feat(auth): add login" >&2
     exit 1
 fi

@@ -52,3 +52,18 @@ else
 	echo "No black targets found; skipping black." >&2
 fi
 
+# flake8: same strategy as isort and black
+if [ -n "$TARGETS" ]; then
+	if [ -n "$PYTHON" ] && "$PYTHON" -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('flake8') else 1)" 2>/dev/null; then
+		echo "Running flake8 on$TARGETS..."
+		"$PYTHON" -m flake8 $TARGETS || { echo "flake8 failed. Aborting commit." >&2; exit 1; }
+	elif command -v flake8 >/dev/null 2>&1; then
+		echo "Running flake8 on$TARGETS..."
+		flake8 $TARGETS || { echo "flake8 failed. Aborting commit." >&2; exit 1; }
+	else
+		echo "flake8 not found in venv or PATH; skipping flake8." >&2
+	fi
+else
+	echo "No flake8 targets found; skipping flake8." >&2
+fi
+
