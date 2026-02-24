@@ -13,7 +13,7 @@ case "$commit_message" in
 esac
 
 # Regular expression for the expected format
-conventional_regex='^(feat|fix|docs|style|refactor|test|chore)(\([a-z0-9_\-]+\))?: .{1,}$'
+conventional_regex='^(feat|fix|docs|style|refactor|test|chore|ci)(\([a-z0-9_\-]+\))?: .{1,}$'
 
 # Validate
 if echo "$commit_message" | grep -Eq "$conventional_regex"; then
