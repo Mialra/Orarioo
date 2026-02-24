@@ -1,28 +1,54 @@
 #!/bin/sh
-#
-# An example hook script to verify what is about to be committed.
-# Called by "git commit" with no arguments.  The hook should
-# exit with non-zero status after issuing an appropriate message if
-# it wants to stop the commit.
-#
-# To enable this hook, rename this file to "pre-commit".
+# Minimal pre-commit hook: run `isort` and `black` on existing targets.
+# Prefers the project's `venv` Python when available and skips tools
+# that are not installed.
 
-# Run import sorter and formatter on project folders before commit.
-# If these tools fail, abort the commit.
-
-if command -v isort >/dev/null 2>&1
-then
-	echo "Running isort on app rosemary core..."
-	isort app rosemary core || { echo "isort failed. Aborting commit." >&2; exit 1; }
+# locate python in venv, if present
+if [ -x "./venv/Scripts/python.exe" ]; then
+	PYTHON=./venv/Scripts/python.exe
+elif [ -x "./venv/bin/python" ]; then
+	PYTHON=./venv/bin/python
+elif command -v python >/dev/null 2>&1; then
+	PYTHON=python
 else
-	echo "isort not found in PATH; skipping isort." >&2
+	PYTHON=
 fi
 
-if command -v black >/dev/null 2>&1
-then
-	echo "Running black on app rosemary core..."
-	black app rosemary core || { echo "black failed. Aborting commit." >&2; exit 1; }
+# determine targets (only include paths that exist)
+TARGETS=""
+for p in app rosemary core main src; do
+	if [ -e "$p" ]; then
+		TARGETS="$TARGETS $p"
+	fi
+done
+
+if [ -n "$TARGETS" ]; then
+	# isort: prefer venv module, otherwise system `isort` command
+	if [ -n "$PYTHON" ] && "$PYTHON" -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('isort') else 1)" 2>/dev/null; then
+		echo "Running isort on$TARGETS..."
+		"$PYTHON" -m isort $TARGETS || { echo "isort failed. Aborting commit." >&2; exit 1; }
+	elif command -v isort >/dev/null 2>&1; then
+		echo "Running isort on$TARGETS..."
+		isort $TARGETS || { echo "isort failed. Aborting commit." >&2; exit 1; }
+	else
+		echo "isort not found in venv or PATH; skipping isort." >&2
+	fi
 else
-	echo "black not found in PATH; skipping black." >&2
+	echo "No isort targets found; skipping isort." >&2
+fi
+
+# black: same strategy as isort
+if [ -n "$TARGETS" ]; then
+	if [ -n "$PYTHON" ] && "$PYTHON" -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('black') else 1)" 2>/dev/null; then
+		echo "Running black on$TARGETS..."
+		"$PYTHON" -m black $TARGETS || { echo "black failed. Aborting commit." >&2; exit 1; }
+	elif command -v black >/dev/null 2>&1; then
+		echo "Running black on$TARGETS..."
+		black $TARGETS || { echo "black failed. Aborting commit." >&2; exit 1; }
+	else
+		echo "black not found in venv or PATH; skipping black." >&2
+	fi
+else
+	echo "No black targets found; skipping black." >&2
 fi
 
