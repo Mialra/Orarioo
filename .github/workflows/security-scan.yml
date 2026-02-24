@@ -2,7 +2,7 @@
 # Security Scan Workflow
 # This workflow runs security checks including dependency scanning and secrets detection.
 # It runs on every push to develop and main branches.
-# Runs on: ubuntu-latest
+# Runs on: ubuntu-latest.
 # ----------------------------------------------------------------------------
 
 name: Security Scan
@@ -11,7 +11,7 @@ permissions:
   contents: read
   security-events: write
   actions: read
-  
+
 on:
   push:
     branches:
