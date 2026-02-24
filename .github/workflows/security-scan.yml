@@ -45,7 +45,7 @@ jobs:
 
       # Step 4: Run Safety to check for known vulnerabilities in dependencies
       - name: Check dependencies with Safety
-        run: safety check --json --file requirements.txt --ignore=low
+        run: safety scan --json --file requirements.txt --ignore=low
 
       # Step 5: Run Bandit for static security analysis
       - name: Run Bandit for security issues
