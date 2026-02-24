@@ -1,0 +1,69 @@
+#!/bin/sh
+# Minimal pre-commit hook: run `isort` and `black` on existing targets.
+# Prefers the project's `venv` Python when available and skips tools
+# that are not installed.
+
+# locate python in venv, if present
+if [ -x "./venv/Scripts/python.exe" ]; then
+	PYTHON=./venv/Scripts/python.exe
+elif [ -x "./venv/bin/python" ]; then
+	PYTHON=./venv/bin/python
+elif command -v python >/dev/null 2>&1; then
+	PYTHON=python
+else
+	PYTHON=
+fi
+
+# determine targets (only include paths that exist)
+TARGETS=""
+for p in app rosemary core main src; do
+	if [ -e "$p" ]; then
+		TARGETS="$TARGETS $p"
+	fi
+done
+
+if [ -n "$TARGETS" ]; then
+	# isort: prefer venv module, otherwise system `isort` command
+	if [ -n "$PYTHON" ] && "$PYTHON" -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('isort') else 1)" 2>/dev/null; then
+		echo "Running isort on$TARGETS..."
+		"$PYTHON" -m isort $TARGETS || { echo "isort failed. Aborting commit." >&2; exit 1; }
+	elif command -v isort >/dev/null 2>&1; then
+		echo "Running isort on$TARGETS..."
+		isort $TARGETS || { echo "isort failed. Aborting commit." >&2; exit 1; }
+	else
+		echo "isort not found in venv or PATH; skipping isort." >&2
+	fi
+else
+	echo "No isort targets found; skipping isort." >&2
+fi
+
+# black: same strategy as isort
+if [ -n "$TARGETS" ]; then
+	if [ -n "$PYTHON" ] && "$PYTHON" -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('black') else 1)" 2>/dev/null; then
+		echo "Running black on$TARGETS..."
+		"$PYTHON" -m black $TARGETS || { echo "black failed. Aborting commit." >&2; exit 1; }
+	elif command -v black >/dev/null 2>&1; then
+		echo "Running black on$TARGETS..."
+		black $TARGETS || { echo "black failed. Aborting commit." >&2; exit 1; }
+	else
+		echo "black not found in venv or PATH; skipping black." >&2
+	fi
+else
+	echo "No black targets found; skipping black." >&2
+fi
+
+# flake8: same strategy as isort and black
+if [ -n "$TARGETS" ]; then
+	if [ -n "$PYTHON" ] && "$PYTHON" -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('flake8') else 1)" 2>/dev/null; then
+		echo "Running flake8 on$TARGETS..."
+		"$PYTHON" -m flake8 $TARGETS || { echo "flake8 failed. Aborting commit." >&2; exit 1; }
+	elif command -v flake8 >/dev/null 2>&1; then
+		echo "Running flake8 on$TARGETS..."
+		flake8 $TARGETS || { echo "flake8 failed. Aborting commit." >&2; exit 1; }
+	else
+		echo "flake8 not found in venv or PATH; skipping flake8." >&2
+	fi
+else
+	echo "No flake8 targets found; skipping flake8." >&2
+fi
+
