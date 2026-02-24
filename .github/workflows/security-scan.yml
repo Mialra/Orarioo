@@ -41,11 +41,11 @@ jobs:
       - name: Install security tools
         run: |
           python -m pip install --upgrade pip
-          pip install safety bandit
+          pip install pip-audit bandit
 
-      # Step 4: Run Safety to check for known vulnerabilities in dependencies
-      - name: Check dependencies with Safety
-        run: safety scan --json --file requirements.txt --ignore=low
+      # Step 4: Run pip-audit for dependency vulnerability scanning
+      - name: Run dependency vulnerability scan
+        run: pip-audit -r requirements.txt
 
       # Step 5: Run Bandit for static security analysis
       - name: Run Bandit for security issues
