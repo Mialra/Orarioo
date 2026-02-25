@@ -1,0 +1,52 @@
+# ----------------------------------------------------------------------------
+# Python Lint Workflow
+# This workflow runs linting and code style checks on develop and main branches.
+# It ensures the codebase follows PEP8, Black formatting, and import ordering.
+# Runs on: ubuntu-latest with Python 3.12
+# ----------------------------------------------------------------------------
+
+name: Python Lint
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+    branches:
+      - develop
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python environment (3.12)
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      # Step 3: Install linting and formatting tools
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 flake8-pyproject black isort
+
+      # Step 4: Run flake8 for PEP8 linting
+      - name: Lint with flake8
+        run: flake8 src/app src/main
+
+      # Step 5: Verify code formatting with Black
+      - name: Check formatting with black
+        run: black --check src/app src/main
+
+      # Step 6: Verify import ordering with isort
+      - name: Check import order with isort
+        run: isort --check-only src/app src/main
