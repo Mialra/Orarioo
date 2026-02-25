@@ -50,7 +50,7 @@ jobs:
 
       # Step 4: Run pip-audit for dependency vulnerability scanning
       - name: Run dependency vulnerability scan
-        run: pip-audit -r requirements.txt
+        run: pip-audit -r .\src\requirements.txt
 
       # Step 5: Run Bandit for static security analysis
       - name: Run Bandit for security issues
