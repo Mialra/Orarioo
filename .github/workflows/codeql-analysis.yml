@@ -10,19 +10,11 @@
 name: CodeQL Analysis
 
 on:
-  push:
-    branches:
-      - develop
-      - main
-    paths:
-      - 'src/**'
-      - '.github/workflows/codeql-analysis.yml'
   pull_request:
     branches:
       - develop
       - main
   schedule:
-    # Run CodeQL analysis weekly on Monday at 2 AM UTC
     - cron: '0 2 * * 1'
 
 jobs:
