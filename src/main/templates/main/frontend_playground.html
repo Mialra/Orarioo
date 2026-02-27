@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orarioo API Playground</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 980px; margin: 24px auto; padding: 0 12px; }
+        h1 { margin-bottom: 8px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+        .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; }
+        label { display: block; margin-top: 8px; font-size: 0.9rem; }
+        input, select, button, textarea { width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box; }
+        button { cursor: pointer; }
+        .row { display: flex; gap: 8px; }
+        .row > * { flex: 1; }
+        pre { background: #111; color: #eee; padding: 10px; border-radius: 8px; overflow: auto; min-height: 140px; }
+        small { color: #555; }
+    </style>
+</head>
+<body>
+    <h1>Orarioo API Playground</h1>
+    <small>Basic frontend to test signup, login, me, users list and password changes.</small>
+
+    <div class="grid">
+        <section class="card">
+            <h3>Sign Up</h3>
+            <label>Given name<input id="suGivenName" value="Test" /></label>
+            <label>Family name<input id="suFamilyName" value="User" /></label>
+            <label>Email<input id="suEmail" type="email" value="test@example.com" /></label>
+            <label>Role
+                <select id="suRole">
+                    <option value="director">director</option>
+                    <option value="administrator">administrator</option>
+                </select>
+            </label>
+            <label>Password<input id="suPassword" type="password" value="TestPassword123!" /></label>
+            <label>Confirm password<input id="suPasswordConfirm" type="password" value="TestPassword123!" /></label>
+            <button id="signupBtn">Sign up</button>
+        </section>
+
+        <section class="card">
+            <h3>Login</h3>
+            <label>Email<input id="loginEmail" type="email" value="test@example.com" /></label>
+            <label>Password<input id="loginPassword" type="password" value="TestPassword123!" /></label>
+            <button id="loginBtn">Login</button>
+            <div class="row" style="margin-top:8px;">
+                <button id="logoutBtn">Logout</button>
+                <button id="refreshBtn">Refresh token</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Authenticated actions</h3>
+            <div class="row">
+                <button id="meBtn">GET /me</button>
+                <button id="usersBtn">GET /users</button>
+            </div>
+            <label style="margin-top:8px;">Current password<input id="cpCurrent" type="password" /></label>
+            <label>New password<input id="cpNew" type="password" /></label>
+            <label>Confirm new password<input id="cpConfirm" type="password" /></label>
+            <button id="changePasswordBtn">Change password</button>
+        </section>
+    </div>
+
+    <section class="card" style="margin-top:12px;">
+        <h3>Tokens</h3>
+        <label>Access token<textarea id="accessToken" rows="4" readonly></textarea></label>
+        <label>Refresh token<textarea id="refreshToken" rows="4" readonly></textarea></label>
+    </section>
+
+    <section class="card" style="margin-top:12px;">
+        <h3>Response</h3>
+        <pre id="output">Ready.</pre>
+    </section>
+
+    <script>
+        const accessKey = "orarioo_access";
+        const refreshKey = "orarioo_refresh";
+
+        const output = document.getElementById("output");
+        const accessField = document.getElementById("accessToken");
+        const refreshField = document.getElementById("refreshToken");
+
+        const getAccess = () => localStorage.getItem(accessKey) || "";
+        const getRefresh = () => localStorage.getItem(refreshKey) || "";
+
+        const syncTokenFields = () => {
+            accessField.value = getAccess();
+            refreshField.value = getRefresh();
+        };
+
+        const saveTokens = (access, refresh) => {
+            if (access) localStorage.setItem(accessKey, access);
+            if (refresh) localStorage.setItem(refreshKey, refresh);
+            syncTokenFields();
+        };
+
+        const clearTokens = () => {
+            localStorage.removeItem(accessKey);
+            localStorage.removeItem(refreshKey);
+            syncTokenFields();
+        };
+
+        const show = (title, data) => {
+            output.textContent = `${title}\n\n${JSON.stringify(data, null, 2)}`;
+        };
+
+        async function api(path, method = "GET", body = null, auth = false) {
+            const headers = { "Content-Type": "application/json" };
+            if (auth && getAccess()) headers["Authorization"] = `Bearer ${getAccess()}`;
+
+            const response = await fetch(`/api/${path}`, {
+                method,
+                headers,
+                body: body ? JSON.stringify(body) : null,
+            });
+            let data;
+            try {
+                data = await response.json();
+            } catch {
+                data = { detail: "No JSON response" };
+            }
+            return { ok: response.ok, status: response.status, data };
+        }
+
+        document.getElementById("signupBtn").onclick = async () => {
+            const payload = {
+                given_name: document.getElementById("suGivenName").value,
+                family_name: document.getElementById("suFamilyName").value,
+                email: document.getElementById("suEmail").value,
+                role: document.getElementById("suRole").value,
+                password: document.getElementById("suPassword").value,
+                password_confirm: document.getElementById("suPasswordConfirm").value,
+            };
+            const result = await api("signup/", "POST", payload);
+            if (result.ok) saveTokens(result.data.access, result.data.refresh);
+            show(`POST /api/signup/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("loginBtn").onclick = async () => {
+            const payload = {
+                email: document.getElementById("loginEmail").value,
+                password: document.getElementById("loginPassword").value,
+            };
+            const result = await api("login/", "POST", payload);
+            if (result.ok) saveTokens(result.data.access, result.data.refresh);
+            show(`POST /api/login/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("refreshBtn").onclick = async () => {
+            const refresh = getRefresh();
+            const result = await api("token/refresh/", "POST", { refresh });
+            if (result.ok) saveTokens(result.data.access, refresh);
+            show(`POST /api/token/refresh/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("meBtn").onclick = async () => {
+            const result = await api("users/me/", "GET", null, true);
+            show(`GET /api/users/me/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("usersBtn").onclick = async () => {
+            const result = await api("users/", "GET", null, true);
+            show(`GET /api/users/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("changePasswordBtn").onclick = async () => {
+            const payload = {
+                current_password: document.getElementById("cpCurrent").value,
+                new_password: document.getElementById("cpNew").value,
+                password_confirm: document.getElementById("cpConfirm").value,
+            };
+            const result = await api("users/change_password/", "POST", payload, true);
+            if (result.ok && result.data.access && result.data.refresh) {
+                saveTokens(result.data.access, result.data.refresh);
+            }
+            show(`POST /api/users/change_password/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("logoutBtn").onclick = async () => {
+            const refresh = getRefresh();
+            const result = await api("users/logout/", "POST", { refresh }, true);
+            if (result.ok) clearTokens();
+            show(`POST /api/users/logout/ (${result.status})`, result.data);
+        };
+
+        syncTokenFields();
+    </script>
+</body>
+</html>

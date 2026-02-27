@@ -1,0 +1,222 @@
+from django.utils.translation import gettext_lazy as _
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
+
+from user.models import User
+from user.serializers import (
+    LoginSerializer,
+    UserChangePasswordSerializer,
+    UserCreateSerializer,
+    UserSerializer,
+    UserUpdateSerializer,
+)
+
+
+class IsAdministrator(permissions.BasePermission):
+    """Permission to check if user is an administrator"""
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.is_administrator()
+        )
+
+
+class IsAdministratorOrSelf(permissions.BasePermission):
+    """Permission for administrators or the user themselves to access"""
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated)
+
+    def has_object_permission(self, request, view, obj):
+        return request.user.is_administrator() or obj.id == request.user.id
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """Custom view to obtain JWT tokens"""
+
+    serializer_class = LoginSerializer
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.validated_data["user"]
+        refresh = RefreshToken.for_user(user)
+
+        return Response(
+            {
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "user": UserSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing users.
+
+    Available operations:
+    - GET /api/users/ - List all users
+    - POST /api/users/ - Create new user
+    - GET /api/users/{id}/ - Get user details
+    - PUT /api/users/{id}/ - Update complete user
+    - PATCH /api/users/{id}/ - Partially update
+    - DELETE /api/users/{id}/ - Delete user
+    - POST /api/users/change_password/ - Change password
+    - POST /api/users/me/ - Get current user data
+    """
+
+    queryset = User.objects.all().order_by("-created_at")
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_throttles(self):
+        if self.action == "create":
+            self.throttle_scope = "signup"
+            return [ScopedRateThrottle()]
+        return super().get_throttles()
+
+    def get_serializer_class(self):
+        """Returns the appropriate serializer based on the action"""
+        if self.action == "create":
+            return UserCreateSerializer
+        elif self.action == "partial_update" or self.action == "update":
+            return UserUpdateSerializer
+        elif self.action == "change_password":
+            return UserChangePasswordSerializer
+        return UserSerializer
+
+    def get_permissions(self):
+        """Defines permissions based on the action"""
+        if self.action == "create":
+            # Allow creating users (signup)
+            return [permissions.AllowAny()]
+        elif self.action in ["list", "destroy", "update", "partial_update"]:
+            # Only administrators can list, delete or modify other users
+            return [IsAdministrator()]
+        elif self.action == "retrieve":
+            # User can see their own profile, administrator can see any
+            return [IsAdministratorOrSelf()]
+        elif self.action == "change_password" or self.action == "me":
+            # Authenticated user can change their password
+            return [permissions.IsAuthenticated()]
+
+        return super().get_permissions()
+
+    def get_queryset(self):
+        """Filters users based on permissions"""
+        user = self.request.user
+
+        if user.is_administrator():
+            # Administrators see all users
+            return User.objects.all().order_by("-created_at")
+        else:
+            # Other users only see their own profile
+            return User.objects.filter(id=user.id).order_by("-created_at")
+
+    @action(
+        detail=False,
+        methods=["get"],
+        permission_classes=[permissions.IsAuthenticated],
+        url_path="me",
+    )
+    def me(self, request):
+        """Gets the current authenticated user data"""
+        serializer = self.get_serializer(request.user)
+        return Response(serializer.data)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        permission_classes=[permissions.IsAuthenticated],
+        url_path="change_password",
+    )
+    def change_password(self, request):
+        """Allows user to change their password"""
+        serializer = self.get_serializer(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.save()
+
+        # Generate new tokens after password change
+        refresh = RefreshToken.for_user(user)
+
+        return Response(
+            {
+                "success": True,
+                "message": _("Password updated successfully"),
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        permission_classes=[permissions.IsAuthenticated],
+        url_path="logout",
+    )
+    def logout(self, request):
+        """Logs out the user and blacklists refresh token"""
+        refresh_token = request.data.get("refresh")
+        if not refresh_token:
+            return Response(
+                {"detail": _("Refresh token is required.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        except Exception:
+            return Response(
+                {"detail": _("Invalid refresh token.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {"message": _("Session closed successfully")},
+            status=status.HTTP_200_OK,
+        )
+
+    def perform_update(self, serializer):
+        """Updates an existing user"""
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """Deletes a user (soft delete - marks as inactive)"""
+        instance.is_enabled = False
+        instance.save()
+
+    def create(self, request, *args, **kwargs):
+        """Allows creating users without authentication (signup)"""
+        response = super().create(request, *args, **kwargs)
+
+        if response.status_code == status.HTTP_201_CREATED:
+            # Generate tokens automatically after registration
+            user = User.objects.get(email=response.data["email"])
+            refresh = RefreshToken.for_user(user)
+
+            return Response(
+                {
+                    "user": response.data,
+                    "refresh": str(refresh),
+                    "access": str(refresh.access_token),
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        return response
