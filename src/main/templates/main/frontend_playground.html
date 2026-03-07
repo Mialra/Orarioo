@@ -20,7 +20,7 @@
 </head>
 <body>
     <h1>Orarioo API Playground</h1>
-    <small>Basic frontend to test authentication, Teacher CRUD, Classroom CRUD, Group CRUD and Schedule CRUD.</small>
+    <small>Basic frontend to test authentication, Teacher CRUD, Classroom CRUD, Group CRUD, Subject CRUD and Schedule CRUD.</small>
 
     <div class="grid">
         <section class="card">
@@ -144,6 +144,47 @@
                 <button id="scheduleDetailBtn">Detail</button>
                 <button id="scheduleUpdateBtn">Update</button>
                 <button id="scheduleDeleteBtn">Delete</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Subject CRUD</h3>
+            <label>Subject ID (for detail/update/delete)<input id="subjectId" type="number" placeholder="1" /></label>
+            <label>Name<input id="subjectName" value="Mathematics" /></label>
+            <div class="row">
+                <label>Weekly hours<input id="subjectWeeklyHours" type="number" value="5" /></label>
+                <label>Duration (hrs)<input id="subjectDuration" type="number" step="0.1" value="1.5" /></label>
+            </div>
+            <label>Preferred time slot<input id="subjectPreferredTimeSlot" value="Morning" /></label>
+            <div class="row">
+                <label>Stage
+                    <select id="subjectStage">
+                        <option value="PRESCHOOL">Preschool</option>
+                        <option value="PRIMARY" selected>Primary</option>
+                        <option value="SECONDARY">Secondary</option>
+                    </select>
+                </label>
+                <label>Type
+                    <select id="subjectType">
+                        <option value="NORMAL" selected>Normal</option>
+                        <option value="TC">TC</option>
+                    </select>
+                </label>
+            </div>
+            <label>Teacher
+                <select id="subjectTeacher">
+                    <option value="">-- Select a teacher --</option>
+                </select>
+            </label>
+            <div class="row" style="margin-top:8px;">
+                <button id="subjectCreateBtn">Create</button>
+                <button id="subjectListBtn">List</button>
+                <button id="loadTeachersBtn">Load Teachers</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <button id="subjectDetailBtn">Detail</button>
+                <button id="subjectUpdateBtn">Update</button>
+                <button id="subjectDeleteBtn">Delete</button>
             </div>
         </section>
     </div>
@@ -503,6 +544,72 @@
             if (!id) return;
             const result = await api(`schedules/${id}/`, "DELETE", null, true);
             show(`DELETE /api/schedules/${id}/ (${result.status})`, result.data);
+        };
+
+        const subjectPayload = () => {
+            const teacherId = document.getElementById("subjectTeacher").value;
+            if (!teacherId) {
+                show("Validation error", {
+                    detail: "Teacher is required. Click 'Load Teachers' first.",
+                });
+                return null;
+            }
+            return {
+                name: document.getElementById("subjectName").value,
+                weekly_hours: Number(document.getElementById("subjectWeeklyHours").value),
+                duration: Number(document.getElementById("subjectDuration").value),
+                preferred_time_slot: document.getElementById("subjectPreferredTimeSlot").value,
+                stage: document.getElementById("subjectStage").value,
+                type: document.getElementById("subjectType").value,
+                teacher: Number(teacherId),
+            };
+        };
+
+        const subjectId = () => document.getElementById("subjectId").value.trim();
+
+        const requireSubjectId = () => {
+            const id = subjectId();
+            if (!id) {
+                show("Subject ID required", {
+                    detail: "Fill 'Subject ID' before detail/update/delete actions.",
+                });
+                return null;
+            }
+            return id;
+        };
+
+        document.getElementById("subjectCreateBtn").onclick = async () => {
+            const result = await api("subjects/", "POST", subjectPayload(), true);
+            if (result.ok && result.data && result.data.id) {
+                document.getElementById("subjectId").value = result.data.id;
+            }
+            show(`POST /api/subjects/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("subjectListBtn").onclick = async () => {
+            const result = await api("subjects/", "GET", null, true);
+            show(`GET /api/subjects/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("subjectDetailBtn").onclick = async () => {
+            const id = requireSubjectId();
+            if (!id) return;
+            const result = await api(`subjects/${id}/`, "GET", null, true);
+            show(`GET /api/subjects/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("subjectUpdateBtn").onclick = async () => {
+            const id = requireSubjectId();
+            if (!id) return;
+            const result = await api(`subjects/${id}/`, "PATCH", subjectPayload(), true);
+            show(`PATCH /api/subjects/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("subjectDeleteBtn").onclick = async () => {
+            const id = requireSubjectId();
+            if (!id) return;
+            const result = await api(`subjects/${id}/`, "DELETE", null, true);
+            show(`DELETE /api/subjects/${id}/ (${result.status})`, result.data);
         };
 
         syncTokenFields();
