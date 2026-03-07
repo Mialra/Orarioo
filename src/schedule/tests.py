@@ -79,7 +79,9 @@ class ScheduleApiTests(APITestCase):
         schedule = self.create_schedule()
 
         list_response = self.client.get(reverse("schedule-list"))
-        detail_response = self.client.get(reverse("schedule-detail", args=[schedule.id]))
+        detail_response = self.client.get(
+            reverse("schedule-detail", args=[schedule.id])
+        )
 
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
         self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
