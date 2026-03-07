@@ -13,6 +13,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
+from namedEntity.models import NamedEntity
 from user.models import RoleChoices, User
 
 
@@ -33,9 +34,13 @@ class UserModelTests(TestCase):
         user = User.objects.create_user(**self.user_data)
 
         self.assertEqual(user.email, self.user_data["email"])
+        self.assertEqual(user.name, self.user_data["given_name"])
         self.assertEqual(user.given_name, self.user_data["given_name"])
         self.assertTrue(user.check_password(self.user_data["password"]))
         self.assertTrue(user.is_enabled)
+
+    def test_user_inherits_named_entity(self):
+        self.assertTrue(issubclass(User, NamedEntity))
 
     def test_create_superuser(self):
         """Creates a superuser successfully."""

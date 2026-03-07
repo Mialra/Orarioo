@@ -15,7 +15,7 @@ class UserAdmin(UserAdmin):
             _("Personal information"),
             {
                 "fields": (
-                    "given_name",
+                    "name",
                     "family_name",
                 )
             },
@@ -51,7 +51,7 @@ class UserAdmin(UserAdmin):
             _("Personal information"),
             {
                 "classes": ("wide",),
-                "fields": ("given_name", "family_name"),
+                "fields": ("name", "family_name"),
             },
         ),
         (
@@ -65,7 +65,7 @@ class UserAdmin(UserAdmin):
 
     list_display = (
         "email",
-        "given_name",
+        "name",
         "family_name",
         "role",
         "is_enabled",
@@ -73,7 +73,7 @@ class UserAdmin(UserAdmin):
         "created_at",
     )
     list_filter = ("role", "is_enabled", "is_staff", "is_superuser", "created_at")
-    search_fields = ("email", "given_name", "family_name")
+    search_fields = ("email", "name", "family_name")
     ordering = ("-created_at",)
     readonly_fields = ("created_at", "updated_at", "last_login")
 

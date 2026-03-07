@@ -2,6 +2,8 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from namedEntity.models import NamedEntity
+
 
 class RoleChoices(models.TextChoices):
     ADMINISTRATOR = "administrator", _("Administrator")
@@ -15,6 +17,13 @@ class CustomUserManager(BaseUserManager):
         """Creates and saves a user with the given email and password"""
         if not email:
             raise ValueError(_("Email is required"))
+
+        # Backward compatibility while moving from given_name to name.
+        if "name" not in extra_fields and "given_name" in extra_fields:
+            extra_fields["name"] = extra_fields.pop("given_name")
+
+        if not extra_fields.get("name"):
+            raise ValueError(_("Name is required"))
 
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
@@ -36,15 +45,12 @@ class CustomUserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
-class User(AbstractUser):
+class User(NamedEntity, AbstractUser):
     """Custom User model with differentiated roles"""
 
     username = None
     email = models.EmailField(
         _("email"), unique=True, help_text=_("Unique email address")
-    )
-    given_name = models.CharField(
-        max_length=150, db_column="nombre", help_text=_("User's given name")
     )
     family_name = models.CharField(
         max_length=150,
@@ -71,7 +77,7 @@ class User(AbstractUser):
     objects = CustomUserManager()
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["given_name"]
+    REQUIRED_FIELDS = ["name"]
 
     class Meta:
         verbose_name = _("user")
@@ -84,11 +90,19 @@ class User(AbstractUser):
         ]
 
     def __str__(self):
-        return f"{self.given_name} {self.family_name} ({self.email})"
+        return f"{self.name} {self.family_name} ({self.email})"
+
+    @property
+    def given_name(self):
+        return self.name
+
+    @given_name.setter
+    def given_name(self, value):
+        self.name = value
 
     def get_full_name(self):
         """Returns the user's full name"""
-        return f"{self.given_name} {self.family_name}".strip()
+        return f"{self.name} {self.family_name}".strip()
 
     def is_administrator(self):
         """Checks if the user is an administrator"""
