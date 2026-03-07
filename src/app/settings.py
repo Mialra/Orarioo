@@ -43,6 +43,9 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
+    "namedEntity",
+    "auditableEntity",
+    "teacher",
     "user",
     "main",
 ]

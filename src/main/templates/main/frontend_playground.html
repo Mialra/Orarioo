@@ -20,7 +20,7 @@
 </head>
 <body>
     <h1>Orarioo API Playground</h1>
-    <small>Basic frontend to test signup, login, me, users list and password changes.</small>
+    <small>Basic frontend to test authentication and Teacher CRUD.</small>
 
     <div class="grid">
         <section class="card">
@@ -60,6 +60,28 @@
             <label>New password<input id="cpNew" type="password" /></label>
             <label>Confirm new password<input id="cpConfirm" type="password" /></label>
             <button id="changePasswordBtn">Change password</button>
+        </section>
+
+        <section class="card">
+            <h3>Teacher CRUD</h3>
+            <label>Teacher ID (for detail/update/delete)<input id="teacherId" type="number" placeholder="1" /></label>
+            <label>Name<input id="teacherName" value="Ana Perez" /></label>
+            <div class="row">
+                <label>Max weekly hours<input id="teacherMaxWeeklyHours" type="number" value="20" /></label>
+                <label>Working hours<input id="teacherWorkingHours" type="number" value="12" /></label>
+            </div>
+            <label>Preferences<input id="teacherPreferences" value="Morning" /></label>
+            <label>Availability<input id="teacherAvailability" value="Mon-Fri 08:00-14:00" /></label>
+            <label>Unavailability<input id="teacherUnavailability" value="Wed 10:00-11:00" /></label>
+            <div class="row" style="margin-top:8px;">
+                <button id="teacherCreateBtn">Create</button>
+                <button id="teacherListBtn">List</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <button id="teacherDetailBtn">Detail</button>
+                <button id="teacherUpdateBtn">Update</button>
+                <button id="teacherDeleteBtn">Delete</button>
+            </div>
         </section>
     </div>
 
@@ -183,6 +205,62 @@
             const result = await api("users/logout/", "POST", { refresh }, true);
             if (result.ok) clearTokens();
             show(`POST /api/users/logout/ (${result.status})`, result.data);
+        };
+
+        const teacherPayload = () => ({
+            name: document.getElementById("teacherName").value,
+            max_weekly_hours: Number(document.getElementById("teacherMaxWeeklyHours").value),
+            working_hours: Number(document.getElementById("teacherWorkingHours").value),
+            preferences: document.getElementById("teacherPreferences").value,
+            availability: document.getElementById("teacherAvailability").value,
+            unavailability: document.getElementById("teacherUnavailability").value,
+        });
+
+        const teacherId = () => document.getElementById("teacherId").value.trim();
+
+        const requireTeacherId = () => {
+            const id = teacherId();
+            if (!id) {
+                show("Teacher ID required", {
+                    detail: "Fill 'Teacher ID' before detail/update/delete actions.",
+                });
+                return null;
+            }
+            return id;
+        };
+
+        document.getElementById("teacherCreateBtn").onclick = async () => {
+            const result = await api("teachers/", "POST", teacherPayload(), true);
+            if (result.ok && result.data && result.data.id) {
+                document.getElementById("teacherId").value = result.data.id;
+            }
+            show(`POST /api/teachers/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("teacherListBtn").onclick = async () => {
+            const result = await api("teachers/", "GET", null, true);
+            show(`GET /api/teachers/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("teacherDetailBtn").onclick = async () => {
+            const id = requireTeacherId();
+            if (!id) return;
+            const result = await api(`teachers/${id}/`, "GET", null, true);
+            show(`GET /api/teachers/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("teacherUpdateBtn").onclick = async () => {
+            const id = requireTeacherId();
+            if (!id) return;
+            const result = await api(`teachers/${id}/`, "PATCH", teacherPayload(), true);
+            show(`PATCH /api/teachers/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("teacherDeleteBtn").onclick = async () => {
+            const id = requireTeacherId();
+            if (!id) return;
+            const result = await api(`teachers/${id}/`, "DELETE", null, true);
+            show(`DELETE /api/teachers/${id}/ (${result.status})`, result.data);
         };
 
         syncTokenFields();
