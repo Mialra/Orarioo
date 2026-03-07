@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "auditableEntity",
     "teacher",
     "classroom",
+    "group",
     "user",
     "main",
 ]

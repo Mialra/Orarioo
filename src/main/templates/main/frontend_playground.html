@@ -20,7 +20,7 @@
 </head>
 <body>
     <h1>Orarioo API Playground</h1>
-    <small>Basic frontend to test authentication, Teacher CRUD and Classroom CRUD.</small>
+    <small>Basic frontend to test authentication, Teacher CRUD, Classroom CRUD and Group CRUD.</small>
 
     <div class="grid">
         <section class="card">
@@ -96,6 +96,28 @@
                 <button id="classroomDetailBtn">Detail</button>
                 <button id="classroomUpdateBtn">Update</button>
                 <button id="classroomDeleteBtn">Delete</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Group CRUD</h3>
+            <label>Group ID (for detail/update/delete)<input id="groupId" type="number" placeholder="1" /></label>
+            <label>Name<input id="groupName" value="1A" /></label>
+            <label>Stage
+                <select id="groupStage">
+                    <option value="preschool">preschool</option>
+                    <option value="primary" selected>primary</option>
+                    <option value="secondary">secondary</option>
+                </select>
+            </label>
+            <div class="row" style="margin-top:8px;">
+                <button id="groupCreateBtn">Create</button>
+                <button id="groupListBtn">List</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <button id="groupDetailBtn">Detail</button>
+                <button id="groupUpdateBtn">Update</button>
+                <button id="groupDeleteBtn">Delete</button>
             </div>
         </section>
     </div>
@@ -332,6 +354,58 @@
             if (!id) return;
             const result = await api(`classrooms/${id}/`, "DELETE", null, true);
             show(`DELETE /api/classrooms/${id}/ (${result.status})`, result.data);
+        };
+
+        const groupPayload = () => ({
+            name: document.getElementById("groupName").value,
+            stage: document.getElementById("groupStage").value,
+        });
+
+        const groupId = () => document.getElementById("groupId").value.trim();
+
+        const requireGroupId = () => {
+            const id = groupId();
+            if (!id) {
+                show("Group ID required", {
+                    detail: "Fill 'Group ID' before detail/update/delete actions.",
+                });
+                return null;
+            }
+            return id;
+        };
+
+        document.getElementById("groupCreateBtn").onclick = async () => {
+            const result = await api("groups/", "POST", groupPayload(), true);
+            if (result.ok && result.data && result.data.id) {
+                document.getElementById("groupId").value = result.data.id;
+            }
+            show(`POST /api/groups/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("groupListBtn").onclick = async () => {
+            const result = await api("groups/", "GET", null, true);
+            show(`GET /api/groups/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("groupDetailBtn").onclick = async () => {
+            const id = requireGroupId();
+            if (!id) return;
+            const result = await api(`groups/${id}/`, "GET", null, true);
+            show(`GET /api/groups/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("groupUpdateBtn").onclick = async () => {
+            const id = requireGroupId();
+            if (!id) return;
+            const result = await api(`groups/${id}/`, "PATCH", groupPayload(), true);
+            show(`PATCH /api/groups/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("groupDeleteBtn").onclick = async () => {
+            const id = requireGroupId();
+            if (!id) return;
+            const result = await api(`groups/${id}/`, "DELETE", null, true);
+            show(`DELETE /api/groups/${id}/ (${result.status})`, result.data);
         };
 
         syncTokenFields();
