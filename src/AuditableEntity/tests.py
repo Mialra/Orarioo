@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 
-from AuditableEntity.models import AuditableEntity
+from auditableEntity.models import AuditableEntity
 from namedEntity.models import NamedEntity
 
 
