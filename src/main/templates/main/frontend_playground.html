@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orarioo API Playground</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 980px; margin: 24px auto; padding: 0 12px; }
+        h1 { margin-bottom: 8px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+        .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; }
+        label { display: block; margin-top: 8px; font-size: 0.9rem; }
+        input, select, button, textarea { width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box; }
+        button { cursor: pointer; }
+        .row { display: flex; gap: 8px; }
+        .row > * { flex: 1; }
+        pre { background: #111; color: #eee; padding: 10px; border-radius: 8px; overflow: auto; min-height: 140px; }
+        small { color: #555; }
+    </style>
+</head>
+<body>
+    <h1>Orarioo API Playground</h1>
+    <small>Basic frontend to test authentication, Teacher CRUD, Classroom CRUD, Group CRUD, Subject CRUD and Schedule CRUD.</small>
+
+    <div class="grid">
+        <section class="card">
+            <h3>Sign Up</h3>
+            <label>Given name<input id="suGivenName" value="Test" /></label>
+            <label>Family name<input id="suFamilyName" value="User" /></label>
+            <label>Email<input id="suEmail" type="email" value="test@example.com" /></label>
+            <label>Role
+                <select id="suRole">
+                    <option value="director">director</option>
+                    <option value="administrator">administrator</option>
+                </select>
+            </label>
+            <label>Password<input id="suPassword" type="password" value="TestPassword123!" /></label>
+            <label>Confirm password<input id="suPasswordConfirm" type="password" value="TestPassword123!" /></label>
+            <button id="signupBtn">Sign up</button>
+        </section>
+
+        <section class="card">
+            <h3>Login</h3>
+            <label>Email<input id="loginEmail" type="email" value="test@example.com" /></label>
+            <label>Password<input id="loginPassword" type="password" value="TestPassword123!" /></label>
+            <button id="loginBtn">Login</button>
+            <div class="row" style="margin-top:8px;">
+                <button id="logoutBtn">Logout</button>
+                <button id="refreshBtn">Refresh token</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Authenticated actions</h3>
+            <div class="row">
+                <button id="meBtn">GET /me</button>
+                <button id="usersBtn">GET /users</button>
+            </div>
+            <label style="margin-top:8px;">Current password<input id="cpCurrent" type="password" /></label>
+            <label>New password<input id="cpNew" type="password" /></label>
+            <label>Confirm new password<input id="cpConfirm" type="password" /></label>
+            <button id="changePasswordBtn">Change password</button>
+        </section>
+
+        <section class="card">
+            <h3>Teacher CRUD</h3>
+            <label>Teacher ID (for detail/update/delete)<input id="teacherId" type="number" placeholder="1" /></label>
+            <label>Name<input id="teacherName" value="Ana Perez" /></label>
+            <div class="row">
+                <label>Max weekly hours<input id="teacherMaxWeeklyHours" type="number" value="20" /></label>
+                <label>Working hours<input id="teacherWorkingHours" type="number" value="12" /></label>
+            </div>
+            <label>Preferences<input id="teacherPreferences" value="Morning" /></label>
+            <label>Availability<input id="teacherAvailability" value="Mon-Fri 08:00-14:00" /></label>
+            <label>Unavailability<input id="teacherUnavailability" value="Wed 10:00-11:00" /></label>
+            <div class="row" style="margin-top:8px;">
+                <button id="teacherCreateBtn">Create</button>
+                <button id="teacherListBtn">List</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <button id="teacherDetailBtn">Detail</button>
+                <button id="teacherUpdateBtn">Update</button>
+                <button id="teacherDeleteBtn">Delete</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Classroom CRUD</h3>
+            <label>Classroom ID (for detail/update/delete)<input id="classroomId" type="number" placeholder="1" /></label>
+            <label>Name<input id="classroomName" value="Aula 1A" /></label>
+            <div class="row" style="margin-top:8px;">
+                <button id="classroomCreateBtn">Create</button>
+                <button id="classroomListBtn">List</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <button id="classroomDetailBtn">Detail</button>
+                <button id="classroomUpdateBtn">Update</button>
+                <button id="classroomDeleteBtn">Delete</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Group CRUD</h3>
+            <label>Group ID (for detail/update/delete)<input id="groupId" type="number" placeholder="1" /></label>
+            <label>Name<input id="groupName" value="1A" /></label>
+            <label>Stage
+                <select id="groupStage">
+                    <option value="preschool">preschool</option>
+                    <option value="primary" selected>primary</option>
+                    <option value="secondary">secondary</option>
+                </select>
+            </label>
+            <div class="row" style="margin-top:8px;">
+                <button id="groupCreateBtn">Create</button>
+                <button id="groupListBtn">List</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <button id="groupDetailBtn">Detail</button>
+                <button id="groupUpdateBtn">Update</button>
+                <button id="groupDeleteBtn">Delete</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Schedule CRUD</h3>
+            <label>Schedule ID (for detail/update/delete)<input id="scheduleId" type="number" placeholder="1" /></label>
+            <label>Name<input id="scheduleName" value="Math Monday" /></label>
+            <div class="row">
+                <label>Start time<input id="scheduleStartTime" type="datetime-local" value="2026-03-08T09:00" /></label>
+                <label>End time<input id="scheduleEndTime" type="datetime-local" value="2026-03-08T10:00" /></label>
+            </div>
+            <div class="row">
+                <label>Teacher ID<input id="scheduleTeacherId" type="number" value="1" /></label>
+                <label>Classroom ID<input id="scheduleClassroomId" type="number" value="1" /></label>
+            </div>
+            <label>Group ID<input id="scheduleGroupId" type="number" value="1" /></label>
+            <label>Subject
+                <select id="scheduleSubject">
+                    <option value="">-- Select a subject --</option>
+                </select>
+            </label>
+            <label>User IDs (comma-separated)<input id="scheduleUserIds" value="1" /></label>
+            <label>Observations<input id="scheduleObservations" value="Bring calculators" /></label>
+            <div class="row" style="margin-top:8px;">
+                <button id="scheduleCreateBtn">Create</button>
+                <button id="scheduleListBtn">List</button>
+                <button id="loadSubjectsBtn">Load Subjects</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <button id="scheduleDetailBtn">Detail</button>
+                <button id="scheduleUpdateBtn">Update</button>
+                <button id="scheduleDeleteBtn">Delete</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Subject CRUD</h3>
+            <label>Subject ID (for detail/update/delete)<input id="subjectId" type="number" placeholder="1" /></label>
+            <label>Name<input id="subjectName" value="Mathematics" /></label>
+            <div class="row">
+                <label>Weekly hours<input id="subjectWeeklyHours" type="number" value="5" /></label>
+                <label>Duration (hrs)<input id="subjectDuration" type="number" step="0.1" value="1.5" /></label>
+            </div>
+            <label>Preferred time slot<input id="subjectPreferredTimeSlot" value="Morning" /></label>
+            <div class="row">
+                <label>Stage
+                    <select id="subjectStage">
+                        <option value="PRESCHOOL">Preschool</option>
+                        <option value="PRIMARY" selected>Primary</option>
+                        <option value="SECONDARY">Secondary</option>
+                    </select>
+                </label>
+                <label>Type
+                    <select id="subjectType">
+                        <option value="NORMAL" selected>Normal</option>
+                        <option value="TC">TC</option>
+                    </select>
+                </label>
+            </div>
+            <label>Teacher
+                <select id="subjectTeacher">
+                    <option value="">-- Select a teacher --</option>
+                </select>
+            </label>
+            <div class="row" style="margin-top:8px;">
+                <button id="subjectCreateBtn">Create</button>
+                <button id="subjectListBtn">List</button>
+                <button id="loadTeachersBtn">Load Teachers</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <button id="subjectDetailBtn">Detail</button>
+                <button id="subjectUpdateBtn">Update</button>
+                <button id="subjectDeleteBtn">Delete</button>
+            </div>
+        </section>
+    </div>
+
+    <section class="card" style="margin-top:12px;">
+        <h3>Tokens</h3>
+        <label>Access token<textarea id="accessToken" rows="4" readonly></textarea></label>
+        <label>Refresh token<textarea id="refreshToken" rows="4" readonly></textarea></label>
+    </section>
+
+    <section class="card" style="margin-top:12px;">
+        <h3>Response</h3>
+        <pre id="output">Ready.</pre>
+    </section>
+
+    <script>
+        const accessKey = "orarioo_access";
+        const refreshKey = "orarioo_refresh";
+
+        const output = document.getElementById("output");
+        const accessField = document.getElementById("accessToken");
+        const refreshField = document.getElementById("refreshToken");
+
+        const getAccess = () => localStorage.getItem(accessKey) || "";
+        const getRefresh = () => localStorage.getItem(refreshKey) || "";
+
+        const syncTokenFields = () => {
+            accessField.value = getAccess();
+            refreshField.value = getRefresh();
+        };
+
+        const saveTokens = (access, refresh) => {
+            if (access) localStorage.setItem(accessKey, access);
+            if (refresh) localStorage.setItem(refreshKey, refresh);
+            syncTokenFields();
+        };
+
+        const clearTokens = () => {
+            localStorage.removeItem(accessKey);
+            localStorage.removeItem(refreshKey);
+            syncTokenFields();
+        };
+
+        const show = (title, data) => {
+            output.textContent = `${title}\n\n${JSON.stringify(data, null, 2)}`;
+        };
+
+        async function api(path, method = "GET", body = null, auth = false) {
+            const headers = { "Content-Type": "application/json" };
+            if (auth && getAccess()) headers["Authorization"] = `Bearer ${getAccess()}`;
+
+            const response = await fetch(`/api/${path}`, {
+                method,
+                headers,
+                body: body ? JSON.stringify(body) : null,
+            });
+            let data;
+            try {
+                data = await response.json();
+            } catch {
+                data = { detail: "No JSON response" };
+            }
+            return { ok: response.ok, status: response.status, data };
+        }
+
+        document.getElementById("signupBtn").onclick = async () => {
+            const payload = {
+                given_name: document.getElementById("suGivenName").value,
+                family_name: document.getElementById("suFamilyName").value,
+                email: document.getElementById("suEmail").value,
+                role: document.getElementById("suRole").value,
+                password: document.getElementById("suPassword").value,
+                password_confirm: document.getElementById("suPasswordConfirm").value,
+            };
+            const result = await api("signup/", "POST", payload);
+            if (result.ok) saveTokens(result.data.access, result.data.refresh);
+            show(`POST /api/signup/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("loginBtn").onclick = async () => {
+            const payload = {
+                email: document.getElementById("loginEmail").value,
+                password: document.getElementById("loginPassword").value,
+            };
+            const result = await api("login/", "POST", payload);
+            if (result.ok) saveTokens(result.data.access, result.data.refresh);
+            show(`POST /api/login/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("refreshBtn").onclick = async () => {
+            const refresh = getRefresh();
+            const result = await api("token/refresh/", "POST", { refresh });
+            if (result.ok) saveTokens(result.data.access, refresh);
+            show(`POST /api/token/refresh/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("meBtn").onclick = async () => {
+            const result = await api("users/me/", "GET", null, true);
+            show(`GET /api/users/me/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("usersBtn").onclick = async () => {
+            const result = await api("users/", "GET", null, true);
+            show(`GET /api/users/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("changePasswordBtn").onclick = async () => {
+            const payload = {
+                current_password: document.getElementById("cpCurrent").value,
+                new_password: document.getElementById("cpNew").value,
+                password_confirm: document.getElementById("cpConfirm").value,
+            };
+            const result = await api("users/change_password/", "POST", payload, true);
+            if (result.ok && result.data.access && result.data.refresh) {
+                saveTokens(result.data.access, result.data.refresh);
+            }
+            show(`POST /api/users/change_password/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("logoutBtn").onclick = async () => {
+            const refresh = getRefresh();
+            const result = await api("users/logout/", "POST", { refresh }, true);
+            if (result.ok) clearTokens();
+            show(`POST /api/users/logout/ (${result.status})`, result.data);
+        };
+
+        const teacherPayload = () => ({
+            name: document.getElementById("teacherName").value,
+            max_weekly_hours: Number(document.getElementById("teacherMaxWeeklyHours").value),
+            working_hours: Number(document.getElementById("teacherWorkingHours").value),
+            preferences: document.getElementById("teacherPreferences").value,
+            availability: document.getElementById("teacherAvailability").value,
+            unavailability: document.getElementById("teacherUnavailability").value,
+        });
+
+        const teacherId = () => document.getElementById("teacherId").value.trim();
+
+        const requireTeacherId = () => {
+            const id = teacherId();
+            if (!id) {
+                show("Teacher ID required", {
+                    detail: "Fill 'Teacher ID' before detail/update/delete actions.",
+                });
+                return null;
+            }
+            return id;
+        };
+
+        document.getElementById("teacherCreateBtn").onclick = async () => {
+            const result = await api("teachers/", "POST", teacherPayload(), true);
+            if (result.ok && result.data && result.data.id) {
+                document.getElementById("teacherId").value = result.data.id;
+            }
+            show(`POST /api/teachers/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("teacherListBtn").onclick = async () => {
+            const result = await api("teachers/", "GET", null, true);
+            show(`GET /api/teachers/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("teacherDetailBtn").onclick = async () => {
+            const id = requireTeacherId();
+            if (!id) return;
+            const result = await api(`teachers/${id}/`, "GET", null, true);
+            show(`GET /api/teachers/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("teacherUpdateBtn").onclick = async () => {
+            const id = requireTeacherId();
+            if (!id) return;
+            const result = await api(`teachers/${id}/`, "PATCH", teacherPayload(), true);
+            show(`PATCH /api/teachers/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("teacherDeleteBtn").onclick = async () => {
+            const id = requireTeacherId();
+            if (!id) return;
+            const result = await api(`teachers/${id}/`, "DELETE", null, true);
+            show(`DELETE /api/teachers/${id}/ (${result.status})`, result.data);
+        };
+
+        const classroomPayload = () => ({
+            name: document.getElementById("classroomName").value,
+        });
+
+        const classroomId = () => document.getElementById("classroomId").value.trim();
+
+        const requireClassroomId = () => {
+            const id = classroomId();
+            if (!id) {
+                show("Classroom ID required", {
+                    detail: "Fill 'Classroom ID' before detail/update/delete actions.",
+                });
+                return null;
+            }
+            return id;
+        };
+
+        document.getElementById("classroomCreateBtn").onclick = async () => {
+            const result = await api("classrooms/", "POST", classroomPayload(), true);
+            if (result.ok && result.data && result.data.id) {
+                document.getElementById("classroomId").value = result.data.id;
+            }
+            show(`POST /api/classrooms/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("classroomListBtn").onclick = async () => {
+            const result = await api("classrooms/", "GET", null, true);
+            show(`GET /api/classrooms/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("classroomDetailBtn").onclick = async () => {
+            const id = requireClassroomId();
+            if (!id) return;
+            const result = await api(`classrooms/${id}/`, "GET", null, true);
+            show(`GET /api/classrooms/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("classroomUpdateBtn").onclick = async () => {
+            const id = requireClassroomId();
+            if (!id) return;
+            const result = await api(
+                `classrooms/${id}/`,
+                "PATCH",
+                classroomPayload(),
+                true
+            );
+            show(`PATCH /api/classrooms/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("classroomDeleteBtn").onclick = async () => {
+            const id = requireClassroomId();
+            if (!id) return;
+            const result = await api(`classrooms/${id}/`, "DELETE", null, true);
+            show(`DELETE /api/classrooms/${id}/ (${result.status})`, result.data);
+        };
+
+        const groupPayload = () => ({
+            name: document.getElementById("groupName").value,
+            stage: document.getElementById("groupStage").value,
+        });
+
+        const groupId = () => document.getElementById("groupId").value.trim();
+
+        const requireGroupId = () => {
+            const id = groupId();
+            if (!id) {
+                show("Group ID required", {
+                    detail: "Fill 'Group ID' before detail/update/delete actions.",
+                });
+                return null;
+            }
+            return id;
+        };
+
+        document.getElementById("groupCreateBtn").onclick = async () => {
+            const result = await api("groups/", "POST", groupPayload(), true);
+            if (result.ok && result.data && result.data.id) {
+                document.getElementById("groupId").value = result.data.id;
+            }
+            show(`POST /api/groups/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("groupListBtn").onclick = async () => {
+            const result = await api("groups/", "GET", null, true);
+            show(`GET /api/groups/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("groupDetailBtn").onclick = async () => {
+            const id = requireGroupId();
+            if (!id) return;
+            const result = await api(`groups/${id}/`, "GET", null, true);
+            show(`GET /api/groups/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("groupUpdateBtn").onclick = async () => {
+            const id = requireGroupId();
+            if (!id) return;
+            const result = await api(`groups/${id}/`, "PATCH", groupPayload(), true);
+            show(`PATCH /api/groups/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("groupDeleteBtn").onclick = async () => {
+            const id = requireGroupId();
+            if (!id) return;
+            const result = await api(`groups/${id}/`, "DELETE", null, true);
+            show(`DELETE /api/groups/${id}/ (${result.status})`, result.data);
+        };
+
+        const parseUserIds = (value) =>
+            value
+                .split(",")
+                .map((part) => Number(part.trim()))
+                .filter((id) => Number.isInteger(id) && id > 0);
+
+        const toIsoOrNull = (value) => {
+            if (!value) return null;
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return null;
+            return date.toISOString();
+        };
+
+        const schedulePayload = () => {
+            const subjectId = document.getElementById("scheduleSubject").value;
+            if (!subjectId) {
+                show("Validation error", {
+                    detail: "Subject is required for schedules. Create/load one first.",
+                });
+                return null;
+            }
+
+            const startTime = toIsoOrNull(document.getElementById("scheduleStartTime").value);
+            const endTime = toIsoOrNull(document.getElementById("scheduleEndTime").value);
+            if (!startTime || !endTime) {
+                show("Validation error", {
+                    detail: "Start time and end time are required.",
+                });
+                return null;
+            }
+
+            return {
+            name: document.getElementById("scheduleName").value,
+            start_time: startTime,
+            end_time: endTime,
+            observations: document.getElementById("scheduleObservations").value,
+            teacher: Number(document.getElementById("scheduleTeacherId").value),
+            classroom: Number(document.getElementById("scheduleClassroomId").value),
+            group: Number(document.getElementById("scheduleGroupId").value),
+            subject: Number(subjectId),
+            users: parseUserIds(document.getElementById("scheduleUserIds").value),
+            };
+        };
+
+        const scheduleId = () => document.getElementById("scheduleId").value.trim();
+
+        const requireScheduleId = () => {
+            const id = scheduleId();
+            if (!id) {
+                show("Schedule ID required", {
+                    detail: "Fill 'Schedule ID' before detail/update/delete actions.",
+                });
+                return null;
+            }
+            return id;
+        };
+
+        document.getElementById("scheduleCreateBtn").onclick = async () => {
+            const payload = schedulePayload();
+            if (!payload) return;
+            const result = await api("schedules/", "POST", payload, true);
+            if (result.ok && result.data && result.data.id) {
+                document.getElementById("scheduleId").value = result.data.id;
+            }
+            show(`POST /api/schedules/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("scheduleListBtn").onclick = async () => {
+            const result = await api("schedules/", "GET", null, true);
+            show(`GET /api/schedules/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("scheduleDetailBtn").onclick = async () => {
+            const id = requireScheduleId();
+            if (!id) return;
+            const result = await api(`schedules/${id}/`, "GET", null, true);
+            show(`GET /api/schedules/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("scheduleUpdateBtn").onclick = async () => {
+            const id = requireScheduleId();
+            if (!id) return;
+            const payload = schedulePayload();
+            if (!payload) return;
+            const result = await api(`schedules/${id}/`, "PATCH", payload, true);
+            show(`PATCH /api/schedules/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("scheduleDeleteBtn").onclick = async () => {
+            const id = requireScheduleId();
+            if (!id) return;
+            const result = await api(`schedules/${id}/`, "DELETE", null, true);
+            show(`DELETE /api/schedules/${id}/ (${result.status})`, result.data);
+        };
+
+        const subjectPayload = () => {
+            const teacherId = document.getElementById("subjectTeacher").value;
+            if (!teacherId) {
+                show("Validation error", {
+                    detail: "Teacher is required. Click 'Load Teachers' first.",
+                });
+                return null;
+            }
+            return {
+                name: document.getElementById("subjectName").value,
+                weekly_hours: Number(document.getElementById("subjectWeeklyHours").value),
+                duration: Number(document.getElementById("subjectDuration").value),
+                preferred_time_slot: document.getElementById("subjectPreferredTimeSlot").value,
+                stage: document.getElementById("subjectStage").value,
+                type: document.getElementById("subjectType").value,
+                teacher: Number(teacherId),
+            };
+        };
+
+        const subjectId = () => document.getElementById("subjectId").value.trim();
+
+        const requireSubjectId = () => {
+            const id = subjectId();
+            if (!id) {
+                show("Subject ID required", {
+                    detail: "Fill 'Subject ID' before detail/update/delete actions.",
+                });
+                return null;
+            }
+            return id;
+        };
+
+        document.getElementById("subjectCreateBtn").onclick = async () => {
+            const payload = subjectPayload();
+            if (!payload) return;
+            const result = await api("subjects/", "POST", payload, true);
+            if (result.ok && result.data && result.data.id) {
+                document.getElementById("subjectId").value = result.data.id;
+            }
+            show(`POST /api/subjects/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("subjectListBtn").onclick = async () => {
+            const result = await api("subjects/", "GET", null, true);
+            show(`GET /api/subjects/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("subjectDetailBtn").onclick = async () => {
+            const id = requireSubjectId();
+            if (!id) return;
+            const result = await api(`subjects/${id}/`, "GET", null, true);
+            show(`GET /api/subjects/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("subjectUpdateBtn").onclick = async () => {
+            const id = requireSubjectId();
+            if (!id) return;
+            const payload = subjectPayload();
+            if (!payload) return;
+            const result = await api(`subjects/${id}/`, "PATCH", payload, true);
+            show(`PATCH /api/subjects/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("subjectDeleteBtn").onclick = async () => {
+            const id = requireSubjectId();
+            if (!id) return;
+            const result = await api(`subjects/${id}/`, "DELETE", null, true);
+            show(`DELETE /api/subjects/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("loadTeachersBtn").onclick = async () => {
+            const result = await api("teachers/", "GET", null, true);
+            if (!result.ok) {
+                show(`GET /api/teachers/ (${result.status})`, result.data);
+                return;
+            }
+
+            const items = Array.isArray(result.data) ? result.data : result.data.results || [];
+            const teacherSelect = document.getElementById("subjectTeacher");
+            teacherSelect.innerHTML = '<option value="">-- Select a teacher --</option>';
+
+            items.forEach((teacher) => {
+                const option = document.createElement("option");
+                option.value = teacher.id;
+                option.textContent = `${teacher.name} (id: ${teacher.id})`;
+                teacherSelect.appendChild(option);
+            });
+
+            if (items.length > 0) {
+                teacherSelect.value = String(items[0].id);
+            }
+
+            show(`GET /api/teachers/ (${result.status})`, {
+                loaded_teachers: items.length,
+            });
+        };
+
+        document.getElementById("loadSubjectsBtn").onclick = async () => {
+            const result = await api("subjects/", "GET", null, true);
+            if (!result.ok) {
+                show(`GET /api/subjects/ (${result.status})`, result.data);
+                return;
+            }
+
+            const items = Array.isArray(result.data) ? result.data : result.data.results || [];
+            const subjectSelect = document.getElementById("scheduleSubject");
+            subjectSelect.innerHTML = '<option value="">-- Select a subject --</option>';
+
+            items.forEach((subject) => {
+                const option = document.createElement("option");
+                option.value = subject.id;
+                option.textContent = `${subject.name} (id: ${subject.id})`;
+                subjectSelect.appendChild(option);
+            });
+
+            if (items.length > 0) {
+                subjectSelect.value = String(items[0].id);
+            }
+
+            show(`GET /api/subjects/ (${result.status})`, {
+                loaded_subjects: items.length,
+            });
+        };
+
+        syncTokenFields();
+    </script>
+</body>
+</html>

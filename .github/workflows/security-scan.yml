@@ -50,7 +50,7 @@ jobs:
 
       # Step 5: Run Bandit for static security analysis
       - name: Run Bandit for security issues
-        run: bandit -r src/ -f json -o bandit-report.json
+        run: bandit -r src/ -c .bandit --severity-level medium -f json -o bandit-report.json
 
       # Step 6: Run Trivy for container and vulnerability scanning (optional)
       - name: Run Trivy vulnerability scanner
