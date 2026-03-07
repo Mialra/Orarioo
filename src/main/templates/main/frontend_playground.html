@@ -20,7 +20,7 @@
 </head>
 <body>
     <h1>Orarioo API Playground</h1>
-    <small>Basic frontend to test authentication and Teacher CRUD.</small>
+    <small>Basic frontend to test authentication, Teacher CRUD and Classroom CRUD.</small>
 
     <div class="grid">
         <section class="card">
@@ -81,6 +81,21 @@
                 <button id="teacherDetailBtn">Detail</button>
                 <button id="teacherUpdateBtn">Update</button>
                 <button id="teacherDeleteBtn">Delete</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Classroom CRUD</h3>
+            <label>Classroom ID (for detail/update/delete)<input id="classroomId" type="number" placeholder="1" /></label>
+            <label>Name<input id="classroomName" value="Aula 1A" /></label>
+            <div class="row" style="margin-top:8px;">
+                <button id="classroomCreateBtn">Create</button>
+                <button id="classroomListBtn">List</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <button id="classroomDetailBtn">Detail</button>
+                <button id="classroomUpdateBtn">Update</button>
+                <button id="classroomDeleteBtn">Delete</button>
             </div>
         </section>
     </div>
@@ -261,6 +276,62 @@
             if (!id) return;
             const result = await api(`teachers/${id}/`, "DELETE", null, true);
             show(`DELETE /api/teachers/${id}/ (${result.status})`, result.data);
+        };
+
+        const classroomPayload = () => ({
+            name: document.getElementById("classroomName").value,
+        });
+
+        const classroomId = () => document.getElementById("classroomId").value.trim();
+
+        const requireClassroomId = () => {
+            const id = classroomId();
+            if (!id) {
+                show("Classroom ID required", {
+                    detail: "Fill 'Classroom ID' before detail/update/delete actions.",
+                });
+                return null;
+            }
+            return id;
+        };
+
+        document.getElementById("classroomCreateBtn").onclick = async () => {
+            const result = await api("classrooms/", "POST", classroomPayload(), true);
+            if (result.ok && result.data && result.data.id) {
+                document.getElementById("classroomId").value = result.data.id;
+            }
+            show(`POST /api/classrooms/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("classroomListBtn").onclick = async () => {
+            const result = await api("classrooms/", "GET", null, true);
+            show(`GET /api/classrooms/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("classroomDetailBtn").onclick = async () => {
+            const id = requireClassroomId();
+            if (!id) return;
+            const result = await api(`classrooms/${id}/`, "GET", null, true);
+            show(`GET /api/classrooms/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("classroomUpdateBtn").onclick = async () => {
+            const id = requireClassroomId();
+            if (!id) return;
+            const result = await api(
+                `classrooms/${id}/`,
+                "PATCH",
+                classroomPayload(),
+                true
+            );
+            show(`PATCH /api/classrooms/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("classroomDeleteBtn").onclick = async () => {
+            const id = requireClassroomId();
+            if (!id) return;
+            const result = await api(`classrooms/${id}/`, "DELETE", null, true);
+            show(`DELETE /api/classrooms/${id}/ (${result.status})`, result.data);
         };
 
         syncTokenFields();
