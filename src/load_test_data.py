@@ -13,12 +13,14 @@ if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
 import django  # noqa: E402
+
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.settings")
 django.setup()
 
 # NOTE: These imports must come after django.setup() - ignore E402
 from django.contrib.auth import get_user_model  # noqa: E402
 from django.utils import timezone  # noqa: E402
+
 from classroom.models import Classroom  # noqa: E402
 from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
 from group.models import Group  # noqa: E402
