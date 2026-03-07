@@ -134,11 +134,17 @@
                 <label>Classroom ID<input id="scheduleClassroomId" type="number" value="1" /></label>
             </div>
             <label>Group ID<input id="scheduleGroupId" type="number" value="1" /></label>
+            <label>Subject
+                <select id="scheduleSubject">
+                    <option value="">-- Select a subject --</option>
+                </select>
+            </label>
             <label>User IDs (comma-separated)<input id="scheduleUserIds" value="1" /></label>
             <label>Observations<input id="scheduleObservations" value="Bring calculators" /></label>
             <div class="row" style="margin-top:8px;">
                 <button id="scheduleCreateBtn">Create</button>
                 <button id="scheduleListBtn">List</button>
+                <button id="loadSubjectsBtn">Load Subjects</button>
             </div>
             <div class="row" style="margin-top:8px;">
                 <button id="scheduleDetailBtn">Detail</button>
@@ -488,16 +494,36 @@
             return date.toISOString();
         };
 
-        const schedulePayload = () => ({
+        const schedulePayload = () => {
+            const subjectId = document.getElementById("scheduleSubject").value;
+            if (!subjectId) {
+                show("Validation error", {
+                    detail: "Subject is required for schedules. Create/load one first.",
+                });
+                return null;
+            }
+
+            const startTime = toIsoOrNull(document.getElementById("scheduleStartTime").value);
+            const endTime = toIsoOrNull(document.getElementById("scheduleEndTime").value);
+            if (!startTime || !endTime) {
+                show("Validation error", {
+                    detail: "Start time and end time are required.",
+                });
+                return null;
+            }
+
+            return {
             name: document.getElementById("scheduleName").value,
-            start_time: toIsoOrNull(document.getElementById("scheduleStartTime").value),
-            end_time: toIsoOrNull(document.getElementById("scheduleEndTime").value),
+            start_time: startTime,
+            end_time: endTime,
             observations: document.getElementById("scheduleObservations").value,
             teacher: Number(document.getElementById("scheduleTeacherId").value),
             classroom: Number(document.getElementById("scheduleClassroomId").value),
             group: Number(document.getElementById("scheduleGroupId").value),
+            subject: Number(subjectId),
             users: parseUserIds(document.getElementById("scheduleUserIds").value),
-        });
+            };
+        };
 
         const scheduleId = () => document.getElementById("scheduleId").value.trim();
 
@@ -513,7 +539,9 @@
         };
 
         document.getElementById("scheduleCreateBtn").onclick = async () => {
-            const result = await api("schedules/", "POST", schedulePayload(), true);
+            const payload = schedulePayload();
+            if (!payload) return;
+            const result = await api("schedules/", "POST", payload, true);
             if (result.ok && result.data && result.data.id) {
                 document.getElementById("scheduleId").value = result.data.id;
             }
@@ -535,7 +563,9 @@
         document.getElementById("scheduleUpdateBtn").onclick = async () => {
             const id = requireScheduleId();
             if (!id) return;
-            const result = await api(`schedules/${id}/`, "PATCH", schedulePayload(), true);
+            const payload = schedulePayload();
+            if (!payload) return;
+            const result = await api(`schedules/${id}/`, "PATCH", payload, true);
             show(`PATCH /api/schedules/${id}/ (${result.status})`, result.data);
         };
 
@@ -579,7 +609,9 @@
         };
 
         document.getElementById("subjectCreateBtn").onclick = async () => {
-            const result = await api("subjects/", "POST", subjectPayload(), true);
+            const payload = subjectPayload();
+            if (!payload) return;
+            const result = await api("subjects/", "POST", payload, true);
             if (result.ok && result.data && result.data.id) {
                 document.getElementById("subjectId").value = result.data.id;
             }
@@ -601,7 +633,9 @@
         document.getElementById("subjectUpdateBtn").onclick = async () => {
             const id = requireSubjectId();
             if (!id) return;
-            const result = await api(`subjects/${id}/`, "PATCH", subjectPayload(), true);
+            const payload = subjectPayload();
+            if (!payload) return;
+            const result = await api(`subjects/${id}/`, "PATCH", payload, true);
             show(`PATCH /api/subjects/${id}/ (${result.status})`, result.data);
         };
 
@@ -610,6 +644,60 @@
             if (!id) return;
             const result = await api(`subjects/${id}/`, "DELETE", null, true);
             show(`DELETE /api/subjects/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("loadTeachersBtn").onclick = async () => {
+            const result = await api("teachers/", "GET", null, true);
+            if (!result.ok) {
+                show(`GET /api/teachers/ (${result.status})`, result.data);
+                return;
+            }
+
+            const items = Array.isArray(result.data) ? result.data : result.data.results || [];
+            const teacherSelect = document.getElementById("subjectTeacher");
+            teacherSelect.innerHTML = '<option value="">-- Select a teacher --</option>';
+
+            items.forEach((teacher) => {
+                const option = document.createElement("option");
+                option.value = teacher.id;
+                option.textContent = `${teacher.name} (id: ${teacher.id})`;
+                teacherSelect.appendChild(option);
+            });
+
+            if (items.length > 0) {
+                teacherSelect.value = String(items[0].id);
+            }
+
+            show(`GET /api/teachers/ (${result.status})`, {
+                loaded_teachers: items.length,
+            });
+        };
+
+        document.getElementById("loadSubjectsBtn").onclick = async () => {
+            const result = await api("subjects/", "GET", null, true);
+            if (!result.ok) {
+                show(`GET /api/subjects/ (${result.status})`, result.data);
+                return;
+            }
+
+            const items = Array.isArray(result.data) ? result.data : result.data.results || [];
+            const subjectSelect = document.getElementById("scheduleSubject");
+            subjectSelect.innerHTML = '<option value="">-- Select a subject --</option>';
+
+            items.forEach((subject) => {
+                const option = document.createElement("option");
+                option.value = subject.id;
+                option.textContent = `${subject.name} (id: ${subject.id})`;
+                subjectSelect.appendChild(option);
+            });
+
+            if (items.length > 0) {
+                subjectSelect.value = String(items[0].id);
+            }
+
+            show(`GET /api/subjects/ (${result.status})`, {
+                loaded_subjects: items.length,
+            });
         };
 
         syncTokenFields();

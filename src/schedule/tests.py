@@ -8,6 +8,8 @@ from rest_framework.test import APITestCase
 from classroom.models import Classroom
 from group.models import EducationalStage, Group
 from schedule.models import Schedule
+from subject.models import EducationalStage as SubjectEducationalStage
+from subject.models import Subject, SubjectType
 from teacher.models import Teacher
 from user.models import RoleChoices, User
 
@@ -37,6 +39,15 @@ class ScheduleApiTests(APITestCase):
         )
         self.classroom = Classroom.objects.create(name="Aula 1A")
         self.group = Group.objects.create(name="1A", stage=EducationalStage.PRIMARY)
+        self.subject = Subject.objects.create(
+            name="Mathematics",
+            weekly_hours=5,
+            duration=1.5,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+        )
 
     def build_payload(self):
         start_time = timezone.now() + timedelta(days=1)
@@ -49,6 +60,7 @@ class ScheduleApiTests(APITestCase):
             "teacher": self.teacher.id,
             "classroom": self.classroom.id,
             "group": self.group.id,
+            "subject": self.subject.id,
             "users": [self.user.id],
         }
 
@@ -61,6 +73,7 @@ class ScheduleApiTests(APITestCase):
             teacher=self.teacher,
             classroom=self.classroom,
             group=self.group,
+            subject=self.subject,
         )
         schedule.users.add(self.user)
         return schedule
@@ -135,3 +148,12 @@ class ScheduleApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("users", response.data)
+
+    def test_reject_missing_subject(self):
+        payload = self.build_payload()
+        payload.pop("subject")
+
+        response = self.client.post(reverse("schedule-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("subject", response.data)

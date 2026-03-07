@@ -23,6 +23,13 @@ class Schedule(AuditableEntity):
         on_delete=models.CASCADE,
         related_name="schedules",
     )
+    subject = models.ForeignKey(
+        "subject.Subject",
+        on_delete=models.CASCADE,
+        related_name="schedules",
+        null=True,
+        blank=True,
+    )
     users = models.ManyToManyField("user.User", related_name="schedules")
 
     class Meta:

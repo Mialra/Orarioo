@@ -7,7 +7,9 @@ from schedule.serializers import ScheduleSerializer
 class ScheduleViewSet(viewsets.ModelViewSet):
     """CRUD API for schedules."""
 
-    queryset = Schedule.objects.all()
+    queryset = Schedule.objects.all().select_related(
+        "teacher", "classroom", "group", "subject"
+    )
     serializer_class = ScheduleSerializer
     permission_classes = [permissions.IsAuthenticated]
 

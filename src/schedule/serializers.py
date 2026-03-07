@@ -7,6 +7,7 @@ class ScheduleSerializer(serializers.ModelSerializer):
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     classroom_name = serializers.CharField(source="classroom.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
 
     class Meta:
         model = Schedule
@@ -22,6 +23,8 @@ class ScheduleSerializer(serializers.ModelSerializer):
             "classroom_name",
             "group",
             "group_name",
+            "subject",
+            "subject_name",
             "users",
             "created_at",
             "updated_at",
@@ -33,6 +36,7 @@ class ScheduleSerializer(serializers.ModelSerializer):
             "teacher_name",
             "classroom_name",
             "group_name",
+            "subject_name",
             "created_at",
             "updated_at",
             "created_by",
@@ -57,6 +61,18 @@ class ScheduleSerializer(serializers.ModelSerializer):
         if self.instance is None and not attrs.get("users"):
             raise serializers.ValidationError(
                 {"users": "At least one user must be assigned."}
+            )
+
+        if self.instance is None and not attrs.get("subject"):
+            raise serializers.ValidationError({"subject": "This field is required."})
+
+        if (
+            self.instance is not None
+            and "subject" in attrs
+            and attrs.get("subject") is None
+        ):
+            raise serializers.ValidationError(
+                {"subject": "This field may not be null."}
             )
 
         if self.instance is not None and "users" in attrs and not attrs.get("users"):
