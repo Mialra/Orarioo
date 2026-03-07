@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "teacher",
     "classroom",
     "group",
+    "schedule",
     "user",
     "main",
 ]

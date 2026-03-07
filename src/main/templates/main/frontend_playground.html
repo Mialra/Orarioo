@@ -20,7 +20,7 @@
 </head>
 <body>
     <h1>Orarioo API Playground</h1>
-    <small>Basic frontend to test authentication, Teacher CRUD, Classroom CRUD and Group CRUD.</small>
+    <small>Basic frontend to test authentication, Teacher CRUD, Classroom CRUD, Group CRUD and Schedule CRUD.</small>
 
     <div class="grid">
         <section class="card">
@@ -118,6 +118,32 @@
                 <button id="groupDetailBtn">Detail</button>
                 <button id="groupUpdateBtn">Update</button>
                 <button id="groupDeleteBtn">Delete</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Schedule CRUD</h3>
+            <label>Schedule ID (for detail/update/delete)<input id="scheduleId" type="number" placeholder="1" /></label>
+            <label>Name<input id="scheduleName" value="Math Monday" /></label>
+            <div class="row">
+                <label>Start time<input id="scheduleStartTime" type="datetime-local" value="2026-03-08T09:00" /></label>
+                <label>End time<input id="scheduleEndTime" type="datetime-local" value="2026-03-08T10:00" /></label>
+            </div>
+            <div class="row">
+                <label>Teacher ID<input id="scheduleTeacherId" type="number" value="1" /></label>
+                <label>Classroom ID<input id="scheduleClassroomId" type="number" value="1" /></label>
+            </div>
+            <label>Group ID<input id="scheduleGroupId" type="number" value="1" /></label>
+            <label>User IDs (comma-separated)<input id="scheduleUserIds" value="1" /></label>
+            <label>Observations<input id="scheduleObservations" value="Bring calculators" /></label>
+            <div class="row" style="margin-top:8px;">
+                <button id="scheduleCreateBtn">Create</button>
+                <button id="scheduleListBtn">List</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <button id="scheduleDetailBtn">Detail</button>
+                <button id="scheduleUpdateBtn">Update</button>
+                <button id="scheduleDeleteBtn">Delete</button>
             </div>
         </section>
     </div>
@@ -406,6 +432,77 @@
             if (!id) return;
             const result = await api(`groups/${id}/`, "DELETE", null, true);
             show(`DELETE /api/groups/${id}/ (${result.status})`, result.data);
+        };
+
+        const parseUserIds = (value) =>
+            value
+                .split(",")
+                .map((part) => Number(part.trim()))
+                .filter((id) => Number.isInteger(id) && id > 0);
+
+        const toIsoOrNull = (value) => {
+            if (!value) return null;
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return null;
+            return date.toISOString();
+        };
+
+        const schedulePayload = () => ({
+            name: document.getElementById("scheduleName").value,
+            start_time: toIsoOrNull(document.getElementById("scheduleStartTime").value),
+            end_time: toIsoOrNull(document.getElementById("scheduleEndTime").value),
+            observations: document.getElementById("scheduleObservations").value,
+            teacher: Number(document.getElementById("scheduleTeacherId").value),
+            classroom: Number(document.getElementById("scheduleClassroomId").value),
+            group: Number(document.getElementById("scheduleGroupId").value),
+            users: parseUserIds(document.getElementById("scheduleUserIds").value),
+        });
+
+        const scheduleId = () => document.getElementById("scheduleId").value.trim();
+
+        const requireScheduleId = () => {
+            const id = scheduleId();
+            if (!id) {
+                show("Schedule ID required", {
+                    detail: "Fill 'Schedule ID' before detail/update/delete actions.",
+                });
+                return null;
+            }
+            return id;
+        };
+
+        document.getElementById("scheduleCreateBtn").onclick = async () => {
+            const result = await api("schedules/", "POST", schedulePayload(), true);
+            if (result.ok && result.data && result.data.id) {
+                document.getElementById("scheduleId").value = result.data.id;
+            }
+            show(`POST /api/schedules/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("scheduleListBtn").onclick = async () => {
+            const result = await api("schedules/", "GET", null, true);
+            show(`GET /api/schedules/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("scheduleDetailBtn").onclick = async () => {
+            const id = requireScheduleId();
+            if (!id) return;
+            const result = await api(`schedules/${id}/`, "GET", null, true);
+            show(`GET /api/schedules/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("scheduleUpdateBtn").onclick = async () => {
+            const id = requireScheduleId();
+            if (!id) return;
+            const result = await api(`schedules/${id}/`, "PATCH", schedulePayload(), true);
+            show(`PATCH /api/schedules/${id}/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("scheduleDeleteBtn").onclick = async () => {
+            const id = requireScheduleId();
+            if (!id) return;
+            const result = await api(`schedules/${id}/`, "DELETE", null, true);
+            show(`DELETE /api/schedules/${id}/ (${result.status})`, result.data);
         };
 
         syncTokenFields();
