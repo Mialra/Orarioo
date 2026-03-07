@@ -8,6 +8,7 @@ from user.models import RoleChoices, User
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for displaying user information"""
 
+    given_name = serializers.CharField(source="name")
     role_display = serializers.SerializerMethodField()
 
     class Meta:
@@ -33,6 +34,7 @@ class UserSerializer(serializers.ModelSerializer):
 class UserCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating new users"""
 
+    given_name = serializers.CharField(source="name")
     password = serializers.CharField(
         write_only=True,
         required=True,
@@ -90,6 +92,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 class UserUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating user information"""
 
+    given_name = serializers.CharField(source="name")
     role = serializers.ChoiceField(choices=RoleChoices.choices, help_text="User role")
 
     class Meta:
@@ -118,7 +121,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def update(self, instance, validated_data):
         """Updates user data"""
-        instance.given_name = validated_data.get("given_name", instance.given_name)
+        instance.name = validated_data.get("name", instance.name)
         instance.family_name = validated_data.get("family_name", instance.family_name)
         instance.email = validated_data.get("email", instance.email)
         instance.role = validated_data.get("role", instance.role)
