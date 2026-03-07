@@ -47,9 +47,7 @@ class Subject(AuditableEntity):
 
     def clean(self):
         if self.duration <= 0:
-            raise ValidationError(
-                {"duration": "Duration must be greater than zero."}
-            )
+            raise ValidationError({"duration": "Duration must be greater than zero."})
         if self.weekly_hours <= 0:
             raise ValidationError(
                 {"weekly_hours": "Weekly hours must be greater than zero."}

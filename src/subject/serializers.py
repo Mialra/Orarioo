@@ -39,7 +39,5 @@ class SubjectSerializer(serializers.ModelSerializer):
 
     def validate_weekly_hours(self, value):
         if value <= 0:
-            raise serializers.ValidationError(
-                "Weekly hours must be greater than zero."
-            )
+            raise serializers.ValidationError("Weekly hours must be greater than zero.")
         return value
