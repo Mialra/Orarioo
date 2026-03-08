@@ -5,6 +5,7 @@ from subject.models import Subject
 
 class SubjectSerializer(serializers.ModelSerializer):
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
+    group_name = serializers.CharField(source="group.name", read_only=True)
 
     class Meta:
         model = Subject
@@ -18,6 +19,8 @@ class SubjectSerializer(serializers.ModelSerializer):
             "type",
             "teacher",
             "teacher_name",
+            "group",
+            "group_name",
             "created_at",
             "updated_at",
             "created_by",
@@ -30,6 +33,7 @@ class SubjectSerializer(serializers.ModelSerializer):
             "created_by",
             "updated_by",
             "teacher_name",
+            "group_name",
         ]
 
     def validate_duration(self, value):

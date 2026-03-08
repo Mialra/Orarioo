@@ -40,6 +40,11 @@ class Subject(AuditableEntity):
         on_delete=models.CASCADE,
         related_name="subjects",
     )
+    group = models.ForeignKey(
+        "group.Group",
+        on_delete=models.CASCADE,
+        related_name="subjects",
+    )
 
     class Meta:
         db_table = "subject"
