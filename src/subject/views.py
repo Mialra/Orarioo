@@ -7,7 +7,7 @@ from subject.serializers import SubjectSerializer
 class SubjectViewSet(viewsets.ModelViewSet):
     """CRUD API for subjects."""
 
-    queryset = Subject.objects.all().select_related("teacher")
+    queryset = Subject.objects.all().select_related("teacher", "group")
     serializer_class = SubjectSerializer
     permission_classes = [permissions.IsAuthenticated]
 

@@ -5,7 +5,6 @@ Run from the src directory with: python load_test_data.py
 
 import os
 import sys
-from datetime import timedelta
 
 # Add the src directory to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,7 +18,6 @@ django.setup()
 
 # NOTE: These imports must come after django.setup() - ignore E402
 from django.contrib.auth import get_user_model  # noqa: E402
-from django.utils import timezone  # noqa: E402
 
 from classroom.models import Classroom  # noqa: E402
 from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
@@ -78,18 +76,18 @@ def create_users():
 
 
 def create_teachers():
-    """Create test teachers"""
+    """Create test teachers for ESO subjects"""
     print("\n👨‍🏫 Creating teachers...")
 
     teachers_data = [
-        ("Prof. Carlos Rodríguez", 25, "Matemáticas"),
-        ("Prof. Laura Jiménez", 20, "Lengua"),
-        ("Prof. Miguel Sánchez", 22, "Inglés"),
-        ("Prof. Elena Torres", 18, "Ciencias Naturales"),
-        ("Prof. David López", 20, "Educación Física"),
-        ("Prof. Carmen Díaz", 18, "Música"),
-        ("Prof. Antonio Ruiz", 20, "Plástica"),
-        ("Prof. Isabel Moreno", 22, "Historia"),
+        ("Prof. Carlos Rodríguez", 20, "Matemáticas"),
+        ("Prof. Laura Jiménez", 20, "Lengua Castellana"),
+        ("Prof. Miguel Sánchez", 18, "Inglés"),
+        ("Prof. Elena Torres", 18, "Biología y Geología"),
+        ("Prof. Isabel Moreno", 18, "Geografía e Historia"),
+        ("Prof. David López", 15, "Educación Física"),
+        ("Prof. Carmen Díaz", 15, "Música"),
+        ("Prof. Antonio Ruiz", 15, "Educación Plástica"),
     ]
 
     teachers = []
@@ -99,8 +97,8 @@ def create_teachers():
             max_weekly_hours=max_hours,
             working_hours=0,
             preferences=preferences,
-            availability="Lunes a Viernes: 8:00-14:00",
-            unavailability="Miércoles 12:00-14:00",
+            availability="Lunes a Viernes: 8:30-15:00",
+            unavailability="",
             created_by="system",
         )
         teachers.append(teacher)
@@ -109,107 +107,144 @@ def create_teachers():
     return teachers
 
 
-def create_subjects(teachers):
-    """Create test subjects"""
+def create_subjects(teachers, groups):
+    """Create test subjects for 1º ESO and 2º ESO"""
     print("\n📚 Creating subjects...")
 
+    # Realistic subjects for Spanish ESO (Educación Secundaria Obligatoria)
+    # Each ESO year has 6 subjects with 5 hours/week = 30 hours/week (6 hours/day × 5 days)
+    # Format: (name, weekly_hours, duration, stage, type, teacher_index, group_index)
     subjects_data = [
-        # Primary subjects
-        ("Matemáticas 1º", 5, 1.0, EducationalStage.PRIMARY, SubjectType.NORMAL, 0),
-        ("Lengua 1º", 5, 1.0, EducationalStage.PRIMARY, SubjectType.NORMAL, 1),
-        ("Inglés 1º", 3, 1.0, EducationalStage.PRIMARY, SubjectType.NORMAL, 2),
+        # 1º ESO subjects (6 subjects × 5 hours = 30 hours total)
         (
-            "Ciencias Naturales 1º",
-            3,
-            1.0,
-            EducationalStage.PRIMARY,
-            SubjectType.NORMAL,
-            3,
-        ),
-        (
-            "Educación Física 1º",
-            2,
-            1.0,
-            EducationalStage.PRIMARY,
-            SubjectType.NORMAL,
-            4,
-        ),
-        ("Matemáticas 2º", 5, 1.0, EducationalStage.PRIMARY, SubjectType.NORMAL, 0),
-        ("Lengua 2º", 5, 1.0, EducationalStage.PRIMARY, SubjectType.NORMAL, 1),
-        ("Inglés 2º", 3, 1.0, EducationalStage.PRIMARY, SubjectType.NORMAL, 2),
-        # Secondary subjects
-        (
-            "Matemáticas Avanzadas",
-            4,
+            "Matemáticas 1º ESO",
+            5,
             1.0,
             EducationalStage.SECONDARY,
             SubjectType.NORMAL,
             0,
+            0,
         ),
         (
-            "Lengua Castellana",
-            4,
+            "Lengua Castellana 1º ESO",
+            5,
             1.0,
             EducationalStage.SECONDARY,
             SubjectType.NORMAL,
             1,
+            0,
         ),
+        ("Inglés 1º ESO", 5, 1.0, EducationalStage.SECONDARY, SubjectType.NORMAL, 2, 0),
         (
-            "Historia Universal",
-            3,
+            "Biología y Geología 1º ESO",
+            5,
             1.0,
             EducationalStage.SECONDARY,
             SubjectType.NORMAL,
-            7,
+            3,
+            0,
         ),
-        # Preschool subjects
-        ("Música Infantil", 2, 0.5, EducationalStage.PRESCHOOL, SubjectType.NORMAL, 5),
         (
-            "Plástica Infantil",
-            2,
-            0.5,
-            EducationalStage.PRESCHOOL,
+            "Geografía e Historia 1º ESO",
+            5,
+            1.0,
+            EducationalStage.SECONDARY,
             SubjectType.NORMAL,
-            6,
+            4,
+            0,
         ),
-        # TC subjects
-        ("Tutoría 1º", 2, 1.0, EducationalStage.PRIMARY, SubjectType.TC, 0),
-        ("Tutoría 2º", 2, 1.0, EducationalStage.PRIMARY, SubjectType.TC, 1),
+        (
+            "Educación Física 1º ESO",
+            5,
+            1.0,
+            EducationalStage.SECONDARY,
+            SubjectType.NORMAL,
+            5,
+            0,
+        ),
+        # 2º ESO subjects (6 subjects × 5 hours = 30 hours total)
+        (
+            "Matemáticas 2º ESO",
+            5,
+            1.0,
+            EducationalStage.SECONDARY,
+            SubjectType.NORMAL,
+            0,
+            1,
+        ),
+        (
+            "Lengua Castellana 2º ESO",
+            5,
+            1.0,
+            EducationalStage.SECONDARY,
+            SubjectType.NORMAL,
+            1,
+            1,
+        ),
+        ("Inglés 2º ESO", 5, 1.0, EducationalStage.SECONDARY, SubjectType.NORMAL, 2, 1),
+        (
+            "Física y Química 2º ESO",
+            5,
+            1.0,
+            EducationalStage.SECONDARY,
+            SubjectType.NORMAL,
+            3,
+            1,
+        ),
+        (
+            "Geografía e Historia 2º ESO",
+            5,
+            1.0,
+            EducationalStage.SECONDARY,
+            SubjectType.NORMAL,
+            4,
+            1,
+        ),
+        ("Música 2º ESO", 5, 1.0, EducationalStage.SECONDARY, SubjectType.NORMAL, 6, 1),
     ]
 
     subjects = []
-    for name, weekly_hours, duration, stage, sub_type, teacher_idx in subjects_data:
+    for (
+        name,
+        weekly_hours,
+        duration,
+        stage,
+        sub_type,
+        teacher_idx,
+        group_idx,
+    ) in subjects_data:
         subject = Subject.objects.create(
             name=name,
             weekly_hours=weekly_hours,
             duration=duration,
-            preferred_time_slot="9:00-10:00" if "Matemáticas" in name else "",
+            preferred_time_slot="8:30-11:30" if "Matemáticas" in name else "",
             stage=stage,
             type=sub_type,
             teacher=teachers[teacher_idx],
+            group=groups[group_idx],
             created_by="system",
         )
         subjects.append(subject)
-        print(f"  ✓ Created subject: {subject.name}")
+        print(f"  ✓ Created subject: {subject.name} ({weekly_hours}h/semana)")
 
+    total_hours = sum(s.weekly_hours for s in subjects)
+    print(
+        f"\n  📊 Total weekly hours: {total_hours} (6 hours/day × 5 days = 30 slots per group)"
+    )
     return subjects
 
 
 def create_classrooms():
-    """Create test classrooms"""
+    """Create test classrooms for ESO"""
     print("\n🏫 Creating classrooms...")
 
     classrooms_data = [
-        "Aula 101",
-        "Aula 102",
-        "Aula 103",
-        "Aula 201",
-        "Aula 202",
-        "Aula 203",
+        "Aula 1º ESO A",
+        "Aula 2º ESO A",
         "Laboratorio",
         "Gimnasio",
         "Aula de Música",
-        "Aula de Plástica",
+        "Aula de Informática",
     ]
 
     classrooms = []
@@ -222,18 +257,12 @@ def create_classrooms():
 
 
 def create_groups():
-    """Create test groups"""
+    """Create test groups for 1º and 2º ESO"""
     print("\n👥 Creating groups...")
 
     groups_data = [
-        ("1º Primaria A", GroupEducationalStage.PRIMARY),
-        ("1º Primaria B", GroupEducationalStage.PRIMARY),
-        ("2º Primaria A", GroupEducationalStage.PRIMARY),
-        ("3º Primaria A", GroupEducationalStage.PRIMARY),
         ("1º ESO A", GroupEducationalStage.SECONDARY),
         ("2º ESO A", GroupEducationalStage.SECONDARY),
-        ("Infantil 3 años", GroupEducationalStage.PRESCHOOL),
-        ("Infantil 4 años", GroupEducationalStage.PRESCHOOL),
     ]
 
     groups = []
@@ -243,179 +272,6 @@ def create_groups():
         print(f"  ✓ Created group: {group.name}")
 
     return groups
-
-
-def create_schedules(teachers, subjects, classrooms, groups, users):
-    """Create test schedules"""
-    print("\n📅 Creating schedules...")
-
-    # Base date - next Monday at 9:00 (timezone-aware)
-    today = timezone.now()
-    days_ahead = 0 - today.weekday()  # Monday is weekday 0
-    if days_ahead <= 0:  # Target day already happened this week
-        days_ahead += 7
-    next_monday = today + timedelta(days_ahead)
-    base_date = next_monday.replace(hour=9, minute=0, second=0, microsecond=0)
-
-    schedules = []
-
-    # Create a week of schedules
-    schedule_data = [
-        # Monday
-        (
-            0,
-            9,
-            0,
-            "Matemáticas 1º - Lunes",
-            subjects[0],
-            teachers[0],
-            classrooms[0],
-            groups[0],
-        ),
-        (
-            0,
-            10,
-            0,
-            "Lengua 1º - Lunes",
-            subjects[1],
-            teachers[1],
-            classrooms[0],
-            groups[0],
-        ),
-        (
-            0,
-            11,
-            0,
-            "Inglés 1º - Lunes",
-            subjects[2],
-            teachers[2],
-            classrooms[0],
-            groups[0],
-        ),
-        # Tuesday
-        (
-            1,
-            9,
-            0,
-            "Matemáticas 2º - Martes",
-            subjects[5],
-            teachers[0],
-            classrooms[1],
-            groups[2],
-        ),
-        (
-            1,
-            10,
-            0,
-            "Lengua 2º - Martes",
-            subjects[6],
-            teachers[1],
-            classrooms[1],
-            groups[2],
-        ),
-        (
-            1,
-            12,
-            0,
-            "Educación Física 1º",
-            subjects[4],
-            teachers[4],
-            classrooms[7],
-            groups[0],
-        ),
-        # Wednesday
-        (
-            2,
-            9,
-            0,
-            "Ciencias Naturales 1º",
-            subjects[3],
-            teachers[3],
-            classrooms[0],
-            groups[0],
-        ),
-        (
-            2,
-            10,
-            0,
-            "Música Infantil",
-            subjects[11],
-            teachers[5],
-            classrooms[8],
-            groups[6],
-        ),
-        # Thursday
-        (
-            3,
-            9,
-            0,
-            "Matemáticas Avanzadas",
-            subjects[8],
-            teachers[0],
-            classrooms[3],
-            groups[4],
-        ),
-        (
-            3,
-            10,
-            0,
-            "Historia Universal",
-            subjects[10],
-            teachers[7],
-            classrooms[3],
-            groups[4],
-        ),
-        # Friday
-        (
-            4,
-            9,
-            0,
-            "Plástica Infantil",
-            subjects[12],
-            teachers[6],
-            classrooms[9],
-            groups[7],
-        ),
-        (4, 11, 0, "Inglés 2º", subjects[7], teachers[2], classrooms[1], groups[2]),
-    ]
-
-    for (
-        day_offset,
-        hour,
-        teacher_idx,
-        name,
-        subject,
-        teacher,
-        classroom,
-        group,
-    ) in schedule_data:
-        start_time = base_date + timedelta(days=day_offset, hours=hour - 9)
-        end_time = start_time + timedelta(hours=subject.duration)
-
-        schedule = Schedule.objects.create(
-            name=name,
-            start_time=start_time,
-            end_time=end_time,
-            observations=f"Clase regular de {subject.name}",
-            teacher=teacher,
-            classroom=classroom,
-            group=group,
-            subject=subject,
-            created_by="system",
-        )
-
-        # Add some users to the schedule
-        if users:
-            schedule.users.add(users[0])  # Add admin
-            if len(users) > 1:
-                schedule.users.add(users[1])  # Add first director
-
-        schedules.append(schedule)
-        print(
-            f"  ✓ Created schedule: {schedule.name} - {schedule.start_time.strftime('%A %H:%M')}"
-        )
-
-    return schedules
 
 
 def main():
@@ -429,10 +285,10 @@ def main():
         # Create all entities
         users = create_users()
         teachers = create_teachers()
-        subjects = create_subjects(teachers)
-        classrooms = create_classrooms()
         groups = create_groups()
-        schedules = create_schedules(teachers, subjects, classrooms, groups, users)
+        subjects = create_subjects(teachers, groups)
+        classrooms = create_classrooms()
+        # schedules = create_schedules(teachers, subjects, classrooms, groups, users)
 
         print("\n" + "=" * 60)
         print("✅ Test data loaded successfully!")
@@ -442,7 +298,7 @@ def main():
         print(f"  • {len(subjects)} subjects created")
         print(f"  • {len(classrooms)} classrooms created")
         print(f"  • {len(groups)} groups created")
-        print(f"  • {len(schedules)} schedules created")
+        # print(f"  • {len(schedules)} schedules created")
         print("\n🔑 Login credentials:")
         print("  Admin: admin@test.com / admin123")
         print("  Director: director1@test.com / director123")

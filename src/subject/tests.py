@@ -2,6 +2,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from group.models import EducationalStage as GroupEducationalStage
+from group.models import Group
 from subject.models import EducationalStage, Subject, SubjectType
 from teacher.models import Teacher
 from user.models import RoleChoices, User
@@ -23,6 +25,10 @@ class SubjectApiTests(APITestCase):
             max_weekly_hours=40,
             working_hours=20,
         )
+        self.group = Group.objects.create(
+            name="1º ESO A",
+            stage=GroupEducationalStage.SECONDARY,
+        )
 
     def test_create_subject(self):
         payload = {
@@ -33,6 +39,7 @@ class SubjectApiTests(APITestCase):
             "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
+            "group": self.group.id,
         }
 
         response = self.client.post(reverse("subject-list"), payload, format="json")
@@ -50,6 +57,7 @@ class SubjectApiTests(APITestCase):
             stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
+            group=self.group,
         )
 
         list_response = self.client.get(reverse("subject-list"))
@@ -68,6 +76,7 @@ class SubjectApiTests(APITestCase):
             stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
+            group=self.group,
         )
 
         payload = {
@@ -78,6 +87,7 @@ class SubjectApiTests(APITestCase):
             "stage": EducationalStage.PRIMARY,
             "type": SubjectType.TC,
             "teacher": self.teacher.id,
+            "group": self.group.id,
         }
 
         response = self.client.put(
@@ -98,6 +108,7 @@ class SubjectApiTests(APITestCase):
             stage=EducationalStage.PRESCHOOL,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
+            group=self.group,
         )
 
         response = self.client.delete(reverse("subject-detail", args=[subject.id]))
@@ -113,6 +124,7 @@ class SubjectApiTests(APITestCase):
             "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
+            "group": self.group.id,
         }
 
         response = self.client.post(reverse("subject-list"), payload, format="json")
@@ -128,6 +140,7 @@ class SubjectApiTests(APITestCase):
             "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
+            "group": self.group.id,
         }
 
         response = self.client.post(reverse("subject-list"), payload, format="json")
@@ -143,8 +156,24 @@ class SubjectApiTests(APITestCase):
             stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
+            group=self.group,
         )
 
         self.assertEqual(subject.teacher.id, self.teacher.id)
         self.assertEqual(self.teacher.subjects.count(), 1)
         self.assertEqual(self.teacher.subjects.first().name, "Physics")
+
+    def test_reject_missing_group(self):
+        payload = {
+            "name": "Sin curso",
+            "weekly_hours": 3,
+            "duration": 1.0,
+            "stage": EducationalStage.SECONDARY,
+            "type": SubjectType.NORMAL,
+            "teacher": self.teacher.id,
+        }
+
+        response = self.client.post(reverse("subject-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("group", response.data)

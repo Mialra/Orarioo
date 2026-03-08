@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orarioo - Generador de Horarios</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 40px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            border-left: 4px solid;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border-left-color: #28a745;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left-color: #dc3545;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left-color: #17a2b8;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .tab-btn {
+            padding: 12px 20px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            font-size: 0.9em;
+            letter-spacing: 0.5px;
+        }
+
+        .tab-btn:hover {
+            color: #333;
+        }
+
+        .tab-btn.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #333;
+            font-size: 0.95em;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.95em;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        input[type="password"]:focus,
+        input[type="number"]:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #e9ecef;
+            color: #333;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #dee2e6;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+            padding: 6px 12px;
+            font-size: 0.85em;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #c82333;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-top: 30px;
+        }
+
+        .schedule-grid-wrap {
+            margin-top: 25px;
+            overflow-x: auto;
+        }
+
+        .schedule-grid {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 900px;
+        }
+
+        .schedule-grid th,
+        .schedule-grid td {
+            border: 1px solid #dee2e6;
+            vertical-align: top;
+            padding: 10px;
+        }
+
+        .schedule-grid thead th {
+            background: #eef1ff;
+            text-align: center;
+        }
+
+        .schedule-time-col {
+            width: 90px;
+            font-weight: 700;
+            background: #f8f9fa;
+            text-align: center;
+        }
+
+        .schedule-cell {
+            min-height: 90px;
+        }
+
+        .schedule-card {
+            background: #ffffff;
+            border: 1px solid #dbe3ff;
+            border-left: 4px solid #667eea;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+            font-size: 0.86em;
+            line-height: 1.35;
+        }
+
+        .schedule-card strong {
+            display: block;
+            color: #2f3a66;
+            margin-bottom: 4px;
+        }
+
+        .schedule-detail-title {
+            margin-top: 24px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .schedule-filter-bar {
+            margin-top: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .schedule-filter-bar label {
+            margin-bottom: 0;
+        }
+
+        .schedule-filter-select {
+            max-width: 260px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95em;
+        }
+
+        thead {
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+            flex-wrap: nowrap;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .form-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid #667eea;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.5em;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                gap: 5px;
+            }
+
+            .tab-btn {
+                padding: 10px 15px;
+                font-size: 0.8em;
+            }
+
+            .tab-content {
+                padding: 20px;
+            }
+
+            table {
+                font-size: 0.85em;
+            }
+
+            th, td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📅 Orarioo - Generador de Horarios</h1>
+            <p>Sistema inteligente de planificación académica</p>
+            <div class="header-actions">
+                <button class="btn-primary" id="loginBtn">🔐 Iniciar Sesión</button>
+                <button class="btn-secondary" id="logoutBtn" style="display: none;">Cerrar Sesión</button>
+                <button class="btn-secondary" id="refreshBtn" style="display: none;">🔄 Actualizar Datos</button>
+            </div>
+        </div>
+
+        <!-- Alerts -->
+        <div id="successAlert" class="alert alert-success"></div>
+        <div id="errorAlert" class="alert alert-error"></div>
+        <div id="infoAlert" class="alert alert-info"></div>
+
+        <!-- Auth Modal -->
+        <div id="authModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+            <div style="background: white; padding: 30px; border-radius: 12px; max-width: 400px; width: 90%;">
+                <h2 style="margin-bottom: 20px;">Iniciar Sesión</h2>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="authEmail" placeholder="admin@test.com" value="admin@test.com" />
+                </div>
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <input type="password" id="authPassword" placeholder="••••••••" value="admin123" />
+                </div>
+                <div class="button-group">
+                    <button class="btn-primary" id="submitLoginBtn" style="flex: 1;">Iniciar Sesión</button>
+                    <button class="btn-secondary" id="cancelLoginBtn" style="flex: 1;">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div id="mainContent" style="display: none;">
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="statTeachers">-</div>
+                    <div class="stat-label">Profesores</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statClassrooms">-</div>
+                    <div class="stat-label">Aulas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statGroups">-</div>
+                    <div class="stat-label">Grupos</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statSubjects">-</div>
+                    <div class="stat-label">Asignaturas</div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="generator">⚙️ Generador</button>
+                <button class="tab-btn" data-tab="teachers">👨‍🏫 Profesores</button>
+                <button class="tab-btn" data-tab="classrooms">🏫 Aulas</button>
+                <button class="tab-btn" data-tab="groups">👥 Grupos</button>
+                <button class="tab-btn" data-tab="subjects">📚 Asignaturas</button>
+            </div>
+
+            <!-- Generator Tab -->
+            <div class="tab-content active" data-tab="generator">
+                <div class="section-title">⚙️ Generar Horario</div>
+                <div class="form-section">
+                    <p style="color: #666; margin-bottom: 15px; line-height: 1.6;">
+                        El sistema generará automáticamente un horario respetando las siguientes restricciones:
+                    </p>
+                    <ul style="color: #666; margin-bottom: 20px; margin-left: 20px; line-height: 1.8;">
+                        <li>✓ Sin solapamientos para profesores</li>
+                        <li>✓ Sin solapamientos para grupos</li>
+                        <li>✓ Considera carga horaria de asignaturas</li>
+                        <li>✓ Distribución automática en franjas disponibles</li>
+                    </ul>
+                </div>
+                <button class="btn-primary" id="generateBtn" style="width: 100%; padding: 15px; font-size: 1.1em;">
+                    🚀 Generar Horario Automático
+                </button>
+                <div class="schedule-filter-bar">
+                    <label for="scheduleCourseFilter">Filtrar por curso:</label>
+                    <select id="scheduleCourseFilter" class="schedule-filter-select">
+                        <option value="">Todos los cursos</option>
+                    </select>
+                </div>
+                <div id="generatorOutput" class="table-container" style="display: none; margin-top: 30px;"></div>
+            </div>
+
+            <!-- Teachers Tab -->
+            <div class="tab-content" data-tab="teachers">
+                <div class="section-title">👨‍🏫 Gestión de Profesores</div>
+                <div class="form-section">
+                    <h3 style="margin-bottom: 15px;">Crear Nuevo Profesor</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nombre</label>
+                            <input type="text" id="teacherName" placeholder="Ej: Juan García" />
+                        </div>
+                        <div class="form-group">
+                            <label>Máximo Horas Semanales</label>
+                            <input type="number" id="teacherMaxHours" placeholder="20" value="20" />
+                        </div>
+                        <div class="form-group">
+                            <label>Horas Actuales</label>
+                            <input type="number" id="teacherCurrentHours" placeholder="0" value="0" />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Preferencias</label>
+                            <input type="text" id="teacherPreferences" placeholder="Ej: Mañanas" />
+                        </div>
+                        <div class="form-group">
+                            <label>Disponibilidad</label>
+                            <input type="text" id="teacherAvailability" placeholder="Ej: Lun-Vie 08:30-15:00" />
+                        </div>
+                    </div>
+                    <button class="btn-primary" id="createTeacherBtn">Crear Profesor</button>
+                </div>
+                <div class="table-container">
+                    <table id="teachersTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Max Horas</th>
+                                <th>Horas Actuales</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="teachersList"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Classrooms Tab -->
+            <div class="tab-content" data-tab="classrooms">
+                <div class="section-title">🏫 Gestión de Aulas</div>
+                <div class="form-section">
+                    <h3 style="margin-bottom: 15px;">Crear Nueva Aula</h3>
+                    <div class="form-group">
+                        <label>Nombre del Aula</label>
+                        <input type="text" id="classroomName" placeholder="Ej: Aula 1A" />
+                    </div>
+                    <button class="btn-primary" id="createClassroomBtn">Crear Aula</button>
+                </div>
+                <div class="table-container">
+                    <table id="classroomsTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="classroomsList"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Groups Tab -->
+            <div class="tab-content" data-tab="groups">
+                <div class="section-title">👥 Gestión de Grupos</div>
+                <div class="form-section">
+                    <h3 style="margin-bottom: 15px;">Crear Nuevo Grupo</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nombre del Grupo</label>
+                            <input type="text" id="groupName" placeholder="Ej: 1A" />
+                        </div>
+                        <div class="form-group">
+                            <label>Etapa Educativa</label>
+                            <select id="groupStage">
+                                <option value="preschool">Educación Infantil</option>
+                                <option value="primary" selected>Educación Primaria</option>
+                                <option value="secondary">Educación Secundaria</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn-primary" id="createGroupBtn">Crear Grupo</button>
+                </div>
+                <div class="table-container">
+                    <table id="groupsTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Etapa</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="groupsList"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Subjects Tab -->
+            <div class="tab-content" data-tab="subjects">
+                <div class="section-title">📚 Gestión de Asignaturas</div>
+                <div class="form-section">
+                    <h3 style="margin-bottom: 15px;">Crear Nueva Asignatura</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nombre</label>
+                            <input type="text" id="subjectName" placeholder="Ej: Matemáticas" />
+                        </div>
+                        <div class="form-group">
+                            <label>Horas Semanales</label>
+                            <input type="number" id="subjectWeeklyHours" placeholder="5" value="5" />
+                        </div>
+                        <div class="form-group">
+                            <label>Duración Sesión (horas)</label>
+                            <input type="number" id="subjectDuration" placeholder="1.5" value="1" step="0.5" />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Etapa</label>
+                            <select id="subjectStage">
+                                <option value="PRESCHOOL">Educación Infantil</option>
+                                <option value="PRIMARY" selected>Educación Primaria</option>
+                                <option value="SECONDARY">Educación Secundaria</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo</label>
+                            <select id="subjectType">
+                                <option value="NORMAL" selected>Normal</option>
+                                <option value="TC">Transversal Compartida</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Profesor Asignado</label>
+                            <select id="subjectTeacher">
+                                <option value="">-- Selecciona Profesor --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Curso (Grupo)</label>
+                            <select id="subjectGroup">
+                                <option value="">-- Selecciona Curso --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn-primary" id="createSubjectBtn">Crear Asignatura</button>
+                </div>
+                <div class="table-container">
+                    <table id="subjectsTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Horas Semanales</th>
+                                <th>Profesor</th>
+                                <th>Curso</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="subjectsList"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const API_BASE = "/api";
+            let authToken = localStorage.getItem("access_token") || "";
+            let latestGeneratedSchedules = [];
+
+        // Utility Functions
+        const showAlert = (type, message) => {
+            const key = `${type}Alert`;
+            if (!document.getElementById(key)) return;
+            const element = document.getElementById(key);
+            element.textContent = message;
+            element.classList.add("show");
+            setTimeout(() => element.classList.remove("show"), 4000);
+        };
+
+        const apiCall = async (endpoint, method = "GET", body = null) => {
+            const options = {
+                method,
+                headers: { "Content-Type": "application/json" },
+            };
+            if (authToken) {
+                options.headers["Authorization"] = `Bearer ${authToken}`;
+            }
+            if (body) options.body = JSON.stringify(body);
+            try {
+                console.log(`API Call: ${method} ${API_BASE}${endpoint}`, options);
+                const response = await fetch(`${API_BASE}${endpoint}`, options);
+                const data = await response.json();
+                console.log(`API Response for ${endpoint}:`, { status: response.status, ok: response.ok, data });
+                if (!response.ok && response.status === 401) {
+                    authToken = "";
+                    localStorage.removeItem("access_token");
+                    updateAuthUI();
+                    throw new Error("Sesión expirada");
+                }
+                return { ok: response.ok, status: response.status, data };
+            } catch (error) {
+                console.error(`API Error for ${endpoint}:`, error);
+                return { ok: false, status: 0, data: { detail: error.message } };
+            }
+        };
+
+        // Auth
+        const updateAuthUI = () => {
+            const mainContent = document.getElementById("mainContent");
+            const loginBtn = document.getElementById("loginBtn");
+            const logoutBtn = document.getElementById("logoutBtn");
+            const refreshBtn = document.getElementById("refreshBtn");
+
+            if (authToken) {
+                mainContent.style.display = "block";
+                loginBtn.style.display = "none";
+                logoutBtn.style.display = "inline-block";
+                refreshBtn.style.display = "inline-block";
+                loadAllData();
+            } else {
+                mainContent.style.display = "none";
+                loginBtn.style.display = "inline-block";
+                logoutBtn.style.display = "none";
+                refreshBtn.style.display = "none";
+            }
+        };
+
+        document.getElementById("loginBtn").onclick = () => {
+            document.getElementById("authModal").style.display = "flex";
+        };
+
+        document.getElementById("submitLoginBtn").onclick = async () => {
+            const email = document.getElementById("authEmail").value;
+            const password = document.getElementById("authPassword").value;
+            if (!email || !password) {
+                showAlert("error", "Rellena email y contraseña");
+                return;
+            }
+            const result = await apiCall("/login/", "POST", { email, password });
+            if (result.ok) {
+                authToken = result.data.access;
+                localStorage.setItem("access_token", authToken);
+                document.getElementById("authModal").style.display = "none";
+                showAlert("success", "✓ Sesión iniciada");
+                updateAuthUI();
+            } else {
+                showAlert("error", result.data.detail || "Error en login");
+            }
+        };
+
+        document.getElementById("cancelLoginBtn").onclick = () => {
+            document.getElementById("authModal").style.display = "none";
+        };
+
+        document.getElementById("logoutBtn").onclick = () => {
+            authToken = "";
+            localStorage.removeItem("access_token");
+            updateAuthUI();
+            showAlert("info", "Sesión cerrada");
+        };
+
+        // Tabs
+        document.querySelectorAll(".tab-btn").forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+                document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+                btn.classList.add("active");
+                document.querySelector(`.tab-content[data-tab="${btn.dataset.tab}"]`).classList.add("active");
+            };
+        });
+
+        // Load All Data
+        const loadAllData = async () => {
+            const [teachers, classrooms, groups, subjects] = await Promise.all([
+                apiCall("/teachers/"),
+                apiCall("/classrooms/"),
+                apiCall("/groups/"),
+                apiCall("/subjects/"),
+            ]);
+
+            console.log("Load data results:", { teachers, classrooms, groups, subjects });
+
+            // Handle paginated responses (data.results) or direct arrays
+            const teacherData = teachers.data?.results || (Array.isArray(teachers.data) ? teachers.data : []);
+            const classroomData = classrooms.data?.results || (Array.isArray(classrooms.data) ? classrooms.data : []);
+            const groupData = groups.data?.results || (Array.isArray(groups.data) ? groups.data : []);
+            const subjectData = subjects.data?.results || (Array.isArray(subjects.data) ? subjects.data : []);
+
+            document.getElementById("statTeachers").textContent = teachers.data?.count || teacherData.length;
+            document.getElementById("statClassrooms").textContent = classrooms.data?.count || classroomData.length;
+            document.getElementById("statGroups").textContent = groups.data?.count || groupData.length;
+            document.getElementById("statSubjects").textContent = subjects.data?.count || subjectData.length;
+
+            renderTeachers(teacherData);
+            renderClassrooms(classroomData);
+            renderGroups(groupData);
+            renderSubjects(subjectData, teacherData, groupData);
+            populateScheduleCourseFilter(groupData);
+        };
+
+        const populateScheduleCourseFilter = (groups) => {
+            const filter = document.getElementById("scheduleCourseFilter");
+            const currentValue = filter.value;
+            const uniqueNames = [...new Set((groups || []).map((g) => g.name).filter(Boolean))].sort();
+
+            filter.innerHTML =
+                '<option value="">Todos los cursos</option>' +
+                uniqueNames.map((name) => `<option value="${name}">${name}</option>`).join("");
+
+            if (currentValue && uniqueNames.includes(currentValue)) {
+                filter.value = currentValue;
+            }
+        };
+
+        const getFilteredSchedules = (schedules) => {
+            const selectedCourse = document.getElementById("scheduleCourseFilter").value;
+            if (!selectedCourse) {
+                return schedules;
+            }
+
+            const normalize = (value) =>
+                (value || "")
+                    .toString()
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .trim();
+
+            const selectedNorm = normalize(selectedCourse);
+
+            // Accept equivalent labels such as "2o eso" and allow subject-based fallback
+            const isFirstEso = selectedNorm.startsWith("1") && selectedNorm.includes("eso");
+            const isSecondEso = selectedNorm.startsWith("2") && selectedNorm.includes("eso");
+
+            return schedules.filter((s) => {
+                const groupNorm = normalize(s.group_name);
+                const subjectNorm = normalize(s.subject_name);
+
+                if (groupNorm === selectedNorm) {
+                    return true;
+                }
+
+                if (isFirstEso && subjectNorm.includes("1") && subjectNorm.includes("eso")) {
+                    return true;
+                }
+
+                if (isSecondEso && subjectNorm.includes("2") && subjectNorm.includes("eso")) {
+                    return true;
+                }
+
+                return false;
+            });
+        };
+
+        const renderFilteredSchedules = () => {
+            const filtered = getFilteredSchedules(latestGeneratedSchedules);
+            displaySchedules(filtered);
+        };
+
+        document.getElementById("scheduleCourseFilter").onchange = () => {
+            renderFilteredSchedules();
+        };
+
+        document.getElementById("refreshBtn").onclick = loadAllData;
+
+        // Teachers CRUD
+        const renderTeachers = (items) => {
+            const tbody = document.getElementById("teachersList");
+            if (!items.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay profesores registrados</td></tr>';
+                return;
+            }
+            tbody.innerHTML = items.map(t => `
+                <tr>
+                    <td>${t.id}</td>
+                    <td>${t.name}</td>
+                    <td>${t.max_weekly_hours}</td>
+                    <td>${t.working_hours}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-danger" onclick="deleteEntity('teachers', ${t.id})">Eliminar</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join("");
+        };
+
+        document.getElementById("createTeacherBtn").onclick = async () => {
+            const payload = {
+                name: document.getElementById("teacherName").value,
+                max_weekly_hours: parseInt(document.getElementById("teacherMaxHours").value),
+                working_hours: parseInt(document.getElementById("teacherCurrentHours").value),
+                preferences: document.getElementById("teacherPreferences").value,
+                availability: document.getElementById("teacherAvailability").value,
+            };
+            if (!payload.name) {
+                showAlert("error", "Ingresa nombre del profesor");
+                return;
+            }
+            const result = await apiCall("/teachers/", "POST", payload);
+            if (result.ok) {
+                showAlert("success", "✓ Profesor creado");
+                document.getElementById("teacherName").value = "";
+                loadAllData();
+            } else {
+                showAlert("error", result.data.detail || "Error al crear");
+            }
+        };
+
+        // Classrooms CRUD
+        const renderClassrooms = (items) => {
+            const tbody = document.getElementById("classroomsList");
+            if (!items.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No hay aulas registradas</td></tr>';
+                return;
+            }
+            tbody.innerHTML = items.map(c => `
+                <tr>
+                    <td>${c.id}</td>
+                    <td>${c.name}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-danger" onclick="deleteEntity('classrooms', ${c.id})">Eliminar</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join("");
+        };
+
+        document.getElementById("createClassroomBtn").onclick = async () => {
+            const name = document.getElementById("classroomName").value;
+            if (!name) {
+                showAlert("error", "Ingresa nombre del aula");
+                return;
+            }
+            const result = await apiCall("/classrooms/", "POST", { name });
+            if (result.ok) {
+                showAlert("success", "✓ Aula creada");
+                document.getElementById("classroomName").value = "";
+                loadAllData();
+            } else {
+                showAlert("error", result.data.detail || "Error al crear");
+            }
+        };
+
+        // Groups CRUD
+        const renderGroups = (items) => {
+            const tbody = document.getElementById("groupsList");
+            if (!items.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No hay grupos registrados</td></tr>';
+                return;
+            }
+            tbody.innerHTML = items.map(g => `
+                <tr>
+                    <td>${g.id}</td>
+                    <td>${g.name}</td>
+                    <td>${g.stage}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-danger" onclick="deleteEntity('groups', ${g.id})">Eliminar</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join("");
+        };
+
+        document.getElementById("createGroupBtn").onclick = async () => {
+            const payload = {
+                name: document.getElementById("groupName").value,
+                stage: document.getElementById("groupStage").value,
+            };
+            if (!payload.name) {
+                showAlert("error", "Ingresa nombre del grupo");
+                return;
+            }
+            const result = await apiCall("/groups/", "POST", payload);
+            if (result.ok) {
+                showAlert("success", "✓ Grupo creado");
+                document.getElementById("groupName").value = "";
+                loadAllData();
+            } else {
+                showAlert("error", result.data.detail || "Error al crear");
+            }
+        };
+
+        // Subjects CRUD
+        const renderSubjects = (items, teachers, groups) => {
+            const tbody = document.getElementById("subjectsList");
+            if (!items.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay asignaturas registradas</td></tr>';
+                return;
+            }
+            tbody.innerHTML = items.map(s => `
+                <tr>
+                    <td>${s.id}</td>
+                    <td>${s.name}</td>
+                    <td>${s.weekly_hours}</td>
+                    <td>${s.teacher_name}</td>
+                    <td>${s.group_name || "-"}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-danger" onclick="deleteEntity('subjects', ${s.id})">Eliminar</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join("");
+
+            // Populate teacher select
+            const select = document.getElementById("subjectTeacher");
+            select.innerHTML = '<option value="">-- Selecciona Profesor --</option>' + 
+                teachers.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+
+            const groupSelect = document.getElementById("subjectGroup");
+            groupSelect.innerHTML = '<option value="">-- Selecciona Curso --</option>' +
+                groups.map(g => `<option value="${g.id}">${g.name}</option>`).join("");
+        };
+
+        document.getElementById("createSubjectBtn").onclick = async () => {
+            const payload = {
+                name: document.getElementById("subjectName").value,
+                weekly_hours: parseInt(document.getElementById("subjectWeeklyHours").value),
+                duration: parseFloat(document.getElementById("subjectDuration").value),
+                preferred_time_slot: "",
+                stage: document.getElementById("subjectStage").value,
+                type: document.getElementById("subjectType").value,
+                teacher: parseInt(document.getElementById("subjectTeacher").value),
+                group: parseInt(document.getElementById("subjectGroup").value),
+            };
+            if (!payload.name || !payload.teacher || !payload.group) {
+                showAlert("error", "Ingresa nombre, profesor y curso");
+                return;
+            }
+            const result = await apiCall("/subjects/", "POST", payload);
+            if (result.ok) {
+                showAlert("success", "✓ Asignatura creada");
+                document.getElementById("subjectName").value = "";
+                loadAllData();
+            } else {
+                showAlert("error", result.data.detail || "Error al crear");
+            }
+        };
+
+        // Generator
+        document.getElementById("generateBtn").onclick = async () => {
+            document.getElementById("generateBtn").disabled = true;
+            const result = await apiCall("/schedules/generate/", "POST", {});
+            document.getElementById("generateBtn").disabled = false;
+
+            if (result.ok) {
+                latestGeneratedSchedules = result.data.schedules || [];
+                showAlert("success", `✓ Se generaron ${result.data.generated_count} sesiones`);
+                renderFilteredSchedules();
+                loadAllData();
+            } else {
+                showAlert("error", result.data.detail || "Error al generar");
+            }
+        };
+
+        const displaySchedules = (schedules) => {
+            const output = document.getElementById("generatorOutput");
+            if (!schedules.length) {
+                output.style.display = "none";
+                return;
+            }
+
+            const weekdayMap = {
+                0: "Domingo",
+                1: "Lunes",
+                2: "Martes",
+                3: "Miércoles",
+                4: "Jueves",
+                5: "Viernes",
+                6: "Sábado",
+            };
+            const visibleDays = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+
+            const sessions = [...schedules]
+                .map((s) => {
+                    const start = new Date(s.start_time);
+                    const end = new Date(s.end_time);
+                    return {
+                        ...s,
+                        start,
+                        end,
+                        dayName: weekdayMap[start.getDay()],
+                        hourKey: `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`,
+                    };
+                })
+                .filter((s) => visibleDays.includes(s.dayName))
+                .sort((a, b) => a.start - b.start);
+
+            const hourKeys = [...new Set(sessions.map((s) => s.hourKey))].sort();
+
+            const groupedByDayHour = {};
+            for (const session of sessions) {
+                const key = `${session.dayName}|${session.hourKey}`;
+                if (!groupedByDayHour[key]) {
+                    groupedByDayHour[key] = [];
+                }
+                groupedByDayHour[key].push(session);
+            }
+
+            const gridRows = hourKeys
+                .map((hour) => {
+                    const dayCells = visibleDays
+                        .map((day) => {
+                            const key = `${day}|${hour}`;
+                            const cellSessions = groupedByDayHour[key] || [];
+                            if (!cellSessions.length) {
+                                return '<td class="schedule-cell"></td>';
+                            }
+                            const cards = cellSessions
+                                .map(
+                                    (s) => `
+                                    <div class="schedule-card">
+                                        <strong>${s.subject_name || "Sin asignatura"}</strong>
+                                        <div>${s.teacher_name || "Sin profesor"}</div>
+                                        <div>${s.group_name || "Sin grupo"} | ${s.classroom_name || "Sin aula"}</div>
+                                        <div>${s.start.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} - ${s.end.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</div>
+                                    </div>
+                                `
+                                )
+                                .join("");
+                            return `<td class="schedule-cell">${cards}</td>`;
+                        })
+                        .join("");
+
+                    return `
+                        <tr>
+                            <td class="schedule-time-col">${hour}</td>
+                            ${dayCells}
+                        </tr>
+                    `;
+                })
+                .join("");
+
+            output.innerHTML = `
+                <div class="schedule-grid-wrap">
+                    <table class="schedule-grid">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                ${visibleDays.map((day) => `<th>${day}</th>`).join("")}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${gridRows || '<tr><td colspan="6" class="empty-state">No hay clases en franjas lectivas visibles</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="schedule-detail-title">Detalle de sesiones</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Asignatura</th>
+                            <th>Profesor</th>
+                            <th>Aula</th>
+                            <th>Grupo</th>
+                            <th>Día</th>
+                            <th>Inicio</th>
+                            <th>Fin</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sessions
+                            .map(
+                                (s) => `
+                                <tr>
+                                    <td>${s.subject_name || "-"}</td>
+                                    <td>${s.teacher_name || "-"}</td>
+                                    <td>${s.classroom_name || "-"}</td>
+                                    <td>${s.group_name || "-"}</td>
+                                    <td>${s.dayName}</td>
+                                    <td>${s.start.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</td>
+                                    <td>${s.end.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</td>
+                                </tr>
+                            `
+                            )
+                            .join("")}
+                    </tbody>
+                </table>
+            `;
+            output.style.display = "block";
+        };
+
+        // Delete Entity
+        window.deleteEntity = async (type, id) => {
+            if (!confirm("¿Estás seguro de que deseas eliminar?")) return;
+            const result = await apiCall(`/${type}/${id}/`, "DELETE");
+            if (result.ok) {
+                showAlert("success", "✓ Eliminado correctamente");
+                loadAllData();
+            } else {
+                showAlert("error", result.data.detail || "Error al eliminar");
+            }
+        };
+
+        // Init
+        updateAuthUI();
+        });
+    </script>
+</body>
+</html>

@@ -27,7 +27,7 @@
             <h3>Sign Up</h3>
             <label>Given name<input id="suGivenName" value="Test" /></label>
             <label>Family name<input id="suFamilyName" value="User" /></label>
-            <label>Email<input id="suEmail" type="email" value="test@example.com" /></label>
+            <label>Email<input id="suEmail" type="email" value="admin@test.com" /></label>
             <label>Role
                 <select id="suRole">
                     <option value="director">director</option>
@@ -41,8 +41,8 @@
 
         <section class="card">
             <h3>Login</h3>
-            <label>Email<input id="loginEmail" type="email" value="test@example.com" /></label>
-            <label>Password<input id="loginPassword" type="password" value="TestPassword123!" /></label>
+            <label>Email<input id="loginEmail" type="email" value="admin@test.com" /></label>
+            <label>Password<input id="loginPassword" type="password" value="admin123" /></label>
             <button id="loginBtn">Login</button>
             <div class="row" style="margin-top:8px;">
                 <button id="logoutBtn">Logout</button>
@@ -145,6 +145,9 @@
                 <button id="scheduleCreateBtn">Create</button>
                 <button id="scheduleListBtn">List</button>
                 <button id="loadSubjectsBtn">Load Subjects</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <button id="scheduleGenerateBtn">Generate Basic Schedule</button>
             </div>
             <div class="row" style="margin-top:8px;">
                 <button id="scheduleDetailBtn">Detail</button>
@@ -551,6 +554,19 @@
         document.getElementById("scheduleListBtn").onclick = async () => {
             const result = await api("schedules/", "GET", null, true);
             show(`GET /api/schedules/ (${result.status})`, result.data);
+        };
+
+        document.getElementById("scheduleGenerateBtn").onclick = async () => {
+            const result = await api("schedules/generate/", "POST", {}, true);
+            if (
+                result.ok
+                && result.data
+                && Array.isArray(result.data.schedules)
+                && result.data.schedules.length > 0
+            ) {
+                document.getElementById("scheduleId").value = result.data.schedules[0].id;
+            }
+            show(`POST /api/schedules/generate/ (${result.status})`, result.data);
         };
 
         document.getElementById("scheduleDetailBtn").onclick = async () => {

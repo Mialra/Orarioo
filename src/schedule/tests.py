@@ -47,6 +47,7 @@ class ScheduleApiTests(APITestCase):
             stage=SubjectEducationalStage.PRIMARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
+            group=self.group,
         )
 
     def build_payload(self):
@@ -157,3 +158,99 @@ class ScheduleApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("subject", response.data)
+
+    def test_generate_basic_schedule(self):
+        Classroom.objects.all().delete()
+
+        response = self.client.post(reverse("schedule-generate"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("schedules", response.data)
+        self.assertEqual(response.data["generated_count"], self.subject.weekly_hours)
+        self.assertEqual(Schedule.objects.count(), self.subject.weekly_hours)
+
+        schedule = Schedule.objects.first()
+        self.assertEqual(schedule.teacher_id, self.teacher.id)
+        self.assertEqual(schedule.group_id, self.group.id)
+        self.assertEqual(schedule.users.count(), 1)
+        self.assertEqual(schedule.users.first().id, self.user.id)
+        self.assertIsNotNone(schedule.classroom_id)
+        self.assertIsNotNone(schedule.group_id)
+
+    def test_generate_basic_schedule_avoids_teacher_overlap(self):
+        Subject.objects.create(
+            name="Physics",
+            weekly_hours=1,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=self.group,
+        )
+
+        response = self.client.post(reverse("schedule-generate"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        teacher_schedules = list(
+            Schedule.objects.filter(teacher=self.teacher).order_by("start_time")
+        )
+        unique_starts = {item.start_time for item in teacher_schedules}
+        self.assertEqual(len(unique_starts), len(teacher_schedules))
+
+    def test_generate_basic_schedule_avoids_teacher_overlap_across_groups(self):
+        group_2 = Group.objects.create(name="2A", stage=EducationalStage.PRIMARY)
+        Subject.objects.create(
+            name="Mathematics 2A",
+            weekly_hours=5,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=group_2,
+        )
+
+        response = self.client.post(reverse("schedule-generate"), {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        teacher_schedules = list(
+            Schedule.objects.filter(teacher=self.teacher).order_by("start_time")
+        )
+        unique_starts = {item.start_time for item in teacher_schedules}
+        self.assertEqual(len(unique_starts), len(teacher_schedules))
+
+    def test_generate_basic_schedule_avoids_group_overlap(self):
+        teacher_2 = Teacher.objects.create(
+            name="Carlos Torres",
+            max_weekly_hours=20,
+            working_hours=8,
+        )
+        Subject.objects.create(
+            name="Science",
+            weekly_hours=5,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=teacher_2,
+            group=self.group,
+        )
+
+        response = self.client.post(reverse("schedule-generate"), {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        group_schedules = list(
+            Schedule.objects.filter(group=self.group).order_by("start_time")
+        )
+        unique_starts = {item.start_time for item in group_schedules}
+        self.assertEqual(len(unique_starts), len(group_schedules))
+
+    def test_generate_basic_schedule_requires_teacher(self):
+        Teacher.objects.all().delete()
+
+        response = self.client.post(reverse("schedule-generate"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
