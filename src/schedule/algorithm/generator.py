@@ -153,7 +153,9 @@ class BasicScheduleGenerator:
                     group_key,
                     {
                         "name": group.name,
-                        "weekly_limit": BasicScheduleGenerator._group_weekly_limit(group),
+                        "weekly_limit": BasicScheduleGenerator._group_weekly_limit(
+                            group
+                        ),
                         "assigned_hours": 0,
                     },
                 )
@@ -173,7 +175,10 @@ class BasicScheduleGenerator:
             )
             teacher_state["assigned_hours"] += 1
 
-        if any(group_state["assigned_hours"] > slot_count for group_state in sessions_by_group.values()):
+        if any(
+            group_state["assigned_hours"] > slot_count
+            for group_state in sessions_by_group.values()
+        ):
             raise ScheduleGenerationError(
                 "Not enough available slots to place all sessions for at least one group."
             )
