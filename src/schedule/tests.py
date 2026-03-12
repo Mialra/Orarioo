@@ -254,3 +254,76 @@ class ScheduleApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
+
+    def test_generate_basic_schedule_rejects_teacher_over_max_weekly_hours(self):
+        self.teacher.max_weekly_hours = 4
+        self.teacher.save(update_fields=["max_weekly_hours"])
+
+        response = self.client.post(reverse("schedule-generate"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+        self.assertIn("exceeds max weekly hours", response.data["detail"])
+
+    def test_generate_rejects_teacher_over_max_with_multiple_subjects(self):
+        group_2 = Group.objects.create(name="2B", stage=EducationalStage.PRIMARY)
+        Subject.objects.create(
+            name="Physics",
+            weekly_hours=3,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=group_2,
+        )
+        self.teacher.max_weekly_hours = 7
+        self.teacher.save(update_fields=["max_weekly_hours"])
+
+        # Same teacher teaches 5h (Math) + 3h (Physics) = 8h, which exceeds 7h.
+        response = self.client.post(reverse("schedule-generate"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+        self.assertIn("exceeds max weekly hours", response.data["detail"])
+
+    def test_generate_rejects_group_over_weekly_capacity_for_primary(self):
+        self.teacher.max_weekly_hours = 40
+        self.teacher.save(update_fields=["max_weekly_hours"])
+        Subject.objects.create(
+            name="Science",
+            weekly_hours=21,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=self.group,
+        )
+
+        # 5h (Math) + 21h (Science) = 26h, above PRIMARY weekly limit (25h).
+        response = self.client.post(reverse("schedule-generate"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+        self.assertIn("exceeds weekly capacity", response.data["detail"])
+
+    def test_generate_respects_group_daily_capacity_for_primary(self):
+        self.teacher.max_weekly_hours = 30
+        self.teacher.save(update_fields=["max_weekly_hours"])
+        self.subject.weekly_hours = 25
+        self.subject.save(update_fields=["weekly_hours"])
+
+        response = self.client.post(reverse("schedule-generate"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        daily_counts = {}
+        group_schedules = Schedule.objects.filter(group=self.group)
+        for schedule in group_schedules:
+            day_key = schedule.start_time.date()
+            daily_counts[day_key] = daily_counts.get(day_key, 0) + 1
+
+        self.assertEqual(group_schedules.count(), 25)
+        self.assertEqual(len(daily_counts), 5)
+        self.assertTrue(all(count <= 5 for count in daily_counts.values()))

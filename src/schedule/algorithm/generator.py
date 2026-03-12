@@ -140,21 +140,69 @@ class BasicScheduleGenerator:
 
     @staticmethod
     def _validate_capacity(*, sessions, slots):
-        """Validate weekly capacity considering that groups can run in parallel."""
+        """Validate stage-based group capacity and teacher weekly limits."""
         slot_count = len(slots)
         sessions_by_group = {}
+        sessions_by_teacher = {}
 
         for session in sessions:
             group = session.get("group")
             group_key = getattr(group, "id", None)
-            sessions_by_group[group_key] = sessions_by_group.get(group_key, 0) + 1
+            if group_key is not None:
+                group_state = sessions_by_group.setdefault(
+                    group_key,
+                    {
+                        "name": group.name,
+                        "weekly_limit": BasicScheduleGenerator._group_weekly_limit(group),
+                        "assigned_hours": 0,
+                    },
+                )
+                group_state["assigned_hours"] += 1
 
-        if any(
-            group_sessions > slot_count for group_sessions in sessions_by_group.values()
-        ):
+            teacher = session.get("teacher")
+            if teacher is None:
+                continue
+            teacher_id = teacher.id
+            teacher_state = sessions_by_teacher.setdefault(
+                teacher_id,
+                {
+                    "name": teacher.name,
+                    "max_weekly_hours": teacher.max_weekly_hours,
+                    "assigned_hours": 0,
+                },
+            )
+            teacher_state["assigned_hours"] += 1
+
+        if any(group_state["assigned_hours"] > slot_count for group_state in sessions_by_group.values()):
             raise ScheduleGenerationError(
                 "Not enough available slots to place all sessions for at least one group."
             )
+
+        for group_state in sessions_by_group.values():
+            if group_state["assigned_hours"] > group_state["weekly_limit"]:
+                raise ScheduleGenerationError(
+                    (
+                        "Group '{name}' exceeds weekly capacity for its stage: "
+                        "assigned {assigned} > max {max_hours}."
+                    ).format(
+                        name=group_state["name"],
+                        assigned=group_state["assigned_hours"],
+                        max_hours=group_state["weekly_limit"],
+                    )
+                )
+
+        for teacher_state in sessions_by_teacher.values():
+            if teacher_state["assigned_hours"] > teacher_state["max_weekly_hours"]:
+                raise ScheduleGenerationError(
+                    (
+                        "Teacher '{name}' exceeds max weekly hours: "
+                        "assigned {assigned} > max {max_hours}."
+                    ).format(
+                        name=teacher_state["name"],
+                        assigned=teacher_state["assigned_hours"],
+                        max_hours=teacher_state["max_weekly_hours"],
+                    )
+                )
 
     @staticmethod
     def _build_sessions(*, subjects, fallback_teacher):
@@ -220,6 +268,12 @@ class BasicScheduleGenerator:
             slot_count=slot_count,
             resource_key="group_id",
         )
+        BasicScheduleGenerator._add_group_daily_capacity_constraints(
+            model=model,
+            x=x,
+            sessions=sessions,
+            slots=slots,
+        )
 
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = 5.0
@@ -275,6 +329,61 @@ class BasicScheduleGenerator:
                 model.Add(sum(x[(s_idx, p_idx)] for s_idx in resource_sessions) <= 1)
 
     @staticmethod
+    def _group_weekly_limit(group):
+        if group.stage in (EducationalStage.PRESCHOOL, EducationalStage.PRIMARY):
+            return 25
+        return 30
+
+    @staticmethod
+    def _group_daily_limit(group):
+        if group.stage in (EducationalStage.PRESCHOOL, EducationalStage.PRIMARY):
+            return 5
+        return 6
+
+    @staticmethod
+    def _build_slot_day_index(*, slots):
+        day_index_by_slot = {}
+        ordered_days = sorted({slot.date() for slot in slots})
+        for idx, day in enumerate(ordered_days):
+            for slot_idx, slot in enumerate(slots):
+                if slot.date() == day:
+                    day_index_by_slot[slot_idx] = idx
+        return day_index_by_slot
+
+    @staticmethod
+    def _add_group_daily_capacity_constraints(*, model, x, sessions, slots):
+        day_index_by_slot = BasicScheduleGenerator._build_slot_day_index(slots=slots)
+        group_to_sessions = {}
+
+        for s_idx, session in enumerate(sessions):
+            group = session.get("group")
+            if group is None:
+                continue
+            group_to_sessions.setdefault(group.id, {"group": group, "sessions": []})[
+                "sessions"
+            ].append(s_idx)
+
+        for group_state in group_to_sessions.values():
+            group = group_state["group"]
+            resource_sessions = group_state["sessions"]
+            daily_limit = BasicScheduleGenerator._group_daily_limit(group)
+
+            for day_idx in set(day_index_by_slot.values()):
+                day_slots = [
+                    p_idx
+                    for p_idx, p_day_idx in day_index_by_slot.items()
+                    if p_day_idx == day_idx
+                ]
+                model.Add(
+                    sum(
+                        x[(s_idx, p_idx)]
+                        for s_idx in resource_sessions
+                        for p_idx in day_slots
+                    )
+                    <= daily_limit
+                )
+
+    @staticmethod
     def _extract_slot_assignment(*, solver, x, session_count, slot_count):
         slot_by_session = []
         for s_idx in range(session_count):
@@ -295,6 +404,8 @@ class BasicScheduleGenerator:
     def _greedy_session_assignment(*, sessions, slots):
         teacher_busy_slots = {}
         group_busy_slots = {}
+        group_daily_load = {}
+        day_index_by_slot = BasicScheduleGenerator._build_slot_day_index(slots=slots)
         slot_by_session = []
 
         for s_idx, session in enumerate(sessions):
@@ -305,6 +416,8 @@ class BasicScheduleGenerator:
             group_id = group.id if group else None
             if group_id:
                 group_busy_slots.setdefault(group_id, set())
+                group_daily_load.setdefault(group_id, {})
+                daily_limit = BasicScheduleGenerator._group_daily_limit(group)
 
             selected_slot = None
             for p_idx in range(len(slots)):
@@ -312,6 +425,11 @@ class BasicScheduleGenerator:
                     continue
                 if group_id and p_idx in group_busy_slots[group_id]:
                     continue
+                if group_id:
+                    day_idx = day_index_by_slot[p_idx]
+                    assigned_today = group_daily_load[group_id].get(day_idx, 0)
+                    if assigned_today >= daily_limit:
+                        continue
                 selected_slot = p_idx
                 break
 
@@ -324,6 +442,10 @@ class BasicScheduleGenerator:
             teacher_busy_slots[teacher_id].add(selected_slot)
             if group_id:
                 group_busy_slots[group_id].add(selected_slot)
+                selected_day = day_index_by_slot[selected_slot]
+                group_daily_load[group_id][selected_day] = (
+                    group_daily_load[group_id].get(selected_day, 0) + 1
+                )
 
         return slot_by_session
 
