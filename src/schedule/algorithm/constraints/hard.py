@@ -1,5 +1,4 @@
 from group.models import EducationalStage
-
 from schedule.algorithm.errors import ScheduleGenerationError
 from schedule.algorithm.slots import build_slot_day_index
 
@@ -126,7 +125,9 @@ def _session_resource_id(*, session, resource_key):
     return session.get(resource_key)
 
 
-def add_resource_non_overlap_constraints(*, model, x, sessions, slot_count, resource_key):
+def add_resource_non_overlap_constraints(
+    *, model, x, sessions, slot_count, resource_key
+):
     resource_to_sessions = {}
 
     for idx, session in enumerate(sessions):
@@ -160,9 +161,15 @@ def add_group_daily_capacity_constraints(*, model, x, sessions, slots):
 
         for day_idx in day_indices:
             day_slots = [
-                p_idx for p_idx, p_day_idx in day_index_by_slot.items() if p_day_idx == day_idx
+                p_idx
+                for p_idx, p_day_idx in day_index_by_slot.items()
+                if p_day_idx == day_idx
             ]
             model.Add(
-                sum(x[(s_idx, p_idx)] for s_idx in resource_sessions for p_idx in day_slots)
+                sum(
+                    x[(s_idx, p_idx)]
+                    for s_idx in resource_sessions
+                    for p_idx in day_slots
+                )
                 <= daily_limit
             )
