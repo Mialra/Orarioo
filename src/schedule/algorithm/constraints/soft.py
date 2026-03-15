@@ -1,10 +1,14 @@
 from schedule.algorithm.constraints.hard import session_preference_state
+from schedule.algorithm.constraints.hard import teacher_preference_state
 from schedule.algorithm.slots import build_slot_preference_index
 from subject.models import SubjectTimePreferenceState
+from teacher.models import TeacherTimePreferenceState
 
 TC_SLOT_COVERAGE_WEIGHT = 5
 PREFER_YES_WEIGHT = 2
 PREFER_NO_WEIGHT = -2
+TEACHER_PREFER_YES_WEIGHT = 2
+TEACHER_PREFER_NO_WEIGHT = -2
 
 
 def apply_soft_constraints(*, model, x, sessions, slots):
@@ -15,6 +19,9 @@ def apply_soft_constraints(*, model, x, sessions, slots):
     )
     objective_terms.extend(
         _subject_time_preference_terms(x=x, sessions=sessions, slots=slots)
+    )
+    objective_terms.extend(
+        _teacher_time_preference_terms(x=x, sessions=sessions, slots=slots)
     )
 
     if objective_terms:
@@ -59,6 +66,24 @@ def _subject_time_preference_terms(*, x, sessions, slots):
                 weighted_terms.append(PREFER_YES_WEIGHT * x[(s_idx, p_idx)])
             elif state == SubjectTimePreferenceState.PREFER_NO:
                 weighted_terms.append(PREFER_NO_WEIGHT * x[(s_idx, p_idx)])
+
+    return weighted_terms
+
+
+def _teacher_time_preference_terms(*, x, sessions, slots):
+    slot_preference_by_idx = build_slot_preference_index(slots=slots)
+    weighted_terms = []
+
+    for s_idx, session in enumerate(sessions):
+        for p_idx, slot_key in slot_preference_by_idx.items():
+            state = teacher_preference_state(
+                session=session,
+                slot_preference_key=slot_key,
+            )
+            if state == TeacherTimePreferenceState.PREFER_YES:
+                weighted_terms.append(TEACHER_PREFER_YES_WEIGHT * x[(s_idx, p_idx)])
+            elif state == TeacherTimePreferenceState.PREFER_NO:
+                weighted_terms.append(TEACHER_PREFER_NO_WEIGHT * x[(s_idx, p_idx)])
 
     return weighted_terms
 

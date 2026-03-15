@@ -17,7 +17,7 @@ from schedule.algorithm.slots import (
 from schedule.models import Schedule
 from subject.models import EducationalStage as SubjectEducationalStage
 from subject.models import Subject, SubjectTimePreferenceState, SubjectType
-from teacher.models import Teacher
+from teacher.models import Teacher, TeacherTimePreferenceState
 from user.models import RoleChoices, User
 
 
@@ -421,6 +421,45 @@ class ScheduleApiTests(APITestCase):
             second_slot_key: SubjectTimePreferenceState.PREFER_YES,
         }
         self.subject.save(update_fields=["weekly_hours", "time_preferences"])
+
+        response = self.generate_schedule()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        generated = Schedule.objects.get(subject=self.subject)
+        generated_slot_key = slot_preference_key_from_datetime(
+            slot=generated.start_time
+        )
+        self.assertEqual(generated_slot_key, second_slot_key)
+
+    def test_generate_rejects_teacher_with_all_slots_marked_unavailable(self):
+        all_slot_keys = build_slot_preference_index(slots=build_weekly_slots()).values()
+        self.teacher.time_preferences = {
+            key: TeacherTimePreferenceState.UNAVAILABLE for key in all_slot_keys
+        }
+        self.teacher.save(update_fields=["time_preferences"])
+
+        response = self.generate_schedule()
+
+        self.assert_generate_bad_request_with_detail(
+            response,
+            "Could not generate a feasible schedule",
+        )
+
+    @skipIf(
+        schedule_assignment.cp_model is None,
+        "Requires OR-Tools CP-SAT to validate soft constraints.",
+    )
+    def test_generate_prefers_teacher_prefer_yes_over_prefer_no(self):
+        self.subject.weekly_hours = 1
+        slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
+        first_slot_key = slot_pref_index[0]
+        second_slot_key = slot_pref_index[1]
+        self.teacher.time_preferences = {
+            first_slot_key: TeacherTimePreferenceState.PREFER_NO,
+            second_slot_key: TeacherTimePreferenceState.PREFER_YES,
+        }
+        self.subject.save(update_fields=["weekly_hours"])
+        self.teacher.save(update_fields=["time_preferences"])
 
         response = self.generate_schedule()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)

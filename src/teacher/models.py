@@ -4,10 +4,20 @@ from django.db import models
 from auditableEntity.models import AuditableEntity
 
 
+class TeacherTimePreferenceState(models.TextChoices):
+    """Preference state for each weekly slot in teacher scheduling."""
+
+    AVAILABLE = "AVAILABLE", "Available"
+    PREFER_YES = "PREFER_YES", "Preferably yes"
+    PREFER_NO = "PREFER_NO", "Preferably no"
+    UNAVAILABLE = "UNAVAILABLE", "Unavailable"
+
+
 class Teacher(AuditableEntity):
     max_weekly_hours = models.PositiveIntegerField()
     working_hours = models.PositiveIntegerField(default=0)
     preferences = models.TextField(blank=True)
+    time_preferences = models.JSONField(default=dict, blank=True)
     availability = models.TextField(blank=True)
     unavailability = models.TextField(blank=True)
 

@@ -625,6 +625,26 @@
                             <input type="text" id="teacherAvailability" placeholder="Ej: Lun-Vie 08:30-15:00" />
                         </div>
                     </div>
+                    <div class="subject-preferences-panel">
+                        <h4 style="margin-bottom: 10px;">Disponibilidad Semanal del Profesor</h4>
+                        <div class="subject-preferences-legend">
+                            <span><span class="legend-dot legend-available"></span>Available</span>
+                            <span><span class="legend-dot legend-prefer-yes"></span>Preferably yes</span>
+                            <span><span class="legend-dot legend-prefer-no"></span>Preferably no</span>
+                            <span><span class="legend-dot legend-unavailable"></span>Unavailable</span>
+                        </div>
+                        <div class="subject-preferences-toolbar">
+                            <label style="margin-bottom: 0;" for="teacherPreferenceBrush">Estado a pintar</label>
+                            <select id="teacherPreferenceBrush" style="max-width: 220px;">
+                                <option value="AVAILABLE" selected>Available</option>
+                                <option value="PREFER_YES">Preferably yes</option>
+                                <option value="PREFER_NO">Preferably no</option>
+                                <option value="UNAVAILABLE">Unavailable</option>
+                            </select>
+                            <button class="btn-secondary" id="teacherPreferenceClearBtn" type="button">Reiniciar cuadrícula</button>
+                        </div>
+                        <div class="subject-pref-grid-wrap" id="teacherPreferencesGrid"></div>
+                    </div>
                     <button class="btn-primary" id="createTeacherBtn">Crear Profesor</button>
                 </div>
                 <div class="table-container">
@@ -814,6 +834,7 @@
                 UNAVAILABLE: "Unavailable",
             };
             const subjectPreferenceMap = {};
+            const teacherPreferenceMap = {};
 
         // Utility Functions
         const showAlert = (type, message) => {
@@ -874,6 +895,11 @@
             renderSubjectPreferencesGrid();
         };
 
+        const resetTeacherPreferences = () => {
+            Object.assign(teacherPreferenceMap, defaultSubjectPreferenceMap());
+            renderTeacherPreferencesGrid();
+        };
+
         const renderSubjectPreferencesGrid = () => {
             const wrap = document.getElementById("subjectPreferencesGrid");
             if (!wrap) return;
@@ -928,6 +954,67 @@
         const collectSubjectTimePreferences = () => {
             const nonDefault = {};
             Object.entries(subjectPreferenceMap).forEach(([key, state]) => {
+                if (state && state !== "AVAILABLE") {
+                    nonDefault[key] = state;
+                }
+            });
+            return nonDefault;
+        };
+
+        const renderTeacherPreferencesGrid = () => {
+            const wrap = document.getElementById("teacherPreferencesGrid");
+            if (!wrap) return;
+
+            const headCells = SUBJECT_PREF_DAY_LABELS
+                .map((label) => `<th>${label}</th>`)
+                .join("");
+
+            const bodyRows = SUBJECT_PREF_HOURS
+                .map((hour) => {
+                    const cells = SUBJECT_PREF_DAY_CODES
+                        .map((dayCode) => {
+                            const key = `${dayCode}_${hour}`;
+                            const state = teacherPreferenceMap[key] || "AVAILABLE";
+                            const stateLabel = SUBJECT_PREF_STATES[state] || state;
+                            return `
+                                <td
+                                    class="pref-cell pref-state-${state}"
+                                    data-teacher-pref-key="${key}"
+                                    title="${key} - ${stateLabel}"
+                                >
+                                    ${stateLabel}
+                                </td>
+                            `;
+                        })
+                        .join("");
+
+                    return `
+                        <tr>
+                            <td class="hour-col">${hour}</td>
+                            ${cells}
+                        </tr>
+                    `;
+                })
+                .join("");
+
+            wrap.innerHTML = `
+                <table class="subject-pref-grid">
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            ${headCells}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${bodyRows}
+                    </tbody>
+                </table>
+            `;
+        };
+
+        const collectTeacherTimePreferences = () => {
+            const nonDefault = {};
+            Object.entries(teacherPreferenceMap).forEach(([key, state]) => {
                 if (state && state !== "AVAILABLE") {
                     nonDefault[key] = state;
                 }
@@ -1111,6 +1198,23 @@
             showAlert("info", "Preferencias de asignatura reiniciadas a Available");
         };
 
+        document.getElementById("teacherPreferencesGrid").addEventListener("click", (event) => {
+            const cell = event.target.closest(".pref-cell");
+            if (!cell) return;
+
+            const key = cell.dataset.teacherPrefKey;
+            const brush = document.getElementById("teacherPreferenceBrush").value;
+            if (!key || !SUBJECT_PREF_STATES[brush]) return;
+
+            teacherPreferenceMap[key] = brush;
+            renderTeacherPreferencesGrid();
+        });
+
+        document.getElementById("teacherPreferenceClearBtn").onclick = () => {
+            resetTeacherPreferences();
+            showAlert("info", "Preferencias de profesor reiniciadas a Available");
+        };
+
         // Teachers CRUD
         const renderTeachers = (items) => {
             const tbody = document.getElementById("teachersList");
@@ -1139,6 +1243,7 @@
                 max_weekly_hours: parseInt(document.getElementById("teacherMaxHours").value),
                 working_hours: parseInt(document.getElementById("teacherCurrentHours").value),
                 preferences: document.getElementById("teacherPreferences").value,
+                time_preferences: collectTeacherTimePreferences(),
                 availability: document.getElementById("teacherAvailability").value,
             };
             if (!payload.name) {
@@ -1149,6 +1254,7 @@
             if (result.ok) {
                 showAlert("success", "✓ Profesor creado");
                 document.getElementById("teacherName").value = "";
+                resetTeacherPreferences();
                 loadAllData();
             } else {
                 showAlert("error", result.data.detail || "Error al crear");
@@ -1448,6 +1554,7 @@
 
         // Init
         resetSubjectPreferences();
+        resetTeacherPreferences();
         updateAuthUI();
         });
     </script>

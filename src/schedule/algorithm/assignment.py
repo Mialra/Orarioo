@@ -8,13 +8,16 @@ from schedule.algorithm.constraints import (
     add_group_daily_capacity_constraints,
     add_resource_non_overlap_constraints,
     add_subject_time_hard_constraints,
+    add_teacher_time_hard_constraints,
     apply_soft_constraints,
     group_daily_limit,
     session_preference_state,
+    teacher_preference_state,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
 from schedule.algorithm.slots import build_slot_day_index, build_slot_preference_index
 from subject.models import SubjectTimePreferenceState
+from teacher.models import TeacherTimePreferenceState
 
 
 def solve_session_assignment(*, sessions, slots):
@@ -60,6 +63,12 @@ def _cp_sat_session_assignment(*, sessions, slots):
         slots=slots,
     )
     add_subject_time_hard_constraints(
+        model=model,
+        x=x,
+        sessions=sessions,
+        slots=slots,
+    )
+    add_teacher_time_hard_constraints(
         model=model,
         x=x,
         sessions=sessions,
@@ -179,6 +188,13 @@ def _is_greedy_slot_available(
 ):
     slot_key = slot_preference_by_idx.get(slot_idx)
     if slot_key is not None:
+        teacher_slot_state = teacher_preference_state(
+            session=session,
+            slot_preference_key=slot_key,
+        )
+        if teacher_slot_state == TeacherTimePreferenceState.UNAVAILABLE:
+            return False
+
         slot_state = session_preference_state(
             session=session,
             slot_preference_key=slot_key,
