@@ -119,11 +119,22 @@ def _extract_slot_assignment(*, solver, x, session_count, slot_count):
 
 def _greedy_session_assignment(*, sessions, slots):
     teacher_busy_slots = {}
+    teacher_day_slots = {}  # {teacher_id: {day_idx: set of slot positions within day}}
     group_busy_slots = {}
     group_daily_load = {}
     subject_day_load = {}
     day_index_by_slot = build_slot_day_index(slots=slots)
     slot_preference_by_idx = build_slot_preference_index(slots=slots)
+
+    # Build slot_day_order: slot_idx → position (0-based) within its day.
+    slots_by_day_ordered = {}
+    for slot_idx, day_idx in day_index_by_slot.items():
+        slots_by_day_ordered.setdefault(day_idx, []).append(slot_idx)
+    slot_day_order = {}
+    for day_slot_list in slots_by_day_ordered.values():
+        for pos, slot_idx in enumerate(sorted(day_slot_list)):
+            slot_day_order[slot_idx] = pos
+
     slot_by_session = []
 
     for session in sessions:
@@ -142,7 +153,10 @@ def _greedy_session_assignment(*, sessions, slots):
         if subj_id:
             subject_day_load.setdefault(subj_id, {})
 
-        # Prefer slots on days not yet used by this subject (F-28 soft spread).
+        teacher_day_slots.setdefault(teacher_id, {})
+
+        # Sort slots: prefer days unused by this subject (F-28), then prefer
+        # slots that create fewer intra-day gaps for the teacher (F-29).
         sorted_slots = sorted(
             range(len(slots)),
             key=lambda p: (
@@ -151,7 +165,14 @@ def _greedy_session_assignment(*, sessions, slots):
                     subj_id is None
                     or subject_day_load[subj_id].get(day_index_by_slot[p], 0) == 0
                 )
-                else 1
+                else 1,
+                _teacher_gap_score(
+                    slot_idx=p,
+                    teacher_id=teacher_id,
+                    teacher_day_slots=teacher_day_slots,
+                    day_index_by_slot=day_index_by_slot,
+                    slot_day_order=slot_day_order,
+                ),
             ),
         )
 
@@ -179,22 +200,54 @@ def _greedy_session_assignment(*, sessions, slots):
             )
 
         slot_by_session.append(selected_slot)
-        teacher_busy_slots[teacher_id].add(selected_slot)
-        if subj_id:
-            selected_day = day_index_by_slot[selected_slot]
-            subject_day_load[subj_id][selected_day] = (
-                subject_day_load[subj_id].get(selected_day, 0) + 1
-            )
-        if group_id:
-            _mark_group_greedy_assignment(
-                selected_slot=selected_slot,
-                group_id=group_id,
-                group_busy_slots=group_busy_slots,
-                group_daily_load=group_daily_load,
-                day_index_by_slot=day_index_by_slot,
-            )
+        _update_greedy_tracking(
+            selected_slot=selected_slot,
+            teacher_id=teacher_id,
+            subj_id=subj_id,
+            group_id=group_id,
+            teacher_busy_slots=teacher_busy_slots,
+            teacher_day_slots=teacher_day_slots,
+            subject_day_load=subject_day_load,
+            group_busy_slots=group_busy_slots,
+            group_daily_load=group_daily_load,
+            day_index_by_slot=day_index_by_slot,
+            slot_day_order=slot_day_order,
+        )
 
     return slot_by_session
+
+
+def _update_greedy_tracking(
+    *,
+    selected_slot,
+    teacher_id,
+    subj_id,
+    group_id,
+    teacher_busy_slots,
+    teacher_day_slots,
+    subject_day_load,
+    group_busy_slots,
+    group_daily_load,
+    day_index_by_slot,
+    slot_day_order,
+):
+    teacher_busy_slots[teacher_id].add(selected_slot)
+    selected_day = day_index_by_slot[selected_slot]
+    teacher_day_slots[teacher_id].setdefault(selected_day, set()).add(
+        slot_day_order[selected_slot]
+    )
+    if subj_id:
+        subject_day_load[subj_id][selected_day] = (
+            subject_day_load[subj_id].get(selected_day, 0) + 1
+        )
+    if group_id:
+        _mark_group_greedy_assignment(
+            selected_slot=selected_slot,
+            group_id=group_id,
+            group_busy_slots=group_busy_slots,
+            group_daily_load=group_daily_load,
+            day_index_by_slot=day_index_by_slot,
+        )
 
 
 def _is_greedy_slot_available(
@@ -256,3 +309,28 @@ def _mark_group_greedy_assignment(
     group_daily_load[group_id][selected_day] = (
         group_daily_load[group_id].get(selected_day, 0) + 1
     )
+
+
+def _teacher_gap_score(
+    *,
+    slot_idx,
+    teacher_id,
+    teacher_day_slots,
+    day_index_by_slot,
+    slot_day_order,
+):
+    """
+    Return the number of intra-day gaps that would exist if this slot were
+    added to the teacher's already-assigned slots on the same day (F-29).
+
+    A gap is any day-position between the earliest and latest assigned
+    positions that has no session. Zero means no fragmentation.
+    """
+    day_idx = day_index_by_slot[slot_idx]
+    existing_positions = teacher_day_slots.get(teacher_id, {}).get(day_idx, set())
+    if not existing_positions:
+        return 0
+    new_pos = slot_day_order[slot_idx]
+    all_positions = sorted(existing_positions | {new_pos})
+    span = all_positions[-1] - all_positions[0]
+    return span - (len(all_positions) - 1)

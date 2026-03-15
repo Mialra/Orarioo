@@ -482,3 +482,39 @@ class ScheduleApiTests(APITestCase):
             4,
             "Expected subject sessions to be spread across at least 4 different days.",
         )
+
+    @skipIf(
+        schedule_assignment.cp_model is None,
+        "Requires OR-Tools CP-SAT to validate soft constraints.",
+    )
+    def test_generate_minimizes_teacher_intraday_gaps(self):
+        """F-29: solver should prefer compact schedules over fragmented ones."""
+        # Allow only 3 Monday slots: position 0 (08:30) and positions 4-5 (13:00, 14:00).
+        # With weekly_hours=2 the solver must pick exactly 2 of those 3 slots.
+        # Compact choice (pos 4 + pos 5) yields 0 internal gaps, while any pair
+        # that includes pos 0 creates 3-4 internal gaps → F-29 should avoid it.
+        slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
+        allowed = {"MON_08:30", "MON_13:00", "MON_14:00"}
+        self.teacher.time_preferences = {
+            key: TeacherTimePreferenceState.UNAVAILABLE
+            for key in slot_pref_index.values()
+            if key not in allowed
+        }
+        self.subject.weekly_hours = 2
+        self.subject.save(update_fields=["weekly_hours"])
+        self.teacher.save(update_fields=["time_preferences"])
+
+        response = self.generate_schedule()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        schedules = Schedule.objects.filter(subject=self.subject)
+        assigned_keys = {
+            slot_preference_key_from_datetime(slot=s.start_time) for s in schedules
+        }
+        self.assertEqual(len(assigned_keys), 2)
+        # The compact pair should win; MON_08:30 (far from 13:00/14:00) must not appear.
+        self.assertNotIn(
+            "MON_08:30",
+            assigned_keys,
+            "Expected compact assignment (MON_13:00 + MON_14:00) but got a fragmented one.",
+        )
