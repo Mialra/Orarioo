@@ -31,7 +31,9 @@ def apply_soft_constraints(*, model, x, sessions, slots):
         _subject_day_spread_terms(model=model, x=x, sessions=sessions, slots=slots)
     )
     objective_terms.extend(
-        _teacher_gap_minimization_terms(model=model, x=x, sessions=sessions, slots=slots)
+        _teacher_gap_minimization_terms(
+            model=model, x=x, sessions=sessions, slots=slots
+        )
     )
 
     if objective_terms:
@@ -198,9 +200,9 @@ def _teacher_gap_minimization_terms(*, model, x, sessions, slots):
                 model.AddBoolAnd([has_before, has_after, has_at.Not()]).OnlyEnforceIf(
                     is_gap
                 )
-                model.AddBoolOr([has_before.Not(), has_after.Not(), has_at]).OnlyEnforceIf(
-                    is_gap.Not()
-                )
+                model.AddBoolOr(
+                    [has_before.Not(), has_after.Not(), has_at]
+                ).OnlyEnforceIf(is_gap.Not())
 
                 weighted_terms.append(-TEACHER_GAP_PENALTY_WEIGHT * is_gap)
 

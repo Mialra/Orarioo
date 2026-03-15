@@ -160,12 +160,14 @@ def _greedy_session_assignment(*, sessions, slots):
         sorted_slots = sorted(
             range(len(slots)),
             key=lambda p: (
-                0
-                if (
-                    subj_id is None
-                    or subject_day_load[subj_id].get(day_index_by_slot[p], 0) == 0
-                )
-                else 1,
+                (
+                    0
+                    if (
+                        subj_id is None
+                        or subject_day_load[subj_id].get(day_index_by_slot[p], 0) == 0
+                    )
+                    else 1
+                ),
                 _teacher_gap_score(
                     slot_idx=p,
                     teacher_id=teacher_id,
