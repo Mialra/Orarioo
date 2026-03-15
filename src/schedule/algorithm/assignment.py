@@ -7,11 +7,14 @@ from schedule.algorithm.constraints import (
     add_exactly_one_slot_constraints,
     add_group_daily_capacity_constraints,
     add_resource_non_overlap_constraints,
+    add_subject_time_hard_constraints,
     apply_soft_constraints,
     group_daily_limit,
+    session_preference_state,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
-from schedule.algorithm.slots import build_slot_day_index
+from schedule.algorithm.slots import build_slot_day_index, build_slot_preference_index
+from subject.models import SubjectTimePreferenceState
 
 
 def solve_session_assignment(*, sessions, slots):
@@ -51,6 +54,12 @@ def _cp_sat_session_assignment(*, sessions, slots):
         resource_key="group_id",
     )
     add_group_daily_capacity_constraints(
+        model=model,
+        x=x,
+        sessions=sessions,
+        slots=slots,
+    )
+    add_subject_time_hard_constraints(
         model=model,
         x=x,
         sessions=sessions,
@@ -104,6 +113,7 @@ def _greedy_session_assignment(*, sessions, slots):
     group_busy_slots = {}
     group_daily_load = {}
     day_index_by_slot = build_slot_day_index(slots=slots)
+    slot_preference_by_idx = build_slot_preference_index(slots=slots)
     slot_by_session = []
 
     for session in sessions:
@@ -119,15 +129,19 @@ def _greedy_session_assignment(*, sessions, slots):
 
         selected_slot = None
         for p_idx in range(len(slots)):
-            if p_idx in teacher_busy_slots[teacher_id]:
+            if not _is_greedy_slot_available(
+                session=session,
+                slot_idx=p_idx,
+                teacher_id=teacher_id,
+                group_id=group_id,
+                daily_limit=daily_limit if group_id else None,
+                teacher_busy_slots=teacher_busy_slots,
+                group_busy_slots=group_busy_slots,
+                group_daily_load=group_daily_load,
+                day_index_by_slot=day_index_by_slot,
+                slot_preference_by_idx=slot_preference_by_idx,
+            ):
                 continue
-            if group_id and p_idx in group_busy_slots[group_id]:
-                continue
-            if group_id:
-                day_idx = day_index_by_slot[p_idx]
-                assigned_today = group_daily_load[group_id].get(day_idx, 0)
-                if assigned_today >= daily_limit:
-                    continue
             selected_slot = p_idx
             break
 
@@ -139,10 +153,66 @@ def _greedy_session_assignment(*, sessions, slots):
         slot_by_session.append(selected_slot)
         teacher_busy_slots[teacher_id].add(selected_slot)
         if group_id:
-            group_busy_slots[group_id].add(selected_slot)
-            selected_day = day_index_by_slot[selected_slot]
-            group_daily_load[group_id][selected_day] = (
-                group_daily_load[group_id].get(selected_day, 0) + 1
+            _mark_group_greedy_assignment(
+                selected_slot=selected_slot,
+                group_id=group_id,
+                group_busy_slots=group_busy_slots,
+                group_daily_load=group_daily_load,
+                day_index_by_slot=day_index_by_slot,
             )
 
     return slot_by_session
+
+
+def _is_greedy_slot_available(
+    *,
+    session,
+    slot_idx,
+    teacher_id,
+    group_id,
+    daily_limit,
+    teacher_busy_slots,
+    group_busy_slots,
+    group_daily_load,
+    day_index_by_slot,
+    slot_preference_by_idx,
+):
+    slot_key = slot_preference_by_idx.get(slot_idx)
+    if slot_key is not None:
+        slot_state = session_preference_state(
+            session=session,
+            slot_preference_key=slot_key,
+        )
+        if slot_state == SubjectTimePreferenceState.UNAVAILABLE:
+            return False
+
+    if slot_idx in teacher_busy_slots[teacher_id]:
+        return False
+
+    if not group_id:
+        return True
+
+    if slot_idx in group_busy_slots[group_id]:
+        return False
+
+    day_idx = day_index_by_slot[slot_idx]
+    assigned_today = group_daily_load[group_id].get(day_idx, 0)
+    if daily_limit is not None and assigned_today >= daily_limit:
+        return False
+
+    return True
+
+
+def _mark_group_greedy_assignment(
+    *,
+    selected_slot,
+    group_id,
+    group_busy_slots,
+    group_daily_load,
+    day_index_by_slot,
+):
+    group_busy_slots[group_id].add(selected_slot)
+    selected_day = day_index_by_slot[selected_slot]
+    group_daily_load[group_id][selected_day] = (
+        group_daily_load[group_id].get(selected_day, 0) + 1
+    )

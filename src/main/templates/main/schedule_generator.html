@@ -385,6 +385,91 @@
             border-left: 4px solid #667eea;
         }
 
+        .subject-preferences-panel {
+            margin-top: 18px;
+            border: 1px solid #d9dfef;
+            border-radius: 8px;
+            background: #fff;
+            padding: 14px;
+        }
+
+        .subject-preferences-toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .subject-preferences-legend {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            font-size: 0.86em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .legend-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+            border: 1px solid #b7c0d5;
+        }
+
+        .legend-available { background: #d8f3df; }
+        .legend-prefer-yes { background: #a8e6b0; }
+        .legend-prefer-no { background: #ffe4b8; }
+        .legend-unavailable { background: #f7c5c5; }
+
+        .subject-pref-grid-wrap {
+            overflow-x: auto;
+        }
+
+        .subject-pref-grid {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 820px;
+            font-size: 0.86em;
+        }
+
+        .subject-pref-grid th,
+        .subject-pref-grid td {
+            border: 1px solid #d8dfea;
+            text-align: center;
+            padding: 8px;
+        }
+
+        .subject-pref-grid th {
+            background: #f3f6ff;
+            font-weight: 600;
+        }
+
+        .subject-pref-grid .hour-col {
+            background: #f8f9fb;
+            font-weight: 600;
+            width: 80px;
+        }
+
+        .pref-cell {
+            cursor: pointer;
+            transition: transform 0.12s, box-shadow 0.12s;
+            user-select: none;
+            min-width: 110px;
+        }
+
+        .pref-cell:hover {
+            transform: translateY(-1px);
+            box-shadow: inset 0 0 0 2px rgba(59, 91, 219, 0.24);
+        }
+
+        .pref-state-AVAILABLE { background: #d8f3df; }
+        .pref-state-PREFER_YES { background: #a8e6b0; }
+        .pref-state-PREFER_NO { background: #ffe4b8; }
+        .pref-state-UNAVAILABLE { background: #f7c5c5; }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 1.5em;
@@ -667,6 +752,26 @@
                             </select>
                         </div>
                     </div>
+                    <div class="subject-preferences-panel">
+                        <h4 style="margin-bottom: 10px;">Disponibilidad Semanal de la Asignatura</h4>
+                        <div class="subject-preferences-legend">
+                            <span><span class="legend-dot legend-available"></span>Available</span>
+                            <span><span class="legend-dot legend-prefer-yes"></span>Preferably yes</span>
+                            <span><span class="legend-dot legend-prefer-no"></span>Preferably no</span>
+                            <span><span class="legend-dot legend-unavailable"></span>Unavailable</span>
+                        </div>
+                        <div class="subject-preferences-toolbar">
+                            <label style="margin-bottom: 0;" for="subjectPreferenceBrush">Estado a pintar</label>
+                            <select id="subjectPreferenceBrush" style="max-width: 220px;">
+                                <option value="AVAILABLE" selected>Available</option>
+                                <option value="PREFER_YES">Preferably yes</option>
+                                <option value="PREFER_NO">Preferably no</option>
+                                <option value="UNAVAILABLE">Unavailable</option>
+                            </select>
+                            <button class="btn-secondary" id="subjectPreferenceClearBtn" type="button">Reiniciar cuadrícula</button>
+                        </div>
+                        <div class="subject-pref-grid-wrap" id="subjectPreferencesGrid"></div>
+                    </div>
                     <button class="btn-primary" id="createSubjectBtn">Crear Asignatura</button>
                 </div>
                 <div class="table-container">
@@ -693,6 +798,22 @@
             const API_BASE = "/api";
             let authToken = localStorage.getItem("access_token") || "";
             let latestGeneratedSchedules = [];
+            const SUBJECT_PREF_DAY_CODES = ["MON", "TUE", "WED", "THU", "FRI"];
+            const SUBJECT_PREF_DAY_LABELS = [
+                "Lunes",
+                "Martes",
+                "Miércoles",
+                "Jueves",
+                "Viernes",
+            ];
+            const SUBJECT_PREF_HOURS = ["08:30", "09:30", "10:30", "12:00", "13:00", "14:00"];
+            const SUBJECT_PREF_STATES = {
+                AVAILABLE: "Available",
+                PREFER_YES: "Preferably yes",
+                PREFER_NO: "Preferably no",
+                UNAVAILABLE: "Unavailable",
+            };
+            const subjectPreferenceMap = {};
 
         // Utility Functions
         const showAlert = (type, message) => {
@@ -729,6 +850,89 @@
                 console.error(`API Error for ${endpoint}:`, error);
                 return { ok: false, status: 0, data: { detail: error.message } };
             }
+        };
+
+        const defaultSubjectPreferenceMap = () => {
+            const map = {};
+            for (const dayCode of SUBJECT_PREF_DAY_CODES) {
+                for (const hour of SUBJECT_PREF_HOURS) {
+                    map[`${dayCode}_${hour}`] = "AVAILABLE";
+                }
+            }
+            return map;
+        };
+
+        const setAllSubjectPreferences = (state) => {
+            const defaults = defaultSubjectPreferenceMap();
+            Object.keys(defaults).forEach((key) => {
+                subjectPreferenceMap[key] = state;
+            });
+        };
+
+        const resetSubjectPreferences = () => {
+            Object.assign(subjectPreferenceMap, defaultSubjectPreferenceMap());
+            renderSubjectPreferencesGrid();
+        };
+
+        const renderSubjectPreferencesGrid = () => {
+            const wrap = document.getElementById("subjectPreferencesGrid");
+            if (!wrap) return;
+
+            const headCells = SUBJECT_PREF_DAY_LABELS
+                .map((label) => `<th>${label}</th>`)
+                .join("");
+
+            const bodyRows = SUBJECT_PREF_HOURS
+                .map((hour) => {
+                    const cells = SUBJECT_PREF_DAY_CODES
+                        .map((dayCode) => {
+                            const key = `${dayCode}_${hour}`;
+                            const state = subjectPreferenceMap[key] || "AVAILABLE";
+                            const stateLabel = SUBJECT_PREF_STATES[state] || state;
+                            return `
+                                <td
+                                    class="pref-cell pref-state-${state}"
+                                    data-pref-key="${key}"
+                                    title="${key} - ${stateLabel}"
+                                >
+                                    ${stateLabel}
+                                </td>
+                            `;
+                        })
+                        .join("");
+
+                    return `
+                        <tr>
+                            <td class="hour-col">${hour}</td>
+                            ${cells}
+                        </tr>
+                    `;
+                })
+                .join("");
+
+            wrap.innerHTML = `
+                <table class="subject-pref-grid">
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            ${headCells}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${bodyRows}
+                    </tbody>
+                </table>
+            `;
+        };
+
+        const collectSubjectTimePreferences = () => {
+            const nonDefault = {};
+            Object.entries(subjectPreferenceMap).forEach(([key, state]) => {
+                if (state && state !== "AVAILABLE") {
+                    nonDefault[key] = state;
+                }
+            });
+            return nonDefault;
         };
 
         // Auth
@@ -890,6 +1094,23 @@
 
         document.getElementById("refreshBtn").onclick = loadAllData;
 
+        document.getElementById("subjectPreferencesGrid").addEventListener("click", (event) => {
+            const cell = event.target.closest(".pref-cell");
+            if (!cell) return;
+
+            const key = cell.dataset.prefKey;
+            const brush = document.getElementById("subjectPreferenceBrush").value;
+            if (!key || !SUBJECT_PREF_STATES[brush]) return;
+
+            subjectPreferenceMap[key] = brush;
+            renderSubjectPreferencesGrid();
+        });
+
+        document.getElementById("subjectPreferenceClearBtn").onclick = () => {
+            resetSubjectPreferences();
+            showAlert("info", "Preferencias de asignatura reiniciadas a Available");
+        };
+
         // Teachers CRUD
         const renderTeachers = (items) => {
             const tbody = document.getElementById("teachersList");
@@ -1048,6 +1269,7 @@
                 weekly_hours: parseInt(document.getElementById("subjectWeeklyHours").value),
                 duration: parseFloat(document.getElementById("subjectDuration").value),
                 preferred_time_slot: "",
+                time_preferences: collectSubjectTimePreferences(),
                 stage: document.getElementById("subjectStage").value,
                 type: document.getElementById("subjectType").value,
                 teacher: parseInt(document.getElementById("subjectTeacher").value),
@@ -1061,6 +1283,7 @@
             if (result.ok) {
                 showAlert("success", "✓ Asignatura creada");
                 document.getElementById("subjectName").value = "";
+                resetSubjectPreferences();
                 loadAllData();
             } else {
                 showAlert("error", result.data.detail || "Error al crear");
@@ -1224,6 +1447,7 @@
         };
 
         // Init
+        resetSubjectPreferences();
         updateAuthUI();
         });
     </script>

@@ -9,9 +9,14 @@ from rest_framework.test import APITestCase
 from classroom.models import Classroom
 from group.models import EducationalStage, Group
 from schedule.algorithm import assignment as schedule_assignment
+from schedule.algorithm.slots import (
+    build_slot_preference_index,
+    build_weekly_slots,
+    slot_preference_key_from_datetime,
+)
 from schedule.models import Schedule
 from subject.models import EducationalStage as SubjectEducationalStage
-from subject.models import Subject, SubjectType
+from subject.models import Subject, SubjectTimePreferenceState, SubjectType
 from teacher.models import Teacher
 from user.models import RoleChoices, User
 
@@ -387,3 +392,39 @@ class ScheduleApiTests(APITestCase):
 
         self.assertEqual(len(tc_schedules), 4)
         self.assertEqual(len(unique_tc_starts), 4)
+
+    def test_generate_rejects_subject_with_all_slots_marked_unavailable(self):
+        all_slot_keys = build_slot_preference_index(slots=build_weekly_slots()).values()
+        self.subject.time_preferences = {
+            key: SubjectTimePreferenceState.UNAVAILABLE for key in all_slot_keys
+        }
+        self.subject.save(update_fields=["time_preferences"])
+
+        response = self.generate_schedule()
+
+        self.assert_generate_bad_request_with_detail(
+            response,
+            "Could not generate a feasible schedule",
+        )
+
+    @skipIf(
+        schedule_assignment.cp_model is None,
+        "Requires OR-Tools CP-SAT to validate soft constraints.",
+    )
+    def test_generate_prefers_prefer_yes_over_prefer_no_for_subject(self):
+        self.subject.weekly_hours = 1
+        slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
+        first_slot_key = slot_pref_index[0]
+        second_slot_key = slot_pref_index[1]
+        self.subject.time_preferences = {
+            first_slot_key: SubjectTimePreferenceState.PREFER_NO,
+            second_slot_key: SubjectTimePreferenceState.PREFER_YES,
+        }
+        self.subject.save(update_fields=["weekly_hours", "time_preferences"])
+
+        response = self.generate_schedule()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        generated = Schedule.objects.get(subject=self.subject)
+        generated_slot_key = slot_preference_key_from_datetime(slot=generated.start_time)
+        self.assertEqual(generated_slot_key, second_slot_key)

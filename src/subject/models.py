@@ -19,12 +19,22 @@ class SubjectType(models.TextChoices):
     TC = "TC", "TC"
 
 
+class SubjectTimePreferenceState(models.TextChoices):
+    """Preference state for each weekly slot in subject scheduling."""
+
+    AVAILABLE = "AVAILABLE", "Available"
+    PREFER_YES = "PREFER_YES", "Preferably yes"
+    PREFER_NO = "PREFER_NO", "Preferably no"
+    UNAVAILABLE = "UNAVAILABLE", "Unavailable"
+
+
 class Subject(AuditableEntity):
     """Subject model representing an academic subject."""
 
     weekly_hours = models.PositiveIntegerField()
     duration = models.FloatField()
     preferred_time_slot = models.CharField(max_length=150, blank=True)
+    time_preferences = models.JSONField(default=dict, blank=True)
     stage = models.CharField(
         max_length=20,
         choices=EducationalStage.choices,

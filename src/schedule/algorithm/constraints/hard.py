@@ -1,6 +1,7 @@
 from group.models import EducationalStage
 from schedule.algorithm.errors import ScheduleGenerationError
-from schedule.algorithm.slots import build_slot_day_index
+from schedule.algorithm.slots import build_slot_day_index, build_slot_preference_index
+from subject.models import SubjectTimePreferenceState
 
 
 def group_weekly_limit(group):
@@ -173,3 +174,28 @@ def add_group_daily_capacity_constraints(*, model, x, sessions, slots):
                 )
                 <= daily_limit
             )
+
+
+def session_preference_state(*, session, slot_preference_key):
+    subject = session.get("subject")
+    if subject is None:
+        return SubjectTimePreferenceState.AVAILABLE
+
+    preferences = getattr(subject, "time_preferences", None) or {}
+    state = preferences.get(slot_preference_key)
+    if state in SubjectTimePreferenceState.values:
+        return state
+    return SubjectTimePreferenceState.AVAILABLE
+
+
+def add_subject_time_hard_constraints(*, model, x, sessions, slots):
+    slot_preference_by_idx = build_slot_preference_index(slots=slots)
+
+    for s_idx, session in enumerate(sessions):
+        for p_idx, slot_key in slot_preference_by_idx.items():
+            state = session_preference_state(
+                session=session,
+                slot_preference_key=slot_key,
+            )
+            if state == SubjectTimePreferenceState.UNAVAILABLE:
+                model.Add(x[(s_idx, p_idx)] == 0)
