@@ -2,7 +2,6 @@ from datetime import datetime, time, timedelta
 
 from django.utils import timezone
 
-
 DAY_CODE_BY_WEEKDAY = {
     0: "MON",
     1: "TUE",

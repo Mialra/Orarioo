@@ -2,7 +2,6 @@ from schedule.algorithm.constraints.hard import session_preference_state
 from schedule.algorithm.slots import build_slot_preference_index
 from subject.models import SubjectTimePreferenceState
 
-
 TC_SLOT_COVERAGE_WEIGHT = 5
 PREFER_YES_WEIGHT = 2
 PREFER_NO_WEIGHT = -2

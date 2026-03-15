@@ -426,5 +426,7 @@ class ScheduleApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         generated = Schedule.objects.get(subject=self.subject)
-        generated_slot_key = slot_preference_key_from_datetime(slot=generated.start_time)
+        generated_slot_key = slot_preference_key_from_datetime(
+            slot=generated.start_time
+        )
         self.assertEqual(generated_slot_key, second_slot_key)
