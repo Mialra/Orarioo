@@ -121,6 +121,7 @@ def _greedy_session_assignment(*, sessions, slots):
     teacher_busy_slots = {}
     group_busy_slots = {}
     group_daily_load = {}
+    subject_day_load = {}
     day_index_by_slot = build_slot_day_index(slots=slots)
     slot_preference_by_idx = build_slot_preference_index(slots=slots)
     slot_by_session = []
@@ -136,8 +137,26 @@ def _greedy_session_assignment(*, sessions, slots):
             group_daily_load.setdefault(group_id, {})
             daily_limit = group_daily_limit(group)
 
+        subject = session.get("subject")
+        subj_id = subject.id if subject else None
+        if subj_id:
+            subject_day_load.setdefault(subj_id, {})
+
+        # Prefer slots on days not yet used by this subject (F-28 soft spread).
+        sorted_slots = sorted(
+            range(len(slots)),
+            key=lambda p: (
+                0
+                if (
+                    subj_id is None
+                    or subject_day_load[subj_id].get(day_index_by_slot[p], 0) == 0
+                )
+                else 1
+            ),
+        )
+
         selected_slot = None
-        for p_idx in range(len(slots)):
+        for p_idx in sorted_slots:
             if not _is_greedy_slot_available(
                 session=session,
                 slot_idx=p_idx,
@@ -161,6 +180,11 @@ def _greedy_session_assignment(*, sessions, slots):
 
         slot_by_session.append(selected_slot)
         teacher_busy_slots[teacher_id].add(selected_slot)
+        if subj_id:
+            selected_day = day_index_by_slot[selected_slot]
+            subject_day_load[subj_id][selected_day] = (
+                subject_day_load[subj_id].get(selected_day, 0) + 1
+            )
         if group_id:
             _mark_group_greedy_assignment(
                 selected_slot=selected_slot,

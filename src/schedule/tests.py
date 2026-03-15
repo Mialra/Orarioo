@@ -469,3 +469,16 @@ class ScheduleApiTests(APITestCase):
             slot=generated.start_time
         )
         self.assertEqual(generated_slot_key, second_slot_key)
+
+    def test_generate_spreads_subject_sessions_across_days(self):
+        response = self.generate_schedule()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        subject_schedules = Schedule.objects.filter(subject=self.subject)
+        distinct_days = {s.start_time.date() for s in subject_schedules}
+        self.assertGreaterEqual(
+            len(distinct_days),
+            4,
+            "Expected subject sessions to be spread across at least 4 different days.",
+        )

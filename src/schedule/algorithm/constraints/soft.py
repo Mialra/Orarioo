@@ -2,7 +2,7 @@ from schedule.algorithm.constraints.hard import (
     session_preference_state,
     teacher_preference_state,
 )
-from schedule.algorithm.slots import build_slot_preference_index
+from schedule.algorithm.slots import build_slot_day_index, build_slot_preference_index
 from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 
@@ -11,6 +11,7 @@ PREFER_YES_WEIGHT = 2
 PREFER_NO_WEIGHT = -2
 TEACHER_PREFER_YES_WEIGHT = 2
 TEACHER_PREFER_NO_WEIGHT = -2
+SUBJECT_DAY_SPREAD_WEIGHT = 3
 
 
 def apply_soft_constraints(*, model, x, sessions, slots):
@@ -24,6 +25,9 @@ def apply_soft_constraints(*, model, x, sessions, slots):
     )
     objective_terms.extend(
         _teacher_time_preference_terms(x=x, sessions=sessions, slots=slots)
+    )
+    objective_terms.extend(
+        _subject_day_spread_terms(model=model, x=x, sessions=sessions, slots=slots)
     )
 
     if objective_terms:
@@ -86,6 +90,42 @@ def _teacher_time_preference_terms(*, x, sessions, slots):
                 weighted_terms.append(TEACHER_PREFER_YES_WEIGHT * x[(s_idx, p_idx)])
             elif state == TeacherTimePreferenceState.PREFER_NO:
                 weighted_terms.append(TEACHER_PREFER_NO_WEIGHT * x[(s_idx, p_idx)])
+
+    return weighted_terms
+
+
+def _subject_day_spread_terms(*, model, x, sessions, slots):
+    """
+    Reward distributing sessions of the same subject across different weekdays.
+
+    For each subject with more than one session, a bonus is added for each
+    distinct weekday that has at least one session assigned to it. This
+    encourages the solver to avoid concentrating all sessions in a few days.
+    """
+    slot_day_index = build_slot_day_index(slots=slots)
+
+    slots_by_day = {}
+    for slot_idx, day_idx in slot_day_index.items():
+        slots_by_day.setdefault(day_idx, []).append(slot_idx)
+
+    sessions_by_subject = {}
+    for s_idx, session in enumerate(sessions):
+        subject = session.get("subject")
+        if subject is not None:
+            sessions_by_subject.setdefault(subject.id, []).append(s_idx)
+
+    weighted_terms = []
+    for subj_id, s_indices in sessions_by_subject.items():
+        if len(s_indices) < 2:
+            continue
+        for day_idx, day_slots in slots_by_day.items():
+            has_session_on_day = model.NewBoolVar(f"subj{subj_id}_day{day_idx}")
+            sessions_on_day_expr = sum(
+                x[(s_idx, p_idx)] for s_idx in s_indices for p_idx in day_slots
+            )
+            model.Add(sessions_on_day_expr >= 1).OnlyEnforceIf(has_session_on_day)
+            model.Add(sessions_on_day_expr == 0).OnlyEnforceIf(has_session_on_day.Not())
+            weighted_terms.append(SUBJECT_DAY_SPREAD_WEIGHT * has_session_on_day)
 
     return weighted_terms
 
