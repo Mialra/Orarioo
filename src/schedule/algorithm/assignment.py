@@ -352,12 +352,14 @@ def _ordered_greedy_slots(
     return sorted(
         range(slot_count),
         key=lambda p: (
-            0
-            if (
-                subj_id is None
-                or subject_day_load[subj_id].get(day_index_by_slot[p], 0) == 0
-            )
-            else 1,
+            (
+                0
+                if (
+                    subj_id is None
+                    or subject_day_load[subj_id].get(day_index_by_slot[p], 0) == 0
+                )
+                else 1
+            ),
             _teacher_gap_score(
                 slot_idx=p,
                 teacher_id=teacher_id,
@@ -548,7 +550,9 @@ def _build_compatible_classroom_index(*, sessions, classrooms):
 
 def _is_classroom_compatible(*, session, classroom):
     subject = session.get("subject")
-    required_type = (getattr(subject, "required_classroom_type", "") or "").strip().casefold()
+    required_type = (
+        (getattr(subject, "required_classroom_type", "") or "").strip().casefold()
+    )
     if not required_type:
         return True
     classroom_type = (getattr(classroom, "classroom_type", "") or "").strip().casefold()

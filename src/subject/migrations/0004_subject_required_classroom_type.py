@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('subject', '0003_subject_time_preferences'),
+        ("subject", "0003_subject_time_preferences"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='subject',
-            name='required_classroom_type',
-            field=models.CharField(blank=True, default='', max_length=150),
+            model_name="subject",
+            name="required_classroom_type",
+            field=models.CharField(blank=True, default="", max_length=150),
         ),
     ]
