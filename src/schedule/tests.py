@@ -393,6 +393,78 @@ class ScheduleApiTests(APITestCase):
         self.assertEqual(len(tc_schedules), 4)
         self.assertEqual(len(unique_tc_starts), 4)
 
+    def test_generate_assigns_only_compatible_classrooms(self):
+        self.classroom.classroom_type = "STANDARD"
+        self.classroom.save(update_fields=["classroom_type"])
+        lab = Classroom.objects.create(name="Laboratorio 1", classroom_type="LAB")
+
+        self.subject.required_classroom_type = "lab"
+        self.subject.save(update_fields=["required_classroom_type"])
+
+        response = self.generate_schedule()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        generated_classroom_ids = set(
+            Schedule.objects.filter(subject=self.subject).values_list(
+                "classroom_id", flat=True
+            )
+        )
+        self.assertEqual(generated_classroom_ids, {lab.id})
+
+    def test_generate_rejects_subject_without_compatible_classroom(self):
+        self.classroom.classroom_type = "STANDARD"
+        self.classroom.save(update_fields=["classroom_type"])
+        self.subject.required_classroom_type = "LAB"
+        self.subject.save(update_fields=["required_classroom_type"])
+
+        response = self.generate_schedule()
+
+        self.assert_generate_bad_request_with_detail(
+            response,
+            "compatible classroom",
+        )
+
+    def test_generate_spreads_sessions_when_one_compatible_classroom_is_shared(self):
+        self.classroom.classroom_type = "LAB"
+        self.classroom.save(update_fields=["classroom_type"])
+        self.subject.weekly_hours = 1
+        self.subject.required_classroom_type = "LAB"
+        self.subject.save(update_fields=["weekly_hours", "required_classroom_type"])
+
+        teacher_2 = Teacher.objects.create(
+            name="Elena Ruiz",
+            max_weekly_hours=20,
+            working_hours=8,
+        )
+        group_2 = Group.objects.create(name="2A", stage=EducationalStage.PRIMARY)
+        other_subject = Subject.objects.create(
+            name="Science Lab",
+            weekly_hours=1,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            required_classroom_type="lab",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=teacher_2,
+            group=group_2,
+        )
+
+        response = self.generate_schedule()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        generated = list(
+            Schedule.objects.filter(subject__in=[self.subject, other_subject]).order_by(
+                "start_time"
+            )
+        )
+        self.assertEqual(len(generated), 2)
+        self.assertEqual({item.classroom_id for item in generated}, {self.classroom.id})
+        self.assertEqual(
+            len({item.start_time for item in generated}),
+            2,
+            "Two sessions that share a single compatible classroom must not overlap.",
+        )
+
     def test_generate_rejects_subject_with_all_slots_marked_unavailable(self):
         all_slot_keys = build_slot_preference_index(slots=build_weekly_slots()).values()
         self.subject.time_preferences = {

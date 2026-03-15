@@ -31,16 +31,17 @@ class BasicScheduleGenerator:
         subjects = list(
             Subject.objects.select_related("teacher", "group").order_by("id")
         )
-        classroom_by_group_id = cls._build_group_classroom_map(
-            subjects=subjects,
-            fallback_classroom=fallback_classroom,
-        )
+        classrooms = cls._build_classroom_pool(fallback_classroom=fallback_classroom)
         sessions = cls._build_sessions(subjects=subjects, fallback_teacher=teacher)
         slots = build_weekly_slots()
 
         validate_group_and_teacher_capacity(sessions=sessions, slots=slots)
 
-        slot_by_session = solve_session_assignment(sessions=sessions, slots=slots)
+        slot_by_session, classroom_by_session = solve_session_assignment(
+            sessions=sessions,
+            slots=slots,
+            classrooms=classrooms,
+        )
 
         created = []
         for session_index, slot_index in enumerate(slot_by_session):
@@ -54,10 +55,7 @@ class BasicScheduleGenerator:
                 end_time=end_time,
                 observations="Auto-generated with CP-SAT basic constraints.",
                 teacher=session["teacher"],
-                classroom=classroom_by_group_id.get(
-                    getattr(session.get("group"), "id", None),
-                    fallback_classroom,
-                ),
+                classroom=classroom_by_session[session_index],
                 group=session.get("group") or group,
                 subject=session["subject"],
                 created_by=actor_email,
@@ -128,21 +126,8 @@ class BasicScheduleGenerator:
         )
 
     @staticmethod
-    def _build_group_classroom_map(*, subjects, fallback_classroom):
-        """Map each subject group to its most suitable classroom by name."""
-        mapping = {}
-        groups = {
-            subject.group for subject in subjects if getattr(subject, "group", None)
-        }
-
-        for group in groups:
-            classroom = (
-                Classroom.objects.filter(name__icontains=group.name)
-                .order_by("id")
-                .first()
-            )
-            if classroom is None:
-                classroom = fallback_classroom
-            mapping[group.id] = classroom
-
-        return mapping
+    def _build_classroom_pool(*, fallback_classroom):
+        classrooms = list(Classroom.objects.order_by("id"))
+        if not classrooms:
+            return [fallback_classroom]
+        return classrooms

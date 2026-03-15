@@ -15,6 +15,7 @@ class SubjectSerializer(serializers.ModelSerializer):
             "weekly_hours",
             "duration",
             "preferred_time_slot",
+            "required_classroom_type",
             "time_preferences",
             "stage",
             "type",

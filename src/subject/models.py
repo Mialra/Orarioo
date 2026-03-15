@@ -34,6 +34,7 @@ class Subject(AuditableEntity):
     weekly_hours = models.PositiveIntegerField()
     duration = models.FloatField()
     preferred_time_slot = models.CharField(max_length=150, blank=True)
+    required_classroom_type = models.CharField(max_length=150, blank=True, default="")
     time_preferences = models.JSONField(default=dict, blank=True)
     stage = models.CharField(
         max_length=20,

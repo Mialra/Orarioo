@@ -9,6 +9,7 @@ class ClassroomSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "classroom_type",
             "created_at",
             "updated_at",
             "created_by",

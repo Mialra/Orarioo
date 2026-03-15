@@ -668,9 +668,15 @@
                 <div class="section-title">🏫 Gestión de Aulas</div>
                 <div class="form-section">
                     <h3 style="margin-bottom: 15px;">Crear Nueva Aula</h3>
-                    <div class="form-group">
-                        <label>Nombre del Aula</label>
-                        <input type="text" id="classroomName" placeholder="Ej: Aula 1A" />
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nombre del Aula</label>
+                            <input type="text" id="classroomName" placeholder="Ej: Aula 1A" />
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo de Aula</label>
+                            <input type="text" id="classroomType" placeholder="Ej: LAB, MUSIC, STANDARD" />
+                        </div>
                     </div>
                     <button class="btn-primary" id="createClassroomBtn">Crear Aula</button>
                 </div>
@@ -680,6 +686,7 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Nombre</th>
+                                <th>Tipo</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -771,6 +778,10 @@
                                 <option value="">-- Selecciona Curso --</option>
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label>Tipo de Aula Requerida</label>
+                            <input type="text" id="subjectRequiredClassroomType" placeholder="Ej: LAB, MUSIC, STANDARD" />
+                        </div>
                     </div>
                     <div class="subject-preferences-panel">
                         <h4 style="margin-bottom: 10px;">Disponibilidad Semanal de la Asignatura</h4>
@@ -803,6 +814,7 @@
                                 <th>Horas Semanales</th>
                                 <th>Profesor</th>
                                 <th>Curso</th>
+                                <th>Aula Requerida</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -1265,13 +1277,14 @@
         const renderClassrooms = (items) => {
             const tbody = document.getElementById("classroomsList");
             if (!items.length) {
-                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No hay aulas registradas</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No hay aulas registradas</td></tr>';
                 return;
             }
             tbody.innerHTML = items.map(c => `
                 <tr>
                     <td>${c.id}</td>
                     <td>${c.name}</td>
+                    <td>${c.classroom_type || "-"}</td>
                     <td>
                         <div class="action-buttons">
                             <button class="btn-danger" onclick="deleteEntity('classrooms', ${c.id})">Eliminar</button>
@@ -1283,14 +1296,19 @@
 
         document.getElementById("createClassroomBtn").onclick = async () => {
             const name = document.getElementById("classroomName").value;
+            const classroomType = document.getElementById("classroomType").value.trim();
             if (!name) {
                 showAlert("error", "Ingresa nombre del aula");
                 return;
             }
-            const result = await apiCall("/classrooms/", "POST", { name });
+            const result = await apiCall("/classrooms/", "POST", {
+                name,
+                classroom_type: classroomType,
+            });
             if (result.ok) {
                 showAlert("success", "✓ Aula creada");
                 document.getElementById("classroomName").value = "";
+                document.getElementById("classroomType").value = "";
                 loadAllData();
             } else {
                 showAlert("error", result.data.detail || "Error al crear");
@@ -1341,7 +1359,7 @@
         const renderSubjects = (items, teachers, groups) => {
             const tbody = document.getElementById("subjectsList");
             if (!items.length) {
-                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay asignaturas registradas</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No hay asignaturas registradas</td></tr>';
                 return;
             }
             tbody.innerHTML = items.map(s => `
@@ -1351,6 +1369,7 @@
                     <td>${s.weekly_hours}</td>
                     <td>${s.teacher_name}</td>
                     <td>${s.group_name || "-"}</td>
+                    <td>${s.required_classroom_type || "-"}</td>
                     <td>
                         <div class="action-buttons">
                             <button class="btn-danger" onclick="deleteEntity('subjects', ${s.id})">Eliminar</button>
@@ -1375,6 +1394,7 @@
                 weekly_hours: parseInt(document.getElementById("subjectWeeklyHours").value),
                 duration: parseFloat(document.getElementById("subjectDuration").value),
                 preferred_time_slot: "",
+                required_classroom_type: document.getElementById("subjectRequiredClassroomType").value.trim(),
                 time_preferences: collectSubjectTimePreferences(),
                 stage: document.getElementById("subjectStage").value,
                 type: document.getElementById("subjectType").value,
@@ -1389,6 +1409,7 @@
             if (result.ok) {
                 showAlert("success", "✓ Asignatura creada");
                 document.getElementById("subjectName").value = "";
+                document.getElementById("subjectRequiredClassroomType").value = "";
                 resetSubjectPreferences();
                 loadAllData();
             } else {
