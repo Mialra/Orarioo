@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest import skipIf
 
 from django.urls import reverse
 from django.utils import timezone
@@ -7,6 +8,7 @@ from rest_framework.test import APITestCase
 
 from classroom.models import Classroom
 from group.models import EducationalStage, Group
+from schedule.algorithm import assignment as schedule_assignment
 from schedule.models import Schedule
 from subject.models import EducationalStage as SubjectEducationalStage
 from subject.models import Subject, SubjectType
@@ -338,3 +340,50 @@ class ScheduleApiTests(APITestCase):
         self.assertEqual(group_schedules.count(), 25)
         self.assertEqual(len(daily_counts), 5)
         self.assertTrue(all(count <= 5 for count in daily_counts.values()))
+
+    @skipIf(
+        schedule_assignment.cp_model is None,
+        "Requires OR-Tools CP-SAT to validate soft constraints.",
+    )
+    def test_generate_tc_sessions_spread_across_distinct_slots_when_feasible(self):
+        self.subject.weekly_hours = 1
+        self.subject.save(update_fields=["weekly_hours"])
+
+        teacher_2 = Teacher.objects.create(
+            name="Lucia Martin",
+            max_weekly_hours=20,
+            working_hours=12,
+        )
+        group_2 = Group.objects.create(name="2A", stage=EducationalStage.PRIMARY)
+
+        Subject.objects.create(
+            name="TC 1A",
+            weekly_hours=2,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.TC,
+            teacher=self.teacher,
+            group=self.group,
+        )
+        Subject.objects.create(
+            name="TC 2A",
+            weekly_hours=2,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.TC,
+            teacher=teacher_2,
+            group=group_2,
+        )
+
+        response = self.generate_schedule()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        tc_schedules = list(
+            Schedule.objects.filter(subject__type=SubjectType.TC).order_by("start_time")
+        )
+        unique_tc_starts = {item.start_time for item in tc_schedules}
+
+        self.assertEqual(len(tc_schedules), 4)
+        self.assertEqual(len(unique_tc_starts), 4)

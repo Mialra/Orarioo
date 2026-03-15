@@ -14,7 +14,6 @@ from teacher.models import Teacher
 
 
 class BasicScheduleGenerator:
-    """Basic CP-SAT generator with non-overlap rules for teacher and group."""
 
     @classmethod
     @transaction.atomic
