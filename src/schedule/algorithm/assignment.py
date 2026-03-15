@@ -5,6 +5,7 @@ except ModuleNotFoundError:  # pragma: no cover - depends on local Python versio
 
 from schedule.algorithm.constraints import (
     add_group_daily_capacity_constraints,
+    add_group_no_intraday_gap_constraints,
     add_resource_non_overlap_constraints,
     add_subject_time_hard_constraints,
     add_teacher_time_hard_constraints,
@@ -80,6 +81,12 @@ def _cp_sat_session_assignment(*, sessions, slots, compatible_classrooms_by_sess
         classrooms=compatible_classrooms_by_session,
     )
     add_group_daily_capacity_constraints(
+        model=model,
+        x=x,
+        sessions=sessions,
+        slots=slots,
+    )
+    add_group_no_intraday_gap_constraints(
         model=model,
         x=x,
         sessions=sessions,
@@ -215,6 +222,7 @@ def _greedy_session_assignment(*, sessions, slots, compatible_classrooms_by_sess
     teacher_day_slots = {}  # {teacher_id: {day_idx: set of slot positions within day}}
     classroom_busy_slots = {}
     group_busy_slots = {}
+    group_day_slots = {}  # {group_id: {day_idx: set of slot positions within day}}
     group_daily_load = {}
     subject_day_load = {}
     day_index_by_slot = build_slot_day_index(slots=slots)
@@ -241,6 +249,7 @@ def _greedy_session_assignment(*, sessions, slots, compatible_classrooms_by_sess
             teacher_day_slots=teacher_day_slots,
             classroom_busy_slots=classroom_busy_slots,
             group_busy_slots=group_busy_slots,
+            group_day_slots=group_day_slots,
             group_daily_load=group_daily_load,
             subject_day_load=subject_day_load,
         )
@@ -250,6 +259,8 @@ def _greedy_session_assignment(*, sessions, slots, compatible_classrooms_by_sess
             subj_id=subj_id,
             subject_day_load=subject_day_load,
             day_index_by_slot=day_index_by_slot,
+            group_id=group_id,
+            group_day_slots=group_day_slots,
             teacher_id=teacher_id,
             teacher_day_slots=teacher_day_slots,
             slot_day_order=slot_day_order,
@@ -269,8 +280,10 @@ def _greedy_session_assignment(*, sessions, slots, compatible_classrooms_by_sess
                 daily_limit=daily_limit if group_id else None,
                 teacher_busy_slots=teacher_busy_slots,
                 group_busy_slots=group_busy_slots,
+                group_day_slots=group_day_slots,
                 group_daily_load=group_daily_load,
                 day_index_by_slot=day_index_by_slot,
+                slot_day_order=slot_day_order,
                 slot_preference_by_idx=slot_preference_by_idx,
             )
             if available_classroom is None:
@@ -297,6 +310,7 @@ def _greedy_session_assignment(*, sessions, slots, compatible_classrooms_by_sess
             classroom_busy_slots=classroom_busy_slots,
             subject_day_load=subject_day_load,
             group_busy_slots=group_busy_slots,
+            group_day_slots=group_day_slots,
             group_daily_load=group_daily_load,
             day_index_by_slot=day_index_by_slot,
             slot_day_order=slot_day_order,
@@ -314,6 +328,7 @@ def _prepare_greedy_session_state(
     teacher_day_slots,
     classroom_busy_slots,
     group_busy_slots,
+    group_day_slots,
     group_daily_load,
     subject_day_load,
 ):
@@ -328,6 +343,7 @@ def _prepare_greedy_session_state(
     daily_limit = None
     if group_id:
         group_busy_slots.setdefault(group_id, set())
+        group_day_slots.setdefault(group_id, {})
         group_daily_load.setdefault(group_id, {})
         daily_limit = group_daily_limit(group)
 
@@ -345,6 +361,8 @@ def _ordered_greedy_slots(
     subj_id,
     subject_day_load,
     day_index_by_slot,
+    group_id,
+    group_day_slots,
     teacher_id,
     teacher_day_slots,
     slot_day_order,
@@ -359,6 +377,13 @@ def _ordered_greedy_slots(
                     or subject_day_load[subj_id].get(day_index_by_slot[p], 0) == 0
                 )
                 else 1
+            ),
+            _group_gap_score(
+                slot_idx=p,
+                group_id=group_id,
+                group_day_slots=group_day_slots,
+                day_index_by_slot=day_index_by_slot,
+                slot_day_order=slot_day_order,
             ),
             _teacher_gap_score(
                 slot_idx=p,
@@ -383,6 +408,7 @@ def _update_greedy_tracking(
     classroom_busy_slots,
     subject_day_load,
     group_busy_slots,
+    group_day_slots,
     group_daily_load,
     day_index_by_slot,
     slot_day_order,
@@ -398,6 +424,9 @@ def _update_greedy_tracking(
             subject_day_load[subj_id].get(selected_day, 0) + 1
         )
     if group_id:
+        group_day_slots[group_id].setdefault(selected_day, set()).add(
+            slot_day_order[selected_slot]
+        )
         _mark_group_greedy_assignment(
             selected_slot=selected_slot,
             group_id=group_id,
@@ -416,8 +445,10 @@ def _is_greedy_slot_available(
     daily_limit,
     teacher_busy_slots,
     group_busy_slots,
+    group_day_slots,
     group_daily_load,
     day_index_by_slot,
+    slot_day_order,
     slot_preference_by_idx,
 ):
     slot_key = slot_preference_by_idx.get(slot_idx)
@@ -450,6 +481,15 @@ def _is_greedy_slot_available(
     if daily_limit is not None and assigned_today >= daily_limit:
         return False
 
+    if _would_create_group_intraday_gap(
+        slot_idx=slot_idx,
+        group_id=group_id,
+        group_day_slots=group_day_slots,
+        day_index_by_slot=day_index_by_slot,
+        slot_day_order=slot_day_order,
+    ):
+        return False
+
     return True
 
 
@@ -465,8 +505,10 @@ def _pick_greedy_compatible_classroom(
     daily_limit,
     teacher_busy_slots,
     group_busy_slots,
+    group_day_slots,
     group_daily_load,
     day_index_by_slot,
+    slot_day_order,
     slot_preference_by_idx,
 ):
     if not _is_greedy_slot_available(
@@ -477,8 +519,10 @@ def _pick_greedy_compatible_classroom(
         daily_limit=daily_limit,
         teacher_busy_slots=teacher_busy_slots,
         group_busy_slots=group_busy_slots,
+        group_day_slots=group_day_slots,
         group_daily_load=group_daily_load,
         day_index_by_slot=day_index_by_slot,
+        slot_day_order=slot_day_order,
         slot_preference_by_idx=slot_preference_by_idx,
     ):
         return None
@@ -527,6 +571,46 @@ def _teacher_gap_score(
     all_positions = sorted(existing_positions | {new_pos})
     span = all_positions[-1] - all_positions[0]
     return span - (len(all_positions) - 1)
+
+
+def _group_gap_score(
+    *,
+    slot_idx,
+    group_id,
+    group_day_slots,
+    day_index_by_slot,
+    slot_day_order,
+):
+    """Heuristic score for building contiguous group blocks under hard F-30."""
+    if not group_id:
+        return 0
+
+    day_idx = day_index_by_slot[slot_idx]
+    existing_positions = group_day_slots.get(group_id, {}).get(day_idx, set())
+    if not existing_positions:
+        last_pos = max(slot_day_order.values()) if slot_day_order else 0
+        return abs(slot_day_order[slot_idx] - (last_pos / 2))
+
+    new_pos = slot_day_order[slot_idx]
+    all_positions = sorted(existing_positions | {new_pos})
+    span = all_positions[-1] - all_positions[0]
+    return span - (len(all_positions) - 1)
+
+
+def _would_create_group_intraday_gap(
+    *, slot_idx, group_id, group_day_slots, day_index_by_slot, slot_day_order
+):
+    if not group_id:
+        return False
+
+    day_idx = day_index_by_slot[slot_idx]
+    existing_positions = group_day_slots.get(group_id, {}).get(day_idx, set())
+    if not existing_positions:
+        return False
+
+    all_positions = sorted(existing_positions | {slot_day_order[slot_idx]})
+    span = all_positions[-1] - all_positions[0]
+    return span != len(all_positions) - 1
 
 
 def _build_compatible_classroom_index(*, sessions, classrooms):

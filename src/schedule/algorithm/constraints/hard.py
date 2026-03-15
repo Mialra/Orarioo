@@ -177,6 +177,73 @@ def add_group_daily_capacity_constraints(*, model, x, sessions, slots):
             )
 
 
+def add_group_no_intraday_gap_constraints(*, model, x, sessions, slots):
+    """Forbid intra-day gaps inside each group's timetable block (F-30)."""
+    slots_by_day = _build_slots_by_day(slots=slots)
+    group_to_sessions = _build_group_session_index(sessions=sessions)
+
+    for group_id, group_sessions in group_to_sessions.items():
+        for day_idx, day_slot_list in slots_by_day.items():
+            occupancy_by_slot = _build_group_day_occupancy_vars(
+                model=model,
+                x=x,
+                group_id=group_id,
+                group_sessions=group_sessions,
+                day_idx=day_idx,
+                day_slot_list=day_slot_list,
+            )
+            _add_no_gap_triplets(
+                model=model,
+                occupancy_by_slot=occupancy_by_slot,
+                day_slot_list=day_slot_list,
+            )
+
+
+def _build_slots_by_day(*, slots):
+    slot_day_index = build_slot_day_index(slots=slots)
+    slots_by_day = {}
+    for slot_idx, day_idx in slot_day_index.items():
+        slots_by_day.setdefault(day_idx, []).append(slot_idx)
+    for day_idx in slots_by_day:
+        slots_by_day[day_idx].sort()
+    return slots_by_day
+
+
+def _build_group_session_index(*, sessions):
+    group_to_sessions = {}
+    for s_idx, session in enumerate(sessions):
+        group = session.get("group")
+        group_id = getattr(group, "id", None)
+        if group_id is not None:
+            group_to_sessions.setdefault(group_id, []).append(s_idx)
+    return group_to_sessions
+
+
+def _build_group_day_occupancy_vars(
+    *, model, x, group_id, group_sessions, day_idx, day_slot_list
+):
+    occupancy_by_slot = {}
+    for slot_idx in day_slot_list:
+        occupied = model.NewBoolVar(f"g{group_id}_d{day_idx}_p{slot_idx}_occ")
+        model.Add(sum(x[(s_idx, slot_idx)] for s_idx in group_sessions) == occupied)
+        occupancy_by_slot[slot_idx] = occupied
+    return occupancy_by_slot
+
+
+def _add_no_gap_triplets(*, model, occupancy_by_slot, day_slot_list):
+    for left_pos, left_slot in enumerate(day_slot_list[:-2]):
+        for middle_pos in range(left_pos + 1, len(day_slot_list) - 1):
+            middle_slot = day_slot_list[middle_pos]
+            for right_slot in day_slot_list[middle_pos + 1 :]:
+                model.AddBoolOr(
+                    [
+                        occupancy_by_slot[left_slot].Not(),
+                        occupancy_by_slot[middle_slot],
+                        occupancy_by_slot[right_slot].Not(),
+                    ]
+                )
+
+
 def session_preference_state(*, session, slot_preference_key):
     subject = session.get("subject")
     if subject is None:

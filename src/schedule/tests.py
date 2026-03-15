@@ -590,3 +590,47 @@ class ScheduleApiTests(APITestCase):
             assigned_keys,
             "Expected compact assignment (MON_13:00 + MON_14:00) but got a fragmented one.",
         )
+
+    def test_generate_rejects_group_intraday_gaps(self):
+        """F-30: a group's timetable cannot contain intra-day gaps."""
+        self.subject.weekly_hours = 1
+        self.subject.save(update_fields=["weekly_hours"])
+
+        teacher_2 = Teacher.objects.create(
+            name="Lucia Lopez",
+            max_weekly_hours=20,
+            working_hours=8,
+        )
+        Subject.objects.create(
+            name="Science",
+            weekly_hours=1,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=teacher_2,
+            group=self.group,
+        )
+
+        slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
+        allowed = {"MON_08:30", "MON_13:00"}
+
+        self.teacher.time_preferences = {
+            key: TeacherTimePreferenceState.UNAVAILABLE
+            for key in slot_pref_index.values()
+            if key not in allowed
+        }
+        teacher_2.time_preferences = {
+            key: TeacherTimePreferenceState.UNAVAILABLE
+            for key in slot_pref_index.values()
+            if key not in allowed
+        }
+        self.teacher.save(update_fields=["time_preferences"])
+        teacher_2.save(update_fields=["time_preferences"])
+
+        response = self.generate_schedule()
+
+        self.assert_generate_bad_request_with_detail(
+            response,
+            "Could not generate a feasible schedule",
+        )
