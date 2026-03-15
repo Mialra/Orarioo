@@ -1,5 +1,7 @@
-from schedule.algorithm.constraints.hard import session_preference_state
-from schedule.algorithm.constraints.hard import teacher_preference_state
+from schedule.algorithm.constraints.hard import (
+    session_preference_state,
+    teacher_preference_state,
+)
 from schedule.algorithm.slots import build_slot_preference_index
 from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
