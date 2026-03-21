@@ -29,12 +29,10 @@ from classroom.models import Classroom  # noqa: E402
 from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
 from group.models import Group  # noqa: E402
 from schedule.models import Schedule  # noqa: E402
-from subject.models import (  # noqa: E402
-    EducationalStage,
-    Subject,
-    SubjectTimePreferenceState,
-    SubjectType,
-)
+from subject.models import EducationalStage  # noqa: E402
+from subject.models import Subject  # noqa: E402
+from subject.models import SubjectTimePreferenceState  # noqa: E402
+from subject.models import SubjectType  # noqa: E402; noqa: E402
 from teacher.models import Teacher, TeacherTimePreferenceState  # noqa: E402
 
 User = get_user_model()
@@ -58,7 +56,9 @@ def build_time_preferences(*, unavailable=None, prefer_yes=None, prefer_no=None)
     return preferences
 
 
-def build_subject_time_preferences(*, unavailable=None, prefer_yes=None, prefer_no=None):
+def build_subject_time_preferences(
+    *, unavailable=None, prefer_yes=None, prefer_no=None
+):
     unavailable = unavailable or []
     prefer_yes = prefer_yes or []
     prefer_no = prefer_no or []
@@ -133,28 +133,141 @@ def create_teachers():
     last_slot = slot_keys(DAY_CODES, ["14:00"])
 
     teachers_data = [
-        ("infantil_1", "Tutoría Infantil 1", 30, build_time_preferences(prefer_yes=early_slots[:5])),
-        ("infantil_2", "Tutoría Infantil 2", 30, build_time_preferences(prefer_yes=early_slots[:5])),
-        ("infantil_3", "Tutoría Infantil 3", 30, build_time_preferences(prefer_yes=early_slots[:5])),
-        ("pri_1", "Tutoría Primaria 1", 32, build_time_preferences(prefer_yes=early_slots[:6])),
-        ("pri_2", "Tutoría Primaria 2", 32, build_time_preferences(prefer_yes=early_slots[:6])),
-        ("pri_3", "Tutoría Primaria 3", 32, build_time_preferences(prefer_yes=early_slots[:6])),
-        ("pri_4", "Tutoría Primaria 4", 32, build_time_preferences(prefer_yes=early_slots[:6])),
-        ("pri_5", "Tutoría Primaria 5", 32, build_time_preferences(prefer_yes=early_slots[:6])),
-        ("pri_6", "Tutoría Primaria 6", 32, build_time_preferences(prefer_yes=early_slots[:6])),
-        ("ingles_1", "Inglés Primaria", 35, build_time_preferences(unavailable=slot_keys(["MON", "WED"], ["08:30"]))),
-        ("ingles_2", "Inglés ESO", 30, build_time_preferences(unavailable=slot_keys(["TUE", "THU"], ["08:30"]))),
-        ("ef_1", "Educación Física", 30, build_time_preferences(unavailable=early_slots[:8], prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"]))),
-        ("musica", "Música", 24, build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"]))),
-        ("plastica", "Educación Artística", 24, build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"]))),
-        ("religion", "Religión/Valores", 22, build_time_preferences(unavailable=slot_keys(["FRI"], ["14:00"]))),
-        ("frances", "Francés", 20, build_time_preferences(unavailable=slot_keys(["MON"], ["08:30"]))),
-        ("eso_mates", "Matemáticas ESO", 30, build_time_preferences(prefer_yes=early_slots[:8])),
-        ("eso_lengua", "Lengua ESO", 30, build_time_preferences(prefer_yes=early_slots[:8])),
-        ("eso_social", "Geografía e Historia ESO", 28, build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["09:30", "10:30"]))),
-        ("eso_bio", "Biología y Geología", 24, build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"]))),
-        ("eso_fq", "Física y Química", 24, build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"]))),
-        ("eso_tec", "Tecnología", 20, build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"]))),
+        (
+            "infantil_1",
+            "Tutoría Infantil 1",
+            30,
+            build_time_preferences(prefer_yes=early_slots[:5]),
+        ),
+        (
+            "infantil_2",
+            "Tutoría Infantil 2",
+            30,
+            build_time_preferences(prefer_yes=early_slots[:5]),
+        ),
+        (
+            "infantil_3",
+            "Tutoría Infantil 3",
+            30,
+            build_time_preferences(prefer_yes=early_slots[:5]),
+        ),
+        (
+            "pri_1",
+            "Tutoría Primaria 1",
+            32,
+            build_time_preferences(prefer_yes=early_slots[:6]),
+        ),
+        (
+            "pri_2",
+            "Tutoría Primaria 2",
+            32,
+            build_time_preferences(prefer_yes=early_slots[:6]),
+        ),
+        (
+            "pri_3",
+            "Tutoría Primaria 3",
+            32,
+            build_time_preferences(prefer_yes=early_slots[:6]),
+        ),
+        (
+            "pri_4",
+            "Tutoría Primaria 4",
+            32,
+            build_time_preferences(prefer_yes=early_slots[:6]),
+        ),
+        (
+            "pri_5",
+            "Tutoría Primaria 5",
+            32,
+            build_time_preferences(prefer_yes=early_slots[:6]),
+        ),
+        (
+            "pri_6",
+            "Tutoría Primaria 6",
+            32,
+            build_time_preferences(prefer_yes=early_slots[:6]),
+        ),
+        (
+            "ingles_1",
+            "Inglés Primaria",
+            35,
+            build_time_preferences(unavailable=slot_keys(["MON", "WED"], ["08:30"])),
+        ),
+        (
+            "ingles_2",
+            "Inglés ESO",
+            30,
+            build_time_preferences(unavailable=slot_keys(["TUE", "THU"], ["08:30"])),
+        ),
+        (
+            "ef_1",
+            "Educación Física",
+            30,
+            build_time_preferences(
+                unavailable=early_slots[:8],
+                prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"]),
+            ),
+        ),
+        (
+            "musica",
+            "Música",
+            24,
+            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])),
+        ),
+        (
+            "plastica",
+            "Educación Artística",
+            24,
+            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])),
+        ),
+        (
+            "religion",
+            "Religión/Valores",
+            22,
+            build_time_preferences(unavailable=slot_keys(["FRI"], ["14:00"])),
+        ),
+        (
+            "frances",
+            "Francés",
+            20,
+            build_time_preferences(unavailable=slot_keys(["MON"], ["08:30"])),
+        ),
+        (
+            "eso_mates",
+            "Matemáticas ESO",
+            30,
+            build_time_preferences(prefer_yes=early_slots[:8]),
+        ),
+        (
+            "eso_lengua",
+            "Lengua ESO",
+            30,
+            build_time_preferences(prefer_yes=early_slots[:8]),
+        ),
+        (
+            "eso_social",
+            "Geografía e Historia ESO",
+            28,
+            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["09:30", "10:30"])),
+        ),
+        (
+            "eso_bio",
+            "Biología y Geología",
+            24,
+            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])),
+        ),
+        (
+            "eso_fq",
+            "Física y Química",
+            24,
+            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])),
+        ),
+        (
+            "eso_tec",
+            "Tecnología",
+            20,
+            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])),
+        ),
         ("orientacion", "Orientación", 20, build_time_preferences(prefer_no=last_slot)),
     ]
 
@@ -262,7 +375,9 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRESCHOOL,
                     "teacher_key": tutor_key,
                     "group_name": grade,
-                    "time_preferences": build_subject_time_preferences(prefer_yes=morning_keys[:10]),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=morning_keys[:10]
+                    ),
                 },
                 {
                     "name": f"Conocimiento del Entorno {grade}",
@@ -271,7 +386,9 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRESCHOOL,
                     "teacher_key": tutor_key,
                     "group_name": grade,
-                    "time_preferences": build_subject_time_preferences(prefer_yes=midday_keys),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=midday_keys
+                    ),
                 },
                 {
                     "name": f"Crecimiento en Armonía {grade}",
@@ -289,13 +406,17 @@ def create_subjects(teachers, groups):
                     "teacher_key": "ef_1",
                     "group_name": grade,
                     "required_classroom_type": "GYM",
-                    "time_preferences": build_subject_time_preferences(prefer_yes=midday_keys, prefer_no=late_keys),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=midday_keys, prefer_no=late_keys
+                    ),
                 },
             ]
         )
 
     # Primaria 1º-4º (25h/semana) - emphasizes mixed durations.
-    for idx, grade in enumerate(["1º Primaria", "2º Primaria", "3º Primaria", "4º Primaria"], start=1):
+    for idx, grade in enumerate(
+        ["1º Primaria", "2º Primaria", "3º Primaria", "4º Primaria"], start=1
+    ):
         tutor_key = f"pri_{idx}"
         subjects_data.extend(
             [
@@ -306,7 +427,9 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": tutor_key,
                     "group_name": grade,
-                    "time_preferences": build_subject_time_preferences(prefer_yes=morning_keys),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=morning_keys
+                    ),
                 },
                 {
                     "name": f"Matemáticas {grade}",
@@ -315,7 +438,10 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": tutor_key,
                     "group_name": grade,
-                    "time_preferences": build_subject_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["08:30", "09:30"]), prefer_no=late_keys),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=slot_keys(DAY_CODES, ["08:30", "09:30"]),
+                        prefer_no=late_keys,
+                    ),
                 },
                 {
                     "name": f"Conocimiento del Medio {grade}",
@@ -332,7 +458,9 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "ingles_1",
                     "group_name": grade,
-                    "time_preferences": build_subject_time_preferences(prefer_yes=midday_keys),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=midday_keys
+                    ),
                 },
                 {
                     "name": f"Educación Física {grade}",
@@ -342,7 +470,10 @@ def create_subjects(teachers, groups):
                     "teacher_key": "ef_1",
                     "group_name": grade,
                     "required_classroom_type": "GYM",
-                    "time_preferences": build_subject_time_preferences(prefer_yes=midday_keys, prefer_no=slot_keys(DAY_CODES, ["08:30"])),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=midday_keys,
+                        prefer_no=slot_keys(DAY_CODES, ["08:30"]),
+                    ),
                 },
                 {
                     "name": f"Música {grade}",
@@ -352,7 +483,9 @@ def create_subjects(teachers, groups):
                     "teacher_key": "musica",
                     "group_name": grade,
                     "required_classroom_type": "MUSIC",
-                    "time_preferences": build_subject_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["12:00"])),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=slot_keys(DAY_CODES, ["12:00"])
+                    ),
                 },
                 {
                     "name": f"Educación Artística {grade}",
@@ -362,7 +495,9 @@ def create_subjects(teachers, groups):
                     "teacher_key": "plastica",
                     "group_name": grade,
                     "required_classroom_type": "ART",
-                    "time_preferences": build_subject_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])
+                    ),
                 },
                 {
                     "name": f"Religión/Valores {grade}",
@@ -371,7 +506,9 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "religion",
                     "group_name": grade,
-                    "time_preferences": build_subject_time_preferences(prefer_no=slot_keys(DAY_CODES, ["14:00"])),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_no=slot_keys(DAY_CODES, ["14:00"])
+                    ),
                 },
                 {
                     "name": f"Tutoría {grade}",
@@ -397,7 +534,9 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": tutor_key,
                     "group_name": grade,
-                    "time_preferences": build_subject_time_preferences(prefer_yes=morning_keys),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=morning_keys
+                    ),
                 },
                 {
                     "name": f"Matemáticas {grade}",
@@ -406,7 +545,9 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": tutor_key,
                     "group_name": grade,
-                    "time_preferences": build_subject_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["08:30", "09:30"])) ,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=slot_keys(DAY_CODES, ["08:30", "09:30"])
+                    ),
                 },
                 {
                     "name": f"Conocimiento del Medio {grade}",
@@ -431,7 +572,9 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "frances",
                     "group_name": grade,
-                    "time_preferences": build_subject_time_preferences(prefer_yes=midday_keys),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=midday_keys
+                    ),
                 },
                 {
                     "name": f"Educación Física {grade}",
@@ -530,7 +673,9 @@ def create_subjects(teachers, groups):
                     "teacher_key": science_teacher,
                     "group_name": grade,
                     "required_classroom_type": "LAB",
-                    "time_preferences": build_subject_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])
+                    ),
                 },
                 {
                     "name": f"Tecnología {grade}",
@@ -555,9 +700,13 @@ def create_subjects(teachers, groups):
                     "weekly_hours": 2,
                     "duration": 1.0,
                     "stage": EducationalStage.SECONDARY,
-                    "teacher_key": "musica" if grade in ["1º ESO", "2º ESO"] else "plastica",
+                    "teacher_key": (
+                        "musica" if grade in ["1º ESO", "2º ESO"] else "plastica"
+                    ),
                     "group_name": grade,
-                    "required_classroom_type": "MUSIC" if grade in ["1º ESO", "2º ESO"] else "ART",
+                    "required_classroom_type": (
+                        "MUSIC" if grade in ["1º ESO", "2º ESO"] else "ART"
+                    ),
                 },
                 {
                     "name": f"Tutoría {grade}",
@@ -584,7 +733,10 @@ def create_subjects(teachers, groups):
                     "teacher_key": "orientacion",
                     "group_name": grade,
                     "type": SubjectType.TC,
-                    "time_preferences": build_subject_time_preferences(prefer_yes=midday_keys, prefer_no=slot_keys(DAY_CODES, ["08:30"])),
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=midday_keys,
+                        prefer_no=slot_keys(DAY_CODES, ["08:30"]),
+                    ),
                 },
             ]
         )
@@ -611,9 +763,7 @@ def create_subjects(teachers, groups):
         )
 
     total_hours = sum(subject.weekly_hours for subject in subjects)
-    print(
-        f"\n  📊 Total weekly hours across all groups: {total_hours}"
-    )
+    print(f"\n  📊 Total weekly hours across all groups: {total_hours}")
     return subjects
 
 
