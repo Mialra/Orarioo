@@ -91,14 +91,11 @@ def create_teachers():
     ]
 
     teachers = []
-    for name, max_hours, preferences in teachers_data:
+    for name, max_hours, _preferences in teachers_data:
         teacher = Teacher.objects.create(
             name=name,
             max_weekly_hours=max_hours,
             working_hours=0,
-            preferences=preferences,
-            availability="Lunes a Viernes: 8:30-15:00",
-            unavailability="",
             created_by="system",
         )
         teachers.append(teacher)

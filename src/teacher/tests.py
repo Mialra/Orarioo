@@ -22,9 +22,6 @@ class TeacherApiTests(APITestCase):
             "name": "Ana Perez",
             "max_weekly_hours": 20,
             "working_hours": 12,
-            "preferences": "Morning",
-            "availability": "Mon-Fri 08:00-14:00",
-            "unavailability": "Wed 10:00-11:00",
         }
 
         response = self.client.post(reverse("teacher-list"), payload, format="json")
@@ -57,9 +54,6 @@ class TeacherApiTests(APITestCase):
             "name": "Laura Ruiz Updated",
             "max_weekly_hours": 24,
             "working_hours": 18,
-            "preferences": "Afternoon",
-            "availability": "Mon-Fri 12:00-18:00",
-            "unavailability": "",
         }
 
         response = self.client.put(

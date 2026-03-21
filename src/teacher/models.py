@@ -16,10 +16,7 @@ class TeacherTimePreferenceState(models.TextChoices):
 class Teacher(AuditableEntity):
     max_weekly_hours = models.PositiveIntegerField()
     working_hours = models.PositiveIntegerField(default=0)
-    preferences = models.TextField(blank=True)
     time_preferences = models.JSONField(default=dict, blank=True)
-    availability = models.TextField(blank=True)
-    unavailability = models.TextField(blank=True)
 
     class Meta:
         db_table = "teacher"

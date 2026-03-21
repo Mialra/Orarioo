@@ -610,20 +610,6 @@
                             <label>Máximo Horas Semanales</label>
                             <input type="number" id="teacherMaxHours" placeholder="20" value="20" />
                         </div>
-                        <div class="form-group">
-                            <label>Horas Actuales</label>
-                            <input type="number" id="teacherCurrentHours" placeholder="0" value="0" />
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Preferencias</label>
-                            <input type="text" id="teacherPreferences" placeholder="Ej: Mañanas" />
-                        </div>
-                        <div class="form-group">
-                            <label>Disponibilidad</label>
-                            <input type="text" id="teacherAvailability" placeholder="Ej: Lun-Vie 08:30-15:00" />
-                        </div>
                     </div>
                     <div class="subject-preferences-panel">
                         <h4 style="margin-bottom: 10px;">Disponibilidad Semanal del Profesor</h4>
@@ -654,7 +640,6 @@
                                 <th>ID</th>
                                 <th>Nombre</th>
                                 <th>Max Horas</th>
-                                <th>Horas Actuales</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -1246,7 +1231,7 @@
         const renderTeachers = (items) => {
             const tbody = document.getElementById("teachersList");
             if (!items.length) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay profesores registrados</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No hay profesores registrados</td></tr>';
                 return;
             }
             tbody.innerHTML = items.map(t => `
@@ -1254,7 +1239,6 @@
                     <td>${t.id}</td>
                     <td>${t.name}</td>
                     <td>${t.max_weekly_hours}</td>
-                    <td>${t.working_hours}</td>
                     <td>
                         <div class="action-buttons">
                             <button class="btn-secondary" onclick="editEntity('teachers', ${t.id})">Modificar</button>
@@ -1269,10 +1253,7 @@
             const payload = {
                 name: document.getElementById("teacherName").value,
                 max_weekly_hours: parseInt(document.getElementById("teacherMaxHours").value),
-                working_hours: parseInt(document.getElementById("teacherCurrentHours").value),
-                preferences: document.getElementById("teacherPreferences").value,
                 time_preferences: collectTeacherTimePreferences(),
-                availability: document.getElementById("teacherAvailability").value,
             };
             if (!payload.name) {
                 showAlert("error", "Ingresa nombre del profesor");
@@ -1620,16 +1601,10 @@
                     String(entity.max_weekly_hours ?? 20)
                 );
                 if (maxWeeklyHoursRaw === null) return;
-                const workingHoursRaw = prompt(
-                    "Horas actuales:",
-                    String(entity.working_hours ?? 0)
-                );
-                if (workingHoursRaw === null) return;
 
                 payload = {
                     name: name.trim(),
                     max_weekly_hours: parseInt(maxWeeklyHoursRaw, 10),
-                    working_hours: parseInt(workingHoursRaw, 10),
                 };
             }
 
