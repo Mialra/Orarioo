@@ -564,6 +564,8 @@
             <!-- Tabs -->
             <div class="tabs">
                 <button class="tab-btn active" data-tab="generator">⚙️ Generador</button>
+                <button class="tab-btn" data-tab="savedSchedules">🗂️ Horarios Guardados</button>
+                <button class="tab-btn" data-tab="users">👤 Usuarios</button>
                 <button class="tab-btn" data-tab="teachers">👨‍🏫 Profesores</button>
                 <button class="tab-btn" data-tab="classrooms">🏫 Aulas</button>
                 <button class="tab-btn" data-tab="groups">👥 Grupos</button>
@@ -587,6 +589,23 @@
                 <button class="btn-primary" id="generateBtn" style="width: 100%; padding: 15px; font-size: 1.1em;">
                     🚀 Generar Horario Automático
                 </button>
+                <div class="form-row" style="margin-top: 14px;">
+                    <div class="form-group">
+                        <label>Nombre para guardar el horario generado</label>
+                        <input type="text" id="generatedTimetableName" placeholder="Ej: Horario 1º ESO - Semana Base" />
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: end;">
+                        <button class="btn-secondary" id="saveGeneratedTimetableBtn" style="width: 100%;" disabled>
+                            💾 Guardar Horario Generado
+                        </button>
+                    </div>
+                </div>
+                <div class="form-row" style="margin-top: 8px;">
+                    <div class="form-group" style="width: 100%;">
+                        <label>Usuarios que podrán ver este horario (multi-selección)</label>
+                        <select id="generatedTimetableUsers" multiple style="min-height: 90px;"></select>
+                    </div>
+                </div>
                 <div class="schedule-filter-bar">
                     <label for="scheduleCourseFilter">Filtrar por curso:</label>
                     <select id="scheduleCourseFilter" class="schedule-filter-select">
@@ -594,6 +613,91 @@
                     </select>
                 </div>
                 <div id="generatorOutput" class="table-container" style="display: none; margin-top: 30px;"></div>
+            </div>
+
+            <!-- Saved Schedules Tab -->
+            <div class="tab-content" data-tab="savedSchedules">
+                <div class="section-title">🗂️ Horarios Guardados</div>
+                <div class="table-container" style="margin-top: 10px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Nombre del Horario</th>
+                                <th>Sesiones</th>
+                                <th>Última Actualización</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="savedSchedulesList"></tbody>
+                    </table>
+                </div>
+                <div class="schedule-filter-bar" style="margin-top: 16px;">
+                    <label for="savedTimetableGroupFilter">Filtrar por grupo:</label>
+                    <select id="savedTimetableGroupFilter" class="schedule-filter-select" disabled>
+                        <option value="">Todos los grupos</option>
+                    </select>
+                    <label for="savedTimetableTeacherFilter">Filtrar por profesor:</label>
+                    <select id="savedTimetableTeacherFilter" class="schedule-filter-select" disabled>
+                        <option value="">Todos los profesores</option>
+                    </select>
+                </div>
+                <div id="savedTimetableOutput" class="table-container" style="display: none; margin-top: 20px;"></div>
+            </div>
+
+            <!-- Users Tab -->
+            <div class="tab-content" data-tab="users">
+                <div class="section-title">👤 Gestión de Usuarios</div>
+                <div class="form-section">
+                    <h3 style="margin-bottom: 15px;">Crear Nuevo Usuario</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nombre (obligatorio)</label>
+                            <input type="text" id="managedUserName" placeholder="Ej: Marta" />
+                        </div>
+                        <div class="form-group">
+                            <label>Apellidos (opcional)</label>
+                            <input type="text" id="managedUserFamilyName" placeholder="Ej: Pérez López" />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="managedUserEmail" placeholder="direccion@centro.es" />
+                        </div>
+                        <div class="form-group">
+                            <label>Rol</label>
+                            <select id="managedUserRole">
+                                <option value="administrator">Administrador</option>
+                                <option value="director" selected>Dirección</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="managedUserCanLogin" />
+                            <label for="managedUserCanLogin" style="margin-bottom: 0;">Puede iniciar sesión</label>
+                        </div>
+                        <div class="form-group" id="managedUserPasswordWrap" style="display: none;">
+                            <label>Contraseña inicial</label>
+                            <input type="password" id="managedUserPassword" placeholder="Contraseña segura" />
+                        </div>
+                    </div>
+                    <button class="btn-primary" id="createManagedUserBtn">Crear Usuario</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Email</th>
+                                <th>Rol</th>
+                                <th>Activo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersList"></tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- Teachers Tab -->
@@ -837,6 +941,8 @@
                 PREFER_NO: "Preferably no",
                 UNAVAILABLE: "Unavailable",
             };
+            const AUTO_GENERATED_OBSERVATION =
+                "Auto-generated with CP-SAT basic constraints.";
             const ENTITY_ENDPOINTS = {
                 teachers: "/teachers/",
                 classrooms: "/classrooms/",
@@ -849,6 +955,10 @@
             let currentClassrooms = [];
             let currentGroups = [];
             let currentSubjects = [];
+            let currentSchedules = [];
+            let currentUsers = [];
+            let savedTimetableGroups = [];
+            let selectedSavedTimetableIndex = null;
 
         // Utility Functions
         const showAlert = (type, message) => {
@@ -1036,6 +1146,263 @@
             return nonDefault;
         };
 
+        const toIsoDateDisplay = (value) => {
+            if (!value) return "-";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return "-";
+            return date.toLocaleString("es-ES", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+            });
+        };
+
+        const buildSavedTimetableGroups = (schedules) => {
+            const groupsByName = new Map();
+            (schedules || []).forEach((schedule) => {
+                const observation = (schedule.observations || "").trim();
+                if (observation === AUTO_GENERATED_OBSERVATION) {
+                    return;
+                }
+                const name = (schedule.name || "").trim();
+                if (!name) {
+                    return;
+                }
+
+                if (!groupsByName.has(name)) {
+                    groupsByName.set(name, {
+                        name,
+                        sessions: [],
+                        updated_at: schedule.updated_at,
+                    });
+                }
+
+                const group = groupsByName.get(name);
+                group.sessions.push(schedule);
+
+                if (
+                    schedule.updated_at &&
+                    (!group.updated_at || new Date(schedule.updated_at) > new Date(group.updated_at))
+                ) {
+                    group.updated_at = schedule.updated_at;
+                }
+            });
+
+            return [...groupsByName.values()].sort(
+                (a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0)
+            );
+        };
+
+        const populateSavedTimetableFilters = (sessions) => {
+            const groupFilter = document.getElementById("savedTimetableGroupFilter");
+            const teacherFilter = document.getElementById("savedTimetableTeacherFilter");
+            const groupNames = [...new Set((sessions || []).map((s) => s.group_name).filter(Boolean))].sort();
+            const teacherNames = [...new Set((sessions || []).map((s) => s.teacher_name).filter(Boolean))].sort();
+
+            groupFilter.innerHTML =
+                '<option value="">Todos los grupos</option>' +
+                groupNames.map((name) => `<option value="${name}">${name}</option>`).join("");
+            teacherFilter.innerHTML =
+                '<option value="">Todos los profesores</option>' +
+                teacherNames.map((name) => `<option value="${name}">${name}</option>`).join("");
+
+            groupFilter.value = "";
+            teacherFilter.value = "";
+            groupFilter.disabled = false;
+            teacherFilter.disabled = false;
+        };
+
+        const clearSavedTimetableFilters = () => {
+            const groupFilter = document.getElementById("savedTimetableGroupFilter");
+            const teacherFilter = document.getElementById("savedTimetableTeacherFilter");
+            groupFilter.innerHTML = '<option value="">Todos los grupos</option>';
+            teacherFilter.innerHTML = '<option value="">Todos los profesores</option>';
+            groupFilter.disabled = true;
+            teacherFilter.disabled = true;
+        };
+
+        const renderUsers = (items) => {
+            const tbody = document.getElementById("usersList");
+            if (!items.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay usuarios</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = items
+                .map(
+                    (u) => `
+                    <tr>
+                        <td>${u.id}</td>
+                        <td>${u.given_name || ""} ${u.family_name || ""}</td>
+                        <td>${u.email}</td>
+                        <td>${u.role_display || u.role}</td>
+                        <td>${u.is_enabled ? "Sí" : "No"}</td>
+                    </tr>
+                `
+                )
+                .join("");
+        };
+
+        const populateGeneratedTimetableUsers = (users) => {
+            const select = document.getElementById("generatedTimetableUsers");
+            if (!select) return;
+
+            const selectedValues = new Set(
+                Array.from(select.selectedOptions || []).map((opt) => opt.value)
+            );
+            select.innerHTML = (users || [])
+                .map(
+                    (user) =>
+                        `<option value="${user.id}">${user.given_name || ""} ${user.family_name || ""} (${user.role_display || user.role})</option>`
+                )
+                .join("");
+
+            Array.from(select.options).forEach((option) => {
+                if (selectedValues.has(option.value)) {
+                    option.selected = true;
+                }
+            });
+        };
+
+        const getSelectedSavedTimetableSessions = () => {
+            if (selectedSavedTimetableIndex === null) {
+                return [];
+            }
+            const group = savedTimetableGroups[selectedSavedTimetableIndex];
+            if (!group) {
+                return [];
+            }
+
+            const selectedGroup = document.getElementById("savedTimetableGroupFilter").value;
+            const selectedTeacher = document.getElementById("savedTimetableTeacherFilter").value;
+
+            return group.sessions.filter((session) => {
+                if (selectedGroup && session.group_name !== selectedGroup) {
+                    return false;
+                }
+                if (selectedTeacher && session.teacher_name !== selectedTeacher) {
+                    return false;
+                }
+                return true;
+            });
+        };
+
+        const renderSavedTimetablePreview = () => {
+            const output = document.getElementById("savedTimetableOutput");
+            const group =
+                selectedSavedTimetableIndex !== null
+                    ? savedTimetableGroups[selectedSavedTimetableIndex]
+                    : null;
+
+            if (!group) {
+                output.style.display = "none";
+                output.innerHTML = "";
+                clearSavedTimetableFilters();
+                return;
+            }
+
+            const sessions = getSelectedSavedTimetableSessions();
+            displaySchedules(
+                sessions,
+                output,
+                `Horario guardado: ${group.name}`
+            );
+        };
+
+        const renderSavedSchedules = (schedules) => {
+            savedTimetableGroups = buildSavedTimetableGroups(schedules);
+            const tbody = document.getElementById("savedSchedulesList");
+            const selectedName =
+                selectedSavedTimetableIndex !== null
+                    ? savedTimetableGroups[selectedSavedTimetableIndex]?.name
+                    : null;
+
+            if (!savedTimetableGroups.length) {
+                selectedSavedTimetableIndex = null;
+                renderSavedTimetablePreview();
+                tbody.innerHTML =
+                    '<tr><td colspan="4" class="empty-state">No hay horarios guardados todavía</td></tr>';
+                return;
+            }
+
+            if (selectedName) {
+                const nextIndex = savedTimetableGroups.findIndex((group) => group.name === selectedName);
+                selectedSavedTimetableIndex = nextIndex >= 0 ? nextIndex : null;
+            }
+
+            tbody.innerHTML = savedTimetableGroups
+                .map(
+                    (group, index) => `
+                    <tr>
+                        <td>${group.name}</td>
+                        <td>${group.sessions.length}</td>
+                        <td>${toIsoDateDisplay(group.updated_at)}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn-secondary" onclick="viewSavedTimetable(${index})">Ver</button>
+                                <button class="btn-danger" onclick="deleteSavedTimetable(${index})">Eliminar</button>
+                            </div>
+                        </td>
+                    </tr>
+                `
+                )
+                .join("");
+
+            if (selectedSavedTimetableIndex === null) {
+                selectedSavedTimetableIndex = 0;
+            }
+
+            const selectedGroup = savedTimetableGroups[selectedSavedTimetableIndex];
+            if (selectedGroup) {
+                populateSavedTimetableFilters(selectedGroup.sessions);
+            }
+            renderSavedTimetablePreview();
+        };
+
+        window.viewSavedTimetable = (index) => {
+            const group = savedTimetableGroups[index];
+            if (!group) {
+                showAlert("error", "Horario guardado no encontrado.");
+                return;
+            }
+
+            selectedSavedTimetableIndex = index;
+            populateSavedTimetableFilters(group.sessions);
+            renderSavedTimetablePreview();
+        };
+
+        window.deleteSavedTimetable = async (index) => {
+            const group = savedTimetableGroups[index];
+            if (!group) {
+                showAlert("error", "Horario guardado no encontrado.");
+                return;
+            }
+
+            if (
+                !confirm(
+                    `¿Eliminar el horario guardado "${group.name}" con ${group.sessions.length} sesiones?`
+                )
+            ) {
+                return;
+            }
+
+            const results = await Promise.all(
+                group.sessions.map((session) => apiCall(`/schedules/${session.id}/`, "DELETE"))
+            );
+            const failed = results.filter((r) => !r.ok).length;
+            if (failed) {
+                showAlert("error", `No se pudieron eliminar ${failed} sesiones del horario.`);
+            } else {
+                showAlert("success", "✓ Horario eliminado correctamente");
+                if (selectedSavedTimetableIndex === index) {
+                    selectedSavedTimetableIndex = null;
+                }
+            }
+            loadAllData();
+        };
+
         const getUniqueClassroomTypes = (classrooms) => {
             return [...new Set(
                 (classrooms || [])
@@ -1144,25 +1511,43 @@
 
         // Load All Data
         const loadAllData = async () => {
-            const [teachers, classrooms, groups, subjects] = await Promise.all([
+            const [teachers, classrooms, groups, subjects, schedules, savedSchedules, users] = await Promise.all([
                 apiCall("/teachers/"),
                 apiCall("/classrooms/"),
                 apiCall("/groups/"),
                 apiCall("/subjects/"),
+                apiCall("/schedules/"),
+                apiCall("/schedules/saved/"),
+                apiCall("/users/"),
             ]);
 
-            console.log("Load data results:", { teachers, classrooms, groups, subjects });
+            console.log("Load data results:", {
+                teachers,
+                classrooms,
+                groups,
+                subjects,
+                schedules,
+                savedSchedules,
+                users,
+            });
 
             // Handle paginated responses (data.results) or direct arrays
             const teacherData = teachers.data?.results || (Array.isArray(teachers.data) ? teachers.data : []);
             const classroomData = classrooms.data?.results || (Array.isArray(classrooms.data) ? classrooms.data : []);
             const groupData = groups.data?.results || (Array.isArray(groups.data) ? groups.data : []);
             const subjectData = subjects.data?.results || (Array.isArray(subjects.data) ? subjects.data : []);
+            const scheduleData = schedules.data?.results || (Array.isArray(schedules.data) ? schedules.data : []);
+            const savedScheduleData =
+                savedSchedules.data?.results ||
+                (Array.isArray(savedSchedules.data) ? savedSchedules.data : []);
+            const userData = users.data?.results || (Array.isArray(users.data) ? users.data : []);
 
             currentTeachers = teacherData;
             currentClassrooms = classroomData;
             currentGroups = groupData;
             currentSubjects = subjectData;
+            currentSchedules = scheduleData;
+            currentUsers = userData;
 
             document.getElementById("statTeachers").textContent = teachers.data?.count || teacherData.length;
             document.getElementById("statClassrooms").textContent = classrooms.data?.count || classroomData.length;
@@ -1173,8 +1558,60 @@
             renderClassrooms(classroomData);
             renderGroups(groupData);
             renderSubjects(subjectData, teacherData, groupData);
+            renderSavedSchedules(savedScheduleData);
+            renderUsers(userData);
+            populateGeneratedTimetableUsers(userData);
             populateClassroomTypeSelectors(classroomData);
             populateScheduleCourseFilter(groupData);
+        };
+
+        document.getElementById("managedUserCanLogin").onchange = (event) => {
+            const wrap = document.getElementById("managedUserPasswordWrap");
+            wrap.style.display = event.target.checked ? "block" : "none";
+            if (!event.target.checked) {
+                document.getElementById("managedUserPassword").value = "";
+            }
+        };
+
+        document.getElementById("createManagedUserBtn").onclick = async () => {
+            const canLogin = document.getElementById("managedUserCanLogin").checked;
+            const payload = {
+                given_name: document.getElementById("managedUserName").value.trim(),
+                family_name: document.getElementById("managedUserFamilyName").value.trim(),
+                email: document.getElementById("managedUserEmail").value.trim(),
+                role: document.getElementById("managedUserRole").value,
+                can_login: canLogin,
+                is_enabled: true,
+            };
+
+            if (!payload.given_name || !payload.email) {
+                showAlert("error", "Nombre y email son obligatorios.");
+                return;
+            }
+
+            if (canLogin) {
+                payload.password = document.getElementById("managedUserPassword").value;
+                if (!payload.password) {
+                    showAlert("error", "Si puede iniciar sesión, indica una contraseña.");
+                    return;
+                }
+            }
+
+            const result = await apiCall("/users/managed_create/", "POST", payload);
+            if (!result.ok) {
+                showAlert("error", result.data.detail || JSON.stringify(result.data) || "Error al crear usuario");
+                return;
+            }
+
+            showAlert("success", "✓ Usuario creado correctamente");
+            document.getElementById("managedUserName").value = "";
+            document.getElementById("managedUserFamilyName").value = "";
+            document.getElementById("managedUserEmail").value = "";
+            document.getElementById("managedUserRole").value = "director";
+            document.getElementById("managedUserCanLogin").checked = false;
+            document.getElementById("managedUserPassword").value = "";
+            document.getElementById("managedUserPasswordWrap").style.display = "none";
+            loadAllData();
         };
 
         const populateScheduleCourseFilter = (groups) => {
@@ -1238,6 +1675,14 @@
 
         document.getElementById("scheduleCourseFilter").onchange = () => {
             renderFilteredSchedules();
+        };
+
+        document.getElementById("savedTimetableGroupFilter").onchange = () => {
+            renderSavedTimetablePreview();
+        };
+
+        document.getElementById("savedTimetableTeacherFilter").onchange = () => {
+            renderSavedTimetablePreview();
         };
 
         document.getElementById("refreshBtn").onclick = loadAllData;
@@ -1491,16 +1936,62 @@
 
             if (result.ok) {
                 latestGeneratedSchedules = result.data.schedules || [];
+                document.getElementById("saveGeneratedTimetableBtn").disabled = !latestGeneratedSchedules.length;
                 showAlert("success", `✓ Se generaron ${result.data.generated_count} sesiones`);
                 renderFilteredSchedules();
                 loadAllData();
             } else {
+                document.getElementById("saveGeneratedTimetableBtn").disabled = true;
                 showAlert("error", result.data.detail || "Error al generar");
             }
         };
 
-        const displaySchedules = (schedules) => {
-            const output = document.getElementById("generatorOutput");
+        document.getElementById("saveGeneratedTimetableBtn").onclick = async () => {
+            if (!latestGeneratedSchedules.length) {
+                showAlert("error", "No hay un horario generado para guardar.");
+                return;
+            }
+
+            const input = document.getElementById("generatedTimetableName");
+            const timetableName = (input.value || "").trim();
+            if (!timetableName) {
+                showAlert("error", "Indica un nombre para guardar el horario.");
+                return;
+            }
+
+            const scheduleIds = latestGeneratedSchedules
+                .map((item) => item.id)
+                .filter((id) => Number.isInteger(id));
+
+            const selectedUserIds = Array.from(
+                document.getElementById("generatedTimetableUsers").selectedOptions || []
+            ).map((option) => parseInt(option.value, 10));
+
+            if (!scheduleIds.length) {
+                showAlert("error", "No se encontraron sesiones generadas para guardar.");
+                return;
+            }
+
+            const result = await apiCall("/schedules/save-generated/", "POST", {
+                timetable_name: timetableName,
+                schedule_ids: scheduleIds,
+                user_ids: selectedUserIds,
+            });
+
+            if (!result.ok) {
+                showAlert("error", result.data.detail || "Error al guardar el horario");
+                return;
+            }
+
+            showAlert("success", `✓ Horario guardado como "${timetableName}"`);
+            input.value = "";
+            latestGeneratedSchedules = [];
+            document.getElementById("saveGeneratedTimetableBtn").disabled = true;
+            loadAllData();
+        };
+
+        const displaySchedules = (schedules, outputElement = null, detailTitle = "Detalle de sesiones") => {
+            const output = outputElement || document.getElementById("generatorOutput");
             if (!schedules.length) {
                 output.style.display = "none";
                 return;
@@ -1592,7 +2083,7 @@
                     </table>
                 </div>
 
-                <h3 class="schedule-detail-title">Detalle de sesiones</h3>
+                <h3 class="schedule-detail-title">${detailTitle}</h3>
                 <table>
                     <thead>
                         <tr>

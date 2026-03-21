@@ -262,6 +262,164 @@ class ScheduleApiTests(APITestCase):
         unique_starts = {item.start_time for item in group_schedules}
         self.assertEqual(len(unique_starts), len(group_schedules))
 
+    def test_save_generated_schedules_in_bulk(self):
+        start_time = timezone.now() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        auto_observation = "Auto-generated with CP-SAT basic constraints."
+
+        schedule_1 = Schedule.objects.create(
+            name="Auto Session 1",
+            start_time=start_time,
+            end_time=end_time,
+            observations=auto_observation,
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=self.group,
+            subject=self.subject,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+        )
+        schedule_1.users.add(self.user)
+
+        schedule_2 = Schedule.objects.create(
+            name="Auto Session 2",
+            start_time=start_time + timedelta(hours=1),
+            end_time=end_time + timedelta(hours=1),
+            observations=auto_observation,
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=self.group,
+            subject=self.subject,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+        )
+        schedule_2.users.add(self.user)
+
+        response = self.client.post(
+            reverse("schedule-save-generated"),
+            {
+                "timetable_name": "Horario Guardado",
+                "schedule_ids": [schedule_1.id, schedule_2.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["saved_count"], 2)
+
+        schedule_1.refresh_from_db()
+        schedule_2.refresh_from_db()
+        self.assertEqual(schedule_1.name, "Horario Guardado")
+        self.assertEqual(schedule_2.name, "Horario Guardado")
+        self.assertEqual(schedule_1.observations, "Saved timetable: Horario Guardado")
+        self.assertEqual(schedule_2.observations, "Saved timetable: Horario Guardado")
+
+    def test_save_generated_schedules_in_bulk_assigns_additional_users(self):
+        start_time = timezone.now() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        auto_observation = "Auto-generated with CP-SAT basic constraints."
+
+        schedule = Schedule.objects.create(
+            name="Auto Session 1",
+            start_time=start_time,
+            end_time=end_time,
+            observations=auto_observation,
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=self.group,
+            subject=self.subject,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+        )
+        schedule.users.add(self.user)
+
+        response = self.client.post(
+            reverse("schedule-save-generated"),
+            {
+                "timetable_name": "Horario Compartido",
+                "schedule_ids": [schedule.id],
+                "user_ids": [self.other_user.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        schedule.refresh_from_db()
+        self.assertTrue(schedule.users.filter(id=self.user.id).exists())
+        self.assertTrue(schedule.users.filter(id=self.other_user.id).exists())
+
+    def test_save_generated_rejects_non_auto_generated_sessions(self):
+        schedule = self.create_schedule()
+        schedule.created_by = self.user.email
+        schedule.updated_by = self.user.email
+        schedule.save(update_fields=["created_by", "updated_by"])
+
+        response = self.client.post(
+            reverse("schedule-save-generated"),
+            {
+                "timetable_name": "Horario Invalido",
+                "schedule_ids": [schedule.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+
+    def test_saved_endpoint_returns_only_saved_schedules_for_current_user(self):
+        start_time = timezone.now() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        auto_observation = "Auto-generated with CP-SAT basic constraints."
+
+        saved_schedule = Schedule.objects.create(
+            name="Horario Guardado",
+            start_time=start_time,
+            end_time=end_time,
+            observations="Saved timetable: Horario Guardado",
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=self.group,
+            subject=self.subject,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+        )
+        saved_schedule.users.add(self.user)
+
+        auto_schedule = Schedule.objects.create(
+            name="Auto Session",
+            start_time=start_time + timedelta(hours=1),
+            end_time=end_time + timedelta(hours=1),
+            observations=auto_observation,
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=self.group,
+            subject=self.subject,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+        )
+        auto_schedule.users.add(self.user)
+
+        other_user_schedule = Schedule.objects.create(
+            name="Horario Otro Usuario",
+            start_time=start_time + timedelta(hours=2),
+            end_time=end_time + timedelta(hours=2),
+            observations="Saved timetable: Horario Otro Usuario",
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=self.group,
+            subject=self.subject,
+            created_by=self.other_user.email,
+            updated_by=self.other_user.email,
+        )
+        other_user_schedule.users.add(self.other_user)
+
+        response = self.client.get(reverse("schedule-saved"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["id"], saved_schedule.id)
+
     def test_generate_basic_schedule_requires_teacher(self):
         Teacher.objects.all().delete()
 

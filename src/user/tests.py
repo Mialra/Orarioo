@@ -212,7 +212,38 @@ class UserApiTests(APITestCase):
 
         response = self.client.get(reverse("user-list"))
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_managed_create_user_without_login_password(self):
+        self.client.force_authenticate(user=self.admin)
+
+        payload = {
+            "given_name": "Nuevo",
+            "family_name": "Director",
+            "email": "nuevo-director@test.com",
+            "role": "director",
+            "can_login": False,
+        }
+        response = self.client.post(reverse("user-managed-create"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created_user = User.objects.get(email="nuevo-director@test.com")
+        self.assertFalse(created_user.has_usable_password())
+
+    def test_managed_create_user_with_login_requires_password(self):
+        self.client.force_authenticate(user=self.admin)
+
+        payload = {
+            "given_name": "Nuevo",
+            "family_name": "Admin",
+            "email": "nuevo-admin@test.com",
+            "role": "administrator",
+            "can_login": True,
+        }
+        response = self.client.post(reverse("user-managed-create"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("password", response.data)
 
     def test_change_password(self):
         self.client.force_authenticate(user=self.director)
@@ -306,7 +337,7 @@ class PermissionsTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_admin_can_update_users(self):
         self.client.force_authenticate(user=self.admin)

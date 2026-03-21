@@ -89,6 +89,65 @@ class UserCreateSerializer(serializers.ModelSerializer):
         return user
 
 
+class UserManagementCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating users from admin/direction panel with optional login."""
+
+    given_name = serializers.CharField(source="name")
+    role = serializers.ChoiceField(
+        choices=RoleChoices.choices,
+        default=RoleChoices.DIRECTOR,
+        help_text="User role (administrator, director)",
+    )
+    can_login = serializers.BooleanField(default=False)
+    password = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        validators=[validate_password],
+        help_text="Optional password. Required only if can_login=true.",
+    )
+
+    class Meta:
+        model = User
+        fields = [
+            "given_name",
+            "family_name",
+            "email",
+            "role",
+            "can_login",
+            "password",
+            "is_enabled",
+        ]
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("This email is already registered.")
+        return value
+
+    def validate_given_name(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Name cannot be empty.")
+        return value
+
+    def validate(self, data):
+        can_login = data.get("can_login", False)
+        password = data.get("password", "")
+        if can_login and not password:
+            raise serializers.ValidationError(
+                {"password": "Password is required when can_login is true."}
+            )
+        return data
+
+    @transaction.atomic
+    def create(self, validated_data):
+        can_login = validated_data.pop("can_login", False)
+        password = validated_data.pop("password", "")
+        if not can_login:
+            password = None
+        user = User.objects.create_user(**validated_data, password=password)
+        return user
+
+
 class UserUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating user information"""
 

@@ -11,19 +11,20 @@ from user.serializers import (
     LoginSerializer,
     UserChangePasswordSerializer,
     UserCreateSerializer,
+    UserManagementCreateSerializer,
     UserSerializer,
     UserUpdateSerializer,
 )
 
 
 class IsAdministrator(permissions.BasePermission):
-    """Permission to check if user is an administrator"""
+    """Permission to check if user has management access."""
 
     def has_permission(self, request, view):
         return bool(
             request.user
             and request.user.is_authenticated
-            and request.user.is_administrator()
+            and request.user.role in ["administrator", "director"]
         )
 
 
@@ -90,6 +91,8 @@ class UserViewSet(viewsets.ModelViewSet):
         """Returns the appropriate serializer based on the action"""
         if self.action == "create":
             return UserCreateSerializer
+        elif self.action == "managed_create":
+            return UserManagementCreateSerializer
         elif self.action == "partial_update" or self.action == "update":
             return UserUpdateSerializer
         elif self.action == "change_password":
@@ -101,8 +104,11 @@ class UserViewSet(viewsets.ModelViewSet):
         if self.action == "create":
             # Allow creating users (signup)
             return [permissions.AllowAny()]
+        elif self.action == "managed_create":
+            # Authenticated staff (administrator/director) can create managed users
+            return [IsAdministrator()]
         elif self.action in ["list", "destroy", "update", "partial_update"]:
-            # Only administrators can list, delete or modify other users
+            # Administrator and director have the same management scope.
             return [IsAdministrator()]
         elif self.action == "retrieve":
             # User can see their own profile, administrator can see any
@@ -117,12 +123,25 @@ class UserViewSet(viewsets.ModelViewSet):
         """Filters users based on permissions"""
         user = self.request.user
 
-        if user.is_administrator():
-            # Administrators see all users
+        if user.role in ["administrator", "director"]:
+            # Administrators and directors see all users.
             return User.objects.all().order_by("-created_at")
         else:
             # Other users only see their own profile
             return User.objects.filter(id=user.id).order_by("-created_at")
+
+    @action(
+        detail=False,
+        methods=["post"],
+        permission_classes=[IsAdministrator],
+        url_path="managed_create",
+    )
+    def managed_create(self, request):
+        """Creates users for audit/assignment flows with optional login access."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
     @action(
         detail=False,
