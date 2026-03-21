@@ -660,7 +660,16 @@
                         </div>
                         <div class="form-group">
                             <label>Tipo de Aula</label>
-                            <input type="text" id="classroomType" placeholder="Ej: LAB, MUSIC, STANDARD" />
+                            <select id="classroomTypeSelect">
+                                <option value="">Sin tipo</option>
+                                <option value="__NEW__">+ Nuevo tipo...</option>
+                            </select>
+                            <input
+                                type="text"
+                                id="classroomTypeNew"
+                                placeholder="Escribe nuevo tipo (Ej: LAB)"
+                                style="margin-top: 8px; display: none;"
+                            />
                         </div>
                     </div>
                     <button class="btn-primary" id="createClassroomBtn">Crear Aula</button>
@@ -693,9 +702,9 @@
                         <div class="form-group">
                             <label>Etapa Educativa</label>
                             <select id="groupStage">
-                                <option value="preschool">Educación Infantil</option>
-                                <option value="primary" selected>Educación Primaria</option>
-                                <option value="secondary">Educación Secundaria</option>
+                                <option value="preschool">Infantil</option>
+                                <option value="primary" selected>Primaria</option>
+                                <option value="secondary">Secundaria</option>
                             </select>
                         </div>
                     </div>
@@ -730,18 +739,14 @@
                             <label>Horas Semanales</label>
                             <input type="number" id="subjectWeeklyHours" placeholder="5" value="5" />
                         </div>
-                        <div class="form-group">
-                            <label>Duración Sesión (horas)</label>
-                            <input type="number" id="subjectDuration" placeholder="1.5" value="1" step="0.5" />
-                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Etapa</label>
                             <select id="subjectStage">
-                                <option value="PRESCHOOL">Educación Infantil</option>
-                                <option value="PRIMARY" selected>Educación Primaria</option>
-                                <option value="SECONDARY">Educación Secundaria</option>
+                                <option value="PRESCHOOL">Infantil</option>
+                                <option value="PRIMARY" selected>Primaria</option>
+                                <option value="SECONDARY">Secundaria</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -765,7 +770,9 @@
                         </div>
                         <div class="form-group">
                             <label>Tipo de Aula Requerida</label>
-                            <input type="text" id="subjectRequiredClassroomType" placeholder="Ej: LAB, MUSIC, STANDARD" />
+                            <select id="subjectRequiredClassroomType">
+                                <option value="">Sin requisito</option>
+                            </select>
                         </div>
                     </div>
                     <div class="subject-preferences-panel">
@@ -1029,6 +1036,47 @@
             return nonDefault;
         };
 
+        const getUniqueClassroomTypes = (classrooms) => {
+            return [...new Set(
+                (classrooms || [])
+                    .map((c) => (c.classroom_type || "").trim())
+                    .filter(Boolean)
+            )].sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+        };
+
+        const populateClassroomTypeSelectors = (classrooms) => {
+            const types = getUniqueClassroomTypes(classrooms);
+
+            const classroomTypeSelect = document.getElementById("classroomTypeSelect");
+            if (classroomTypeSelect) {
+                const selected = classroomTypeSelect.value;
+                classroomTypeSelect.innerHTML =
+                    '<option value="">Sin tipo</option>' +
+                    types.map((type) => `<option value="${type}">${type}</option>`).join("") +
+                    '<option value="__NEW__">+ Nuevo tipo...</option>';
+
+                if (selected === "__NEW__" || types.includes(selected) || selected === "") {
+                    classroomTypeSelect.value = selected;
+                } else {
+                    classroomTypeSelect.value = "";
+                }
+            }
+
+            const subjectRequiredTypeSelect = document.getElementById("subjectRequiredClassroomType");
+            if (subjectRequiredTypeSelect) {
+                const selected = subjectRequiredTypeSelect.value;
+                subjectRequiredTypeSelect.innerHTML =
+                    '<option value="">Sin requisito</option>' +
+                    types.map((type) => `<option value="${type}">${type}</option>`).join("");
+
+                if (types.includes(selected) || selected === "") {
+                    subjectRequiredTypeSelect.value = selected;
+                } else {
+                    subjectRequiredTypeSelect.value = "";
+                }
+            }
+        };
+
         // Auth
         const updateAuthUI = () => {
             const mainContent = document.getElementById("mainContent");
@@ -1125,6 +1173,7 @@
             renderClassrooms(classroomData);
             renderGroups(groupData);
             renderSubjects(subjectData, teacherData, groupData);
+            populateClassroomTypeSelectors(classroomData);
             populateScheduleCourseFilter(groupData);
         };
 
@@ -1227,6 +1276,16 @@
             showAlert("info", "Preferencias de profesor reiniciadas a Available");
         };
 
+        document.getElementById("classroomTypeSelect").onchange = (event) => {
+            const newTypeInput = document.getElementById("classroomTypeNew");
+            if (!newTypeInput) return;
+            const isNewType = event.target.value === "__NEW__";
+            newTypeInput.style.display = isNewType ? "block" : "none";
+            if (!isNewType) {
+                newTypeInput.value = "";
+            }
+        };
+
         // Teachers CRUD
         const renderTeachers = (items) => {
             const tbody = document.getElementById("teachersList");
@@ -1294,9 +1353,15 @@
 
         document.getElementById("createClassroomBtn").onclick = async () => {
             const name = document.getElementById("classroomName").value;
-            const classroomType = document.getElementById("classroomType").value.trim();
+            const classroomTypeSelect = document.getElementById("classroomTypeSelect").value;
+            const classroomTypeNew = document.getElementById("classroomTypeNew").value.trim();
+            const classroomType = classroomTypeSelect === "__NEW__" ? classroomTypeNew : classroomTypeSelect;
             if (!name) {
                 showAlert("error", "Ingresa nombre del aula");
+                return;
+            }
+            if (classroomTypeSelect === "__NEW__" && !classroomType) {
+                showAlert("error", "Escribe el nuevo tipo de aula");
                 return;
             }
             const result = await apiCall("/classrooms/", "POST", {
@@ -1306,7 +1371,9 @@
             if (result.ok) {
                 showAlert("success", "✓ Aula creada");
                 document.getElementById("classroomName").value = "";
-                document.getElementById("classroomType").value = "";
+                document.getElementById("classroomTypeSelect").value = "";
+                document.getElementById("classroomTypeNew").value = "";
+                document.getElementById("classroomTypeNew").style.display = "none";
                 loadAllData();
             } else {
                 showAlert("error", result.data.detail || "Error al crear");
@@ -1392,9 +1459,8 @@
             const payload = {
                 name: document.getElementById("subjectName").value,
                 weekly_hours: parseInt(document.getElementById("subjectWeeklyHours").value),
-                duration: parseFloat(document.getElementById("subjectDuration").value),
                 preferred_time_slot: "",
-                required_classroom_type: document.getElementById("subjectRequiredClassroomType").value.trim(),
+                required_classroom_type: document.getElementById("subjectRequiredClassroomType").value,
                 time_preferences: collectSubjectTimePreferences(),
                 stage: document.getElementById("subjectStage").value,
                 type: document.getElementById("subjectType").value,
@@ -1661,11 +1727,6 @@
                     String(entity.weekly_hours ?? 1)
                 );
                 if (weeklyHoursRaw === null) return;
-                const durationRaw = prompt(
-                    "Duración por sesión (horas):",
-                    String(entity.duration ?? 1)
-                );
-                if (durationRaw === null) return;
                 const stage = prompt(
                     "Etapa (PRESCHOOL, PRIMARY, SECONDARY):",
                     entity.stage || "PRIMARY"
@@ -1685,7 +1746,6 @@
                 payload = {
                     name: name.trim(),
                     weekly_hours: parseInt(weeklyHoursRaw, 10),
-                    duration: parseFloat(durationRaw),
                     stage: stage.trim().toUpperCase(),
                     type: subjectType.trim().toUpperCase(),
                     required_classroom_type: requiredClassroomType.trim(),

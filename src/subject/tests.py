@@ -34,7 +34,6 @@ class SubjectApiTests(APITestCase):
         payload = {
             "name": "Mathematics",
             "weekly_hours": 5,
-            "duration": 1.5,
             "preferred_time_slot": "Morning",
             "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
@@ -82,7 +81,6 @@ class SubjectApiTests(APITestCase):
         payload = {
             "name": "History Updated",
             "weekly_hours": 4,
-            "duration": 1.5,
             "preferred_time_slot": "Afternoon",
             "stage": EducationalStage.PRIMARY,
             "type": SubjectType.TC,
@@ -116,7 +114,7 @@ class SubjectApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Subject.objects.filter(id=subject.id).exists())
 
-    def test_reject_invalid_duration(self):
+    def test_ignore_duration_if_provided(self):
         payload = {
             "name": "Invalid Subject",
             "weekly_hours": 3,
@@ -129,14 +127,13 @@ class SubjectApiTests(APITestCase):
 
         response = self.client.post(reverse("subject-list"), payload, format="json")
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("duration", response.data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["duration"], 1.0)
 
     def test_reject_invalid_weekly_hours(self):
         payload = {
             "name": "Invalid Subject",
             "weekly_hours": -5,
-            "duration": 1.0,
             "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
@@ -167,7 +164,6 @@ class SubjectApiTests(APITestCase):
         payload = {
             "name": "Sin curso",
             "weekly_hours": 3,
-            "duration": 1.0,
             "stage": EducationalStage.SECONDARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,

@@ -30,6 +30,7 @@ class SubjectSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "id",
+            "duration",
             "created_at",
             "updated_at",
             "created_by",
@@ -37,11 +38,6 @@ class SubjectSerializer(serializers.ModelSerializer):
             "teacher_name",
             "group_name",
         ]
-
-    def validate_duration(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Duration must be greater than zero.")
-        return value
 
     def validate_weekly_hours(self, value):
         if value <= 0:

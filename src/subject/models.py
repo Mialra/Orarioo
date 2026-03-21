@@ -32,7 +32,7 @@ class Subject(AuditableEntity):
     """Subject model representing an academic subject."""
 
     weekly_hours = models.PositiveIntegerField()
-    duration = models.FloatField()
+    duration = models.FloatField(default=1.0)
     preferred_time_slot = models.CharField(max_length=150, blank=True)
     required_classroom_type = models.CharField(max_length=150, blank=True, default="")
     time_preferences = models.JSONField(default=dict, blank=True)
