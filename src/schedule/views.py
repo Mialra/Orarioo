@@ -1,3 +1,5 @@
+import random
+
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 
@@ -26,10 +28,23 @@ class ScheduleViewSet(viewsets.ModelViewSet):
 
     def generate(self, request):
         actor = getattr(request.user, "email", "")
+        raw_seed = request.data.get("seed")
+        if raw_seed in (None, ""):
+            generation_seed = random.SystemRandom().randrange(1, 2**31 - 1)
+        else:
+            try:
+                generation_seed = int(raw_seed)
+            except (TypeError, ValueError):
+                return Response(
+                    {"detail": "seed must be an integer value."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         try:
             schedules = BasicScheduleGenerator.generate(
                 actor_email=actor,
                 user=request.user,
+                random_seed=generation_seed,
             )
         except ScheduleGenerationError as exc:
             return Response(
@@ -40,6 +55,7 @@ class ScheduleViewSet(viewsets.ModelViewSet):
         return Response(
             {
                 "detail": "Schedule generated successfully.",
+                "seed": generation_seed,
                 "schedules": serialized.data,
                 "generated_count": len(serialized.data),
             },

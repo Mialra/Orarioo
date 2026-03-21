@@ -1,3 +1,5 @@
+import random
+
 try:
     from ortools.sat.python import cp_model
 except ModuleNotFoundError:  # pragma: no cover - depends on local Python version
@@ -20,25 +22,30 @@ from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 
 
-def solve_session_assignment(*, sessions, slots, classrooms):
+def solve_session_assignment(*, sessions, slots, classrooms, random_seed=None):
     compatible_classrooms_by_session = _build_compatible_classroom_index(
         sessions=sessions,
         classrooms=classrooms,
     )
+    rng = random.Random(random_seed)
     if cp_model is None:
         return _greedy_session_assignment(
             sessions=sessions,
             slots=slots,
             compatible_classrooms_by_session=compatible_classrooms_by_session,
+            rng=rng,
         )
     return _cp_sat_session_assignment(
         sessions=sessions,
         slots=slots,
         compatible_classrooms_by_session=compatible_classrooms_by_session,
+        random_seed=random_seed,
     )
 
 
-def _cp_sat_session_assignment(*, sessions, slots, compatible_classrooms_by_session):
+def _cp_sat_session_assignment(
+    *, sessions, slots, compatible_classrooms_by_session, random_seed
+):
     model = cp_model.CpModel()
     session_count = len(sessions)
     slot_count = len(slots)
@@ -109,6 +116,10 @@ def _cp_sat_session_assignment(*, sessions, slots, compatible_classrooms_by_sess
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 5.0
+    if random_seed is not None:
+        solver.parameters.random_seed = int(random_seed)
+        if hasattr(solver.parameters, "randomize_search"):
+            solver.parameters.randomize_search = True
     status = solver.Solve(model)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         raise ScheduleGenerationError(
@@ -217,7 +228,7 @@ def _extract_slot_and_classroom_assignment(
     return slot_by_session, classroom_by_session
 
 
-def _greedy_session_assignment(*, sessions, slots, compatible_classrooms_by_session):
+def _greedy_session_assignment(*, sessions, slots, compatible_classrooms_by_session, rng):
     teacher_busy_slots = {}
     teacher_day_slots = {}  # {teacher_id: {day_idx: set of slot positions within day}}
     classroom_busy_slots = {}
@@ -239,6 +250,7 @@ def _greedy_session_assignment(*, sessions, slots, compatible_classrooms_by_sess
 
     slot_by_session = []
     classroom_by_session = []
+    slot_tie_break = {slot_idx: rng.random() for slot_idx in range(len(slots))}
 
     for session_index, session in enumerate(sessions):
         teacher_id, group_id, daily_limit, subj_id = _prepare_greedy_session_state(
@@ -264,6 +276,7 @@ def _greedy_session_assignment(*, sessions, slots, compatible_classrooms_by_sess
             teacher_id=teacher_id,
             teacher_day_slots=teacher_day_slots,
             slot_day_order=slot_day_order,
+            slot_tie_break=slot_tie_break,
         )
 
         selected_slot = None
@@ -366,6 +379,7 @@ def _ordered_greedy_slots(
     teacher_id,
     teacher_day_slots,
     slot_day_order,
+    slot_tie_break,
 ):
     return sorted(
         range(slot_count),
@@ -392,6 +406,7 @@ def _ordered_greedy_slots(
                 day_index_by_slot=day_index_by_slot,
                 slot_day_order=slot_day_order,
             ),
+            slot_tie_break[p],
         ),
     )
 

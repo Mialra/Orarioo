@@ -1,4 +1,5 @@
 from datetime import timedelta
+import random
 
 from django.db import transaction
 
@@ -17,7 +18,7 @@ class BasicScheduleGenerator:
 
     @classmethod
     @transaction.atomic
-    def generate(cls, *, actor_email: str, user):
+    def generate(cls, *, actor_email: str, user, random_seed: int | None = None):
         cls._clear_previous_generated_schedules(actor_email=actor_email, user=user)
 
         teacher = Teacher.objects.order_by("id").first()
@@ -35,12 +36,21 @@ class BasicScheduleGenerator:
         sessions = cls._build_sessions(subjects=subjects, fallback_teacher=teacher)
         slots = build_weekly_slots()
 
+        rng = random.Random(random_seed)
+        cls._randomize_generation_inputs(
+            sessions=sessions,
+            slots=slots,
+            classrooms=classrooms,
+            rng=rng,
+        )
+
         validate_group_and_teacher_capacity(sessions=sessions, slots=slots)
 
         slot_by_session, classroom_by_session = solve_session_assignment(
             sessions=sessions,
             slots=slots,
             classrooms=classrooms,
+            random_seed=random_seed,
         )
 
         created = []
@@ -131,3 +141,8 @@ class BasicScheduleGenerator:
         if not classrooms:
             return [fallback_classroom]
         return classrooms
+
+    @staticmethod
+    def _randomize_generation_inputs(*, sessions, slots, classrooms, rng):
+        rng.shuffle(sessions)
+        rng.shuffle(classrooms)
