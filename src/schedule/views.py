@@ -146,7 +146,9 @@ class ScheduleViewSet(viewsets.ModelViewSet):
             schedule.name = timetable_name
             schedule.observations = saved_observation
             schedule.updated_by = actor
-            schedule.save(update_fields=["name", "observations", "updated_by", "updated_at"])
+            schedule.save(
+                update_fields=["name", "observations", "updated_by", "updated_at"]
+            )
             schedule.users.add(*target_users)
 
         serialized = self.get_serializer(schedules, many=True)

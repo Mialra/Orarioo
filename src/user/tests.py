@@ -224,7 +224,9 @@ class UserApiTests(APITestCase):
             "role": "director",
             "can_login": False,
         }
-        response = self.client.post(reverse("user-managed-create"), payload, format="json")
+        response = self.client.post(
+            reverse("user-managed-create"), payload, format="json"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         created_user = User.objects.get(email="nuevo-director@test.com")
@@ -240,7 +242,9 @@ class UserApiTests(APITestCase):
             "role": "administrator",
             "can_login": True,
         }
-        response = self.client.post(reverse("user-managed-create"), payload, format="json")
+        response = self.client.post(
+            reverse("user-managed-create"), payload, format="json"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("password", response.data)
