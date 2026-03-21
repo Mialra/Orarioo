@@ -845,8 +845,18 @@
                 PREFER_NO: "Preferably no",
                 UNAVAILABLE: "Unavailable",
             };
+            const ENTITY_ENDPOINTS = {
+                teachers: "/teachers/",
+                classrooms: "/classrooms/",
+                groups: "/groups/",
+                subjects: "/subjects/",
+            };
             const subjectPreferenceMap = {};
             const teacherPreferenceMap = {};
+            let currentTeachers = [];
+            let currentClassrooms = [];
+            let currentGroups = [];
+            let currentSubjects = [];
 
         // Utility Functions
         const showAlert = (type, message) => {
@@ -1116,6 +1126,11 @@
             const groupData = groups.data?.results || (Array.isArray(groups.data) ? groups.data : []);
             const subjectData = subjects.data?.results || (Array.isArray(subjects.data) ? subjects.data : []);
 
+            currentTeachers = teacherData;
+            currentClassrooms = classroomData;
+            currentGroups = groupData;
+            currentSubjects = subjectData;
+
             document.getElementById("statTeachers").textContent = teachers.data?.count || teacherData.length;
             document.getElementById("statClassrooms").textContent = classrooms.data?.count || classroomData.length;
             document.getElementById("statGroups").textContent = groups.data?.count || groupData.length;
@@ -1242,6 +1257,7 @@
                     <td>${t.working_hours}</td>
                     <td>
                         <div class="action-buttons">
+                            <button class="btn-secondary" onclick="editEntity('teachers', ${t.id})">Modificar</button>
                             <button class="btn-danger" onclick="deleteEntity('teachers', ${t.id})">Eliminar</button>
                         </div>
                     </td>
@@ -1287,6 +1303,7 @@
                     <td>${c.classroom_type || "-"}</td>
                     <td>
                         <div class="action-buttons">
+                            <button class="btn-secondary" onclick="editEntity('classrooms', ${c.id})">Modificar</button>
                             <button class="btn-danger" onclick="deleteEntity('classrooms', ${c.id})">Eliminar</button>
                         </div>
                     </td>
@@ -1329,6 +1346,7 @@
                     <td>${g.stage}</td>
                     <td>
                         <div class="action-buttons">
+                            <button class="btn-secondary" onclick="editEntity('groups', ${g.id})">Modificar</button>
                             <button class="btn-danger" onclick="deleteEntity('groups', ${g.id})">Eliminar</button>
                         </div>
                     </td>
@@ -1372,6 +1390,7 @@
                     <td>${s.required_classroom_type || "-"}</td>
                     <td>
                         <div class="action-buttons">
+                            <button class="btn-secondary" onclick="editEntity('subjects', ${s.id})">Modificar</button>
                             <button class="btn-danger" onclick="deleteEntity('subjects', ${s.id})">Eliminar</button>
                         </div>
                     </td>
@@ -1563,13 +1582,152 @@
 
         // Delete Entity
         window.deleteEntity = async (type, id) => {
+            const endpoint = ENTITY_ENDPOINTS[type];
+            if (!endpoint) {
+                showAlert("error", `Tipo de entidad no soportado: ${type}`);
+                return;
+            }
             if (!confirm("¿Estás seguro de que deseas eliminar?")) return;
-            const result = await apiCall(`/${type}/${id}/`, "DELETE");
+            const result = await apiCall(`${endpoint}${id}/`, "DELETE");
             if (result.ok) {
                 showAlert("success", "✓ Eliminado correctamente");
                 loadAllData();
             } else {
                 showAlert("error", result.data.detail || "Error al eliminar");
+            }
+        };
+
+        // Edit Entity
+        window.editEntity = async (type, id) => {
+            const endpoint = ENTITY_ENDPOINTS[type];
+            if (!endpoint) {
+                showAlert("error", `Tipo de entidad no soportado: ${type}`);
+                return;
+            }
+
+            let payload = null;
+
+            if (type === "teachers") {
+                const entity = currentTeachers.find((item) => item.id === id);
+                if (!entity) {
+                    showAlert("error", "Profesor no encontrado en caché.");
+                    return;
+                }
+                const name = prompt("Nombre del profesor:", entity.name || "");
+                if (name === null || !name.trim()) return;
+                const maxWeeklyHoursRaw = prompt(
+                    "Máximo de horas semanales:",
+                    String(entity.max_weekly_hours ?? 20)
+                );
+                if (maxWeeklyHoursRaw === null) return;
+                const workingHoursRaw = prompt(
+                    "Horas actuales:",
+                    String(entity.working_hours ?? 0)
+                );
+                if (workingHoursRaw === null) return;
+
+                payload = {
+                    name: name.trim(),
+                    max_weekly_hours: parseInt(maxWeeklyHoursRaw, 10),
+                    working_hours: parseInt(workingHoursRaw, 10),
+                };
+            }
+
+            if (type === "classrooms") {
+                const entity = currentClassrooms.find((item) => item.id === id);
+                if (!entity) {
+                    showAlert("error", "Aula no encontrada en caché.");
+                    return;
+                }
+                const name = prompt("Nombre del aula:", entity.name || "");
+                if (name === null || !name.trim()) return;
+                const classroomType = prompt(
+                    "Tipo de aula (vacío permitido):",
+                    entity.classroom_type || ""
+                );
+                if (classroomType === null) return;
+
+                payload = {
+                    name: name.trim(),
+                    classroom_type: classroomType.trim(),
+                };
+            }
+
+            if (type === "groups") {
+                const entity = currentGroups.find((item) => item.id === id);
+                if (!entity) {
+                    showAlert("error", "Grupo no encontrado en caché.");
+                    return;
+                }
+                const name = prompt("Nombre del grupo:", entity.name || "");
+                if (name === null || !name.trim()) return;
+                const stage = prompt(
+                    "Etapa (preschool, primary, secondary):",
+                    entity.stage || "primary"
+                );
+                if (stage === null || !stage.trim()) return;
+
+                payload = {
+                    name: name.trim(),
+                    stage: stage.trim().toLowerCase(),
+                };
+            }
+
+            if (type === "subjects") {
+                const entity = currentSubjects.find((item) => item.id === id);
+                if (!entity) {
+                    showAlert("error", "Asignatura no encontrada en caché.");
+                    return;
+                }
+                const name = prompt("Nombre de la asignatura:", entity.name || "");
+                if (name === null || !name.trim()) return;
+                const weeklyHoursRaw = prompt(
+                    "Horas semanales:",
+                    String(entity.weekly_hours ?? 1)
+                );
+                if (weeklyHoursRaw === null) return;
+                const durationRaw = prompt(
+                    "Duración por sesión (horas):",
+                    String(entity.duration ?? 1)
+                );
+                if (durationRaw === null) return;
+                const stage = prompt(
+                    "Etapa (PRESCHOOL, PRIMARY, SECONDARY):",
+                    entity.stage || "PRIMARY"
+                );
+                if (stage === null || !stage.trim()) return;
+                const subjectType = prompt(
+                    "Tipo (NORMAL, TC):",
+                    entity.type || "NORMAL"
+                );
+                if (subjectType === null || !subjectType.trim()) return;
+                const requiredClassroomType = prompt(
+                    "Tipo de aula requerida (vacío permitido):",
+                    entity.required_classroom_type || ""
+                );
+                if (requiredClassroomType === null) return;
+
+                payload = {
+                    name: name.trim(),
+                    weekly_hours: parseInt(weeklyHoursRaw, 10),
+                    duration: parseFloat(durationRaw),
+                    stage: stage.trim().toUpperCase(),
+                    type: subjectType.trim().toUpperCase(),
+                    required_classroom_type: requiredClassroomType.trim(),
+                };
+            }
+
+            if (!payload) {
+                showAlert("error", "No se pudo construir el payload de edición.");
+                return;
+            }
+
+            const result = await apiCall(`${endpoint}${id}/`, "PATCH", payload);
+            if (result.ok) {
+                showAlert("success", "✓ Entidad modificada");
+                loadAllData();
+            } else {
+                showAlert("error", result.data.detail || JSON.stringify(result.data) || "Error al modificar");
             }
         };
 
