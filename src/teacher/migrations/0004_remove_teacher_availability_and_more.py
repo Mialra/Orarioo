@@ -6,20 +6,20 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('teacher', '0003_teacher_time_preferences'),
+        ("teacher", "0003_teacher_time_preferences"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='teacher',
-            name='availability',
+            model_name="teacher",
+            name="availability",
         ),
         migrations.RemoveField(
-            model_name='teacher',
-            name='preferences',
+            model_name="teacher",
+            name="preferences",
         ),
         migrations.RemoveField(
-            model_name='teacher',
-            name='unavailability',
+            model_name="teacher",
+            name="unavailability",
         ),
     ]
