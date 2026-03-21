@@ -228,7 +228,9 @@ def _extract_slot_and_classroom_assignment(
     return slot_by_session, classroom_by_session
 
 
-def _greedy_session_assignment(*, sessions, slots, compatible_classrooms_by_session, rng):
+def _greedy_session_assignment(
+    *, sessions, slots, compatible_classrooms_by_session, rng
+):
     teacher_busy_slots = {}
     teacher_day_slots = {}  # {teacher_id: {day_idx: set of slot positions within day}}
     classroom_busy_slots = {}
