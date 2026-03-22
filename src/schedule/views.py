@@ -1,4 +1,5 @@
 import random
+import logging
 
 from rest_framework import status
 from rest_framework.response import Response
@@ -10,6 +11,8 @@ from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFI
 from schedule.models import Schedule
 from schedule.serializers import ScheduleSerializer
 from user.models import User
+
+logger = logging.getLogger(__name__)
 
 
 class ScheduleViewSet(AuditableModelViewSet):
@@ -244,8 +247,17 @@ class ScheduleViewSet(AuditableModelViewSet):
                 actor_email=actor,
             )
         except ScheduleGenerationError as exc:
+            logger.exception(
+                "ScheduleGenerationError while applying manual change: "
+                "schedule_id=%s, new_slot_index=%s, actor=%s",
+                schedule_id,
+                new_slot_index,
+                actor,
+            )
             return Response(
-                {"detail": str(exc)},
+                {
+                    "detail": "Failed to replan schedule with manual change."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
