@@ -529,6 +529,7 @@
             <p>Sistema inteligente de planificación académica</p>
             <div class="header-actions">
                 <button class="btn-primary" id="loginBtn">🔐 Iniciar Sesión</button>
+                <button class="btn-secondary" id="signupBtn">📝 Registrarse</button>
                 <button class="btn-secondary" id="logoutBtn" style="display: none;">Cerrar Sesión</button>
                 <button class="btn-secondary" id="refreshBtn" style="display: none;">🔄 Actualizar Datos</button>
             </div>
@@ -554,6 +555,48 @@
                 <div class="button-group">
                     <button class="btn-primary" id="submitLoginBtn" style="flex: 1;">Iniciar Sesión</button>
                     <button class="btn-secondary" id="cancelLoginBtn" style="flex: 1;">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Signup Modal -->
+        <div id="signupModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
+            <div style="background: white; padding: 30px; border-radius: 12px; max-width: 460px; width: 92%; max-height: 88vh; overflow-y: auto;">
+                <h2 style="margin-bottom: 20px;">Crear Cuenta</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nombre</label>
+                        <input type="text" id="signupGivenName" placeholder="Ej: Marta" />
+                    </div>
+                    <div class="form-group">
+                        <label>Apellidos</label>
+                        <input type="text" id="signupFamilyName" placeholder="Ej: Pérez López" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="signupEmail" placeholder="direccion@centro.es" />
+                </div>
+                <div class="form-group">
+                    <label>Rol</label>
+                    <select id="signupRole">
+                        <option value="director" selected>Dirección</option>
+                        <option value="administrator">Administrador</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Contraseña</label>
+                        <input type="password" id="signupPassword" placeholder="••••••••" />
+                    </div>
+                    <div class="form-group">
+                        <label>Repetir Contraseña</label>
+                        <input type="password" id="signupPasswordConfirm" placeholder="••••••••" />
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button class="btn-primary" id="submitSignupBtn" style="flex: 1;">Crear Cuenta</button>
+                    <button class="btn-secondary" id="cancelSignupBtn" style="flex: 1;">Cancelar</button>
                 </div>
             </div>
         </div>
@@ -1013,6 +1056,36 @@
             element.textContent = message;
             element.classList.add("show");
             setTimeout(() => element.classList.remove("show"), 4000);
+        };
+
+        const extractApiErrorMessage = (data, fallback = "Ha ocurrido un error") => {
+            if (!data || typeof data !== "object") {
+                return fallback;
+            }
+
+            if (typeof data.detail === "string" && data.detail.trim()) {
+                return data.detail;
+            }
+
+            if (data.errors && typeof data.errors === "object") {
+                const firstError = Object.values(data.errors)[0];
+                if (Array.isArray(firstError) && firstError.length) {
+                    return String(firstError[0]);
+                }
+                if (typeof firstError === "string" && firstError.trim()) {
+                    return firstError;
+                }
+            }
+
+            const firstFieldError = Object.values(data)[0];
+            if (Array.isArray(firstFieldError) && firstFieldError.length) {
+                return String(firstFieldError[0]);
+            }
+            if (typeof firstFieldError === "string" && firstFieldError.trim()) {
+                return firstFieldError;
+            }
+
+            return fallback;
         };
 
         const apiCall = async (endpoint, method = "GET", body = null) => {
@@ -1638,18 +1711,21 @@
         const updateAuthUI = () => {
             const mainContent = document.getElementById("mainContent");
             const loginBtn = document.getElementById("loginBtn");
+            const signupBtn = document.getElementById("signupBtn");
             const logoutBtn = document.getElementById("logoutBtn");
             const refreshBtn = document.getElementById("refreshBtn");
 
             if (authToken) {
                 mainContent.style.display = "block";
                 loginBtn.style.display = "none";
+                signupBtn.style.display = "none";
                 logoutBtn.style.display = "inline-block";
                 refreshBtn.style.display = "inline-block";
                 loadAllData();
             } else {
                 mainContent.style.display = "none";
                 loginBtn.style.display = "inline-block";
+                signupBtn.style.display = "inline-block";
                 logoutBtn.style.display = "none";
                 refreshBtn.style.display = "none";
             }
@@ -1657,6 +1733,10 @@
 
         document.getElementById("loginBtn").onclick = () => {
             document.getElementById("authModal").style.display = "flex";
+        };
+
+        document.getElementById("signupBtn").onclick = () => {
+            document.getElementById("signupModal").style.display = "flex";
         };
 
         document.getElementById("submitLoginBtn").onclick = async () => {
@@ -1674,12 +1754,62 @@
                 showAlert("success", "✓ Sesión iniciada");
                 updateAuthUI();
             } else {
-                showAlert("error", result.data.detail || "Error en login");
+                showAlert("error", extractApiErrorMessage(result.data, "Error en login"));
             }
         };
 
         document.getElementById("cancelLoginBtn").onclick = () => {
             document.getElementById("authModal").style.display = "none";
+        };
+
+        document.getElementById("submitSignupBtn").onclick = async () => {
+            const given_name = document.getElementById("signupGivenName").value.trim();
+            const family_name = document.getElementById("signupFamilyName").value.trim();
+            const email = document.getElementById("signupEmail").value.trim();
+            const role = document.getElementById("signupRole").value;
+            const password = document.getElementById("signupPassword").value;
+            const password_confirm = document.getElementById("signupPasswordConfirm").value;
+
+            if (!given_name || !email || !password || !password_confirm) {
+                showAlert("error", "Nombre, email y contraseñas son obligatorios.");
+                return;
+            }
+
+            if (password !== password_confirm) {
+                showAlert("error", "Las contraseñas no coinciden.");
+                return;
+            }
+
+            const payload = {
+                given_name,
+                family_name,
+                email,
+                role,
+                password,
+                password_confirm,
+            };
+
+            const result = await apiCall("/signup/", "POST", payload);
+            if (!result.ok) {
+                showAlert("error", extractApiErrorMessage(result.data, "Error en registro"));
+                return;
+            }
+
+            authToken = result.data.access;
+            localStorage.setItem("access_token", authToken);
+            document.getElementById("signupModal").style.display = "none";
+            document.getElementById("signupGivenName").value = "";
+            document.getElementById("signupFamilyName").value = "";
+            document.getElementById("signupEmail").value = "";
+            document.getElementById("signupPassword").value = "";
+            document.getElementById("signupPasswordConfirm").value = "";
+
+            showAlert("success", "✓ Cuenta creada e inicio de sesión correcto");
+            updateAuthUI();
+        };
+
+        document.getElementById("cancelSignupBtn").onclick = () => {
+            document.getElementById("signupModal").style.display = "none";
         };
 
         document.getElementById("logoutBtn").onclick = () => {
