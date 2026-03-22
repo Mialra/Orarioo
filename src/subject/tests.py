@@ -2,37 +2,36 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from common.test_utils import AuthenticatedAdminAPIMixin
+from group.models import EducationalStage as GroupEducationalStage
+from group.models import Group
 from subject.models import EducationalStage, Subject, SubjectType
 from teacher.models import Teacher
-from user.models import RoleChoices, User
 
 
-class SubjectApiTests(APITestCase):
+class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="subject-api@test.com",
-            password="StrongPassword123!",
-            given_name="Api",
-            family_name="Tester",
-            role=RoleChoices.ADMINISTRATOR,
-        )
-        self.client.force_authenticate(self.user)
+        self.authenticate_admin(email_prefix="subject-api")
 
         self.teacher = Teacher.objects.create(
             name="John Doe",
             max_weekly_hours=40,
             working_hours=20,
         )
+        self.group = Group.objects.create(
+            name="1º ESO A",
+            stage=GroupEducationalStage.SECONDARY,
+        )
 
     def test_create_subject(self):
         payload = {
             "name": "Mathematics",
             "weekly_hours": 5,
-            "duration": 1.5,
             "preferred_time_slot": "Morning",
             "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
+            "group": self.group.id,
         }
 
         response = self.client.post(reverse("subject-list"), payload, format="json")
@@ -50,6 +49,7 @@ class SubjectApiTests(APITestCase):
             stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
+            group=self.group,
         )
 
         list_response = self.client.get(reverse("subject-list"))
@@ -68,16 +68,17 @@ class SubjectApiTests(APITestCase):
             stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
+            group=self.group,
         )
 
         payload = {
             "name": "History Updated",
             "weekly_hours": 4,
-            "duration": 1.5,
             "preferred_time_slot": "Afternoon",
             "stage": EducationalStage.PRIMARY,
             "type": SubjectType.TC,
             "teacher": self.teacher.id,
+            "group": self.group.id,
         }
 
         response = self.client.put(
@@ -98,6 +99,7 @@ class SubjectApiTests(APITestCase):
             stage=EducationalStage.PRESCHOOL,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
+            group=self.group,
         )
 
         response = self.client.delete(reverse("subject-detail", args=[subject.id]))
@@ -105,7 +107,7 @@ class SubjectApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Subject.objects.filter(id=subject.id).exists())
 
-    def test_reject_invalid_duration(self):
+    def test_ignore_duration_if_provided(self):
         payload = {
             "name": "Invalid Subject",
             "weekly_hours": 3,
@@ -113,21 +115,22 @@ class SubjectApiTests(APITestCase):
             "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
+            "group": self.group.id,
         }
 
         response = self.client.post(reverse("subject-list"), payload, format="json")
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("duration", response.data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["duration"], 1.0)
 
     def test_reject_invalid_weekly_hours(self):
         payload = {
             "name": "Invalid Subject",
             "weekly_hours": -5,
-            "duration": 1.0,
             "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
+            "group": self.group.id,
         }
 
         response = self.client.post(reverse("subject-list"), payload, format="json")
@@ -143,8 +146,23 @@ class SubjectApiTests(APITestCase):
             stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
+            group=self.group,
         )
 
         self.assertEqual(subject.teacher.id, self.teacher.id)
         self.assertEqual(self.teacher.subjects.count(), 1)
         self.assertEqual(self.teacher.subjects.first().name, "Physics")
+
+    def test_reject_missing_group(self):
+        payload = {
+            "name": "Sin curso",
+            "weekly_hours": 3,
+            "stage": EducationalStage.SECONDARY,
+            "type": SubjectType.NORMAL,
+            "teacher": self.teacher.id,
+        }
+
+        response = self.client.post(reverse("subject-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("group", response.data)

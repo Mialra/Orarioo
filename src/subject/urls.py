@@ -1,16 +1,9 @@
 from django.urls import path
 
+from common.drf import build_crud_views
 from subject.views import SubjectViewSet
 
-subject_list = SubjectViewSet.as_view({"get": "list", "post": "create"})
-subject_detail = SubjectViewSet.as_view(
-    {
-        "get": "retrieve",
-        "put": "update",
-        "patch": "partial_update",
-        "delete": "destroy",
-    }
-)
+subject_list, subject_detail = build_crud_views(SubjectViewSet)
 
 urlpatterns = [
     path("subjects/", subject_list, name="subject-list"),

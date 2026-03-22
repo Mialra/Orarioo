@@ -6,24 +6,25 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from user.models import User
+from user.models import RoleChoices, User
 from user.serializers import (
     LoginSerializer,
     UserChangePasswordSerializer,
     UserCreateSerializer,
+    UserManagementCreateSerializer,
     UserSerializer,
     UserUpdateSerializer,
 )
 
 
 class IsAdministrator(permissions.BasePermission):
-    """Permission to check if user is an administrator"""
+    """Permission to check if user has management access."""
 
     def has_permission(self, request, view):
         return bool(
             request.user
             and request.user.is_authenticated
-            and request.user.is_administrator()
+            and request.user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECTOR]
         )
 
 
@@ -79,6 +80,13 @@ class UserViewSet(viewsets.ModelViewSet):
 
     queryset = User.objects.all().order_by("-created_at")
     permission_classes = [permissions.IsAuthenticated]
+    serializer_action_classes = {
+        "create": UserCreateSerializer,
+        "managed_create": UserManagementCreateSerializer,
+        "partial_update": UserUpdateSerializer,
+        "update": UserUpdateSerializer,
+        "change_password": UserChangePasswordSerializer,
+    }
 
     def get_throttles(self):
         if self.action == "create":
@@ -88,26 +96,23 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         """Returns the appropriate serializer based on the action"""
-        if self.action == "create":
-            return UserCreateSerializer
-        elif self.action == "partial_update" or self.action == "update":
-            return UserUpdateSerializer
-        elif self.action == "change_password":
-            return UserChangePasswordSerializer
-        return UserSerializer
+        return self.serializer_action_classes.get(self.action, UserSerializer)
 
     def get_permissions(self):
         """Defines permissions based on the action"""
         if self.action == "create":
             # Allow creating users (signup)
             return [permissions.AllowAny()]
-        elif self.action in ["list", "destroy", "update", "partial_update"]:
-            # Only administrators can list, delete or modify other users
+        if self.action == "managed_create":
+            # Authenticated staff (administrator/director) can create managed users
             return [IsAdministrator()]
-        elif self.action == "retrieve":
+        if self.action in ["list", "destroy", "update", "partial_update"]:
+            # Administrator and director have the same management scope.
+            return [IsAdministrator()]
+        if self.action == "retrieve":
             # User can see their own profile, administrator can see any
             return [IsAdministratorOrSelf()]
-        elif self.action == "change_password" or self.action == "me":
+        if self.action in ["change_password", "me"]:
             # Authenticated user can change their password
             return [permissions.IsAuthenticated()]
 
@@ -117,12 +122,25 @@ class UserViewSet(viewsets.ModelViewSet):
         """Filters users based on permissions"""
         user = self.request.user
 
-        if user.is_administrator():
-            # Administrators see all users
+        if user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECTOR]:
+            # Administrators and directors see all users.
             return User.objects.all().order_by("-created_at")
-        else:
-            # Other users only see their own profile
-            return User.objects.filter(id=user.id).order_by("-created_at")
+
+        # Other users only see their own profile.
+        return User.objects.filter(id=user.id).order_by("-created_at")
+
+    @action(
+        detail=False,
+        methods=["post"],
+        permission_classes=[IsAdministrator],
+        url_path="managed_create",
+    )
+    def managed_create(self, request):
+        """Creates users for audit/assignment flows with optional login access."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
     @action(
         detail=False,
