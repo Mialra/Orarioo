@@ -7,12 +7,15 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('group', '0001_initial'),
+        ("group", "0001_initial"),
     ]
 
     operations = [
         migrations.AddConstraint(
-            model_name='group',
-            constraint=models.UniqueConstraint(django.db.models.functions.text.Lower('name'), name='group_name_ci_unique'),
+            model_name="group",
+            constraint=models.UniqueConstraint(
+                django.db.models.functions.text.Lower("name"),
+                name="group_name_ci_unique",
+            ),
         ),
     ]

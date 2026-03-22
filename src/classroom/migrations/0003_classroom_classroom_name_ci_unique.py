@@ -7,12 +7,15 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('classroom', '0002_classroom_classroom_type'),
+        ("classroom", "0002_classroom_classroom_type"),
     ]
 
     operations = [
         migrations.AddConstraint(
-            model_name='classroom',
-            constraint=models.UniqueConstraint(django.db.models.functions.text.Lower('name'), name='classroom_name_ci_unique'),
+            model_name="classroom",
+            constraint=models.UniqueConstraint(
+                django.db.models.functions.text.Lower("name"),
+                name="classroom_name_ci_unique",
+            ),
         ),
     ]

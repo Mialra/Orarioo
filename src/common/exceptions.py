@@ -88,7 +88,10 @@ def api_exception_handler(exc, context):
 
     response = drf_exception_handler(exc, context)
 
-    if response is not None and response.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR:
+    if (
+        response is not None
+        and response.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR
+    ):
         logger.exception("Server-side API exception", exc_info=exc)
         return Response(
             {

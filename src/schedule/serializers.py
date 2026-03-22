@@ -1,9 +1,7 @@
 from rest_framework import serializers
 
 from common.serializer_utils import AUDIT_FIELD_NAMES
-from common.validation import (
-    normalize_optional_text,
-)
+from common.validation import normalize_optional_text
 from namedEntity.serializers import NamedEntityNameValidationMixin
 from schedule.models import Schedule
 
@@ -83,7 +81,9 @@ class ScheduleSerializer(NamedEntityNameValidationMixin, serializers.ModelSerial
             )
 
         attrs["observations"] = normalize_optional_text(
-            attrs.get("observations", self.instance.observations if self.instance else ""),
+            attrs.get(
+                "observations", self.instance.observations if self.instance else ""
+            ),
             field_name="observations",
         )
 

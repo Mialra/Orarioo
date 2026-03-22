@@ -7,14 +7,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('group', '0002_group_group_name_ci_unique'),
-        ('subject', '0005_alter_subject_duration'),
-        ('teacher', '0005_teacher_teacher_name_ci_unique'),
+        ("group", "0002_group_group_name_ci_unique"),
+        ("subject", "0005_alter_subject_duration"),
+        ("teacher", "0005_teacher_teacher_name_ci_unique"),
     ]
 
     operations = [
         migrations.AddConstraint(
-            model_name='subject',
-            constraint=models.UniqueConstraint(django.db.models.functions.text.Lower('name'), name='subject_name_ci_unique'),
+            model_name="subject",
+            constraint=models.UniqueConstraint(
+                django.db.models.functions.text.Lower("name"),
+                name="subject_name_ci_unique",
+            ),
         ),
     ]
