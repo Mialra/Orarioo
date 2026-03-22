@@ -7,11 +7,13 @@ from schedule.algorithm.constraints import (
     add_group_daily_capacity_constraints,
     add_group_no_intraday_gap_constraints,
     add_resource_non_overlap_constraints,
+    add_stage_slot_hard_constraints,
     add_subject_time_hard_constraints,
     add_teacher_time_hard_constraints,
     apply_soft_constraints,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
+from schedule.algorithm.slots import slot_overlaps
 
 
 def solve_session_assignment(
@@ -83,6 +85,30 @@ def _cp_sat_session_assignment(
             if slot_idx < 0 or slot_idx >= slot_count:
                 raise ScheduleGenerationError(f"Invalid slot index: {slot_idx}")
             model.Add(x[(session_idx, slot_idx)] == 1)
+
+    add_stage_slot_hard_constraints(
+        model=model,
+        x=x,
+        sessions=sessions,
+        slots=slots,
+    )
+
+    _add_resource_interval_non_overlap_constraints(
+        model=model,
+        x=x,
+        sessions=sessions,
+        slots=slots,
+        resource_key="teacher_id",
+    )
+    _add_resource_interval_non_overlap_constraints(
+        model=model,
+        x=x,
+        sessions=sessions,
+        slots=slots,
+        resource_key="group_id",
+    )
+
+    # Backward-compatible call (kept as no-op in hard constraints module).
     add_resource_non_overlap_constraints(
         model=model,
         x=x,
@@ -100,7 +126,7 @@ def _cp_sat_session_assignment(
     _add_classroom_non_overlap_constraints(
         model=model,
         y=y,
-        slot_count=slot_count,
+        slots=slots,
         classrooms=compatible_classrooms_by_session,
     )
     add_group_daily_capacity_constraints(
@@ -312,22 +338,70 @@ def _add_exactly_one_slot_and_classroom_constraints(
         )
 
 
-def _add_classroom_non_overlap_constraints(*, model, y, slot_count, classrooms):
+def _add_classroom_non_overlap_constraints(*, model, y, slots, classrooms):
     classroom_ids = {
         classroom.id
         for compatible_classrooms in classrooms.values()
         for classroom in compatible_classrooms
     }
     for classroom_id in classroom_ids:
-        for p_idx in range(slot_count):
-            model.Add(
-                sum(
-                    var
-                    for (s_idx, var_p_idx, var_classroom_id), var in y.items()
-                    if var_p_idx == p_idx and var_classroom_id == classroom_id
+        for left_slot in range(len(slots)):
+            for right_slot in range(left_slot, len(slots)):
+                if not slot_overlaps(
+                    left_slot=slots[left_slot],
+                    right_slot=slots[right_slot],
+                ):
+                    continue
+                model.Add(
+                    sum(
+                        var
+                        for (_, var_p_idx, var_classroom_id), var in y.items()
+                        if var_classroom_id == classroom_id
+                        and var_p_idx in (left_slot, right_slot)
+                    )
+                    <= 1
                 )
-                <= 1
-            )
+
+
+def _add_resource_interval_non_overlap_constraints(
+    *, model, x, sessions, slots, resource_key
+):
+    resource_to_sessions = {}
+    for idx, session in enumerate(sessions):
+        if resource_key == "group_id":
+            group = session.get("group")
+            resource_id = getattr(group, "id", None)
+        else:
+            resource_id = session.get(resource_key)
+        if resource_id is None:
+            continue
+        resource_to_sessions.setdefault(resource_id, []).append(idx)
+
+    overlapping_slot_pairs = []
+    slot_count = len(slots)
+    for left_idx in range(slot_count):
+        for right_idx in range(left_idx, slot_count):
+            if slot_overlaps(left_slot=slots[left_idx], right_slot=slots[right_idx]):
+                overlapping_slot_pairs.append((left_idx, right_idx))
+
+    for resource_sessions in resource_to_sessions.values():
+        for first_pos, first_session in enumerate(resource_sessions):
+            for second_session in resource_sessions[first_pos + 1 :]:
+                for left_idx, right_idx in overlapping_slot_pairs:
+                    if left_idx == right_idx:
+                        model.Add(
+                            x[(first_session, left_idx)] + x[(second_session, right_idx)]
+                            <= 1
+                        )
+                    else:
+                        model.Add(
+                            x[(first_session, left_idx)] + x[(second_session, right_idx)]
+                            <= 1
+                        )
+                        model.Add(
+                            x[(first_session, right_idx)] + x[(second_session, left_idx)]
+                            <= 1
+                        )
 
 
 def _extract_slot_and_classroom_assignment(

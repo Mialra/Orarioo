@@ -30,6 +30,7 @@ from django.utils import timezone  # noqa: E402
 from classroom.models import Classroom  # noqa: E402
 from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
 from group.models import Group  # noqa: E402
+from schedule.algorithm.slots import build_weekly_slots, session_stage_code  # noqa: E402
 from schedule.constants import SAVED_TIMETABLE_PREFIX  # noqa: E402
 from schedule.models import Schedule  # noqa: E402
 from subject.models import EducationalStage  # noqa: E402
@@ -798,25 +799,39 @@ def create_admin_saved_timetable(*, users):
     if not classrooms:
         raise RuntimeError("No classrooms found while creating saved admin timetable.")
 
-    # Monday of current week in local timezone as deterministic base.
-    now_local = timezone.localtime()
-    monday = (now_local - timedelta(days=now_local.weekday())).date()
-    hour_map = [8, 9, 10, 12, 13, 14]
-    minute_map = [30, 30, 30, 0, 0, 0]
+    stage_slots = build_weekly_slots()
+    stage_slot_cursor = {
+        "PRESCHOOL": 0,
+        "PRIMARY": 0,
+        "SECONDARY": 0,
+    }
+    stage_slot_indices = {
+        "PRESCHOOL": [
+            idx for idx, slot in enumerate(stage_slots) if slot.get("stage") == "PRESCHOOL"
+        ],
+        "PRIMARY": [
+            idx for idx, slot in enumerate(stage_slots) if slot.get("stage") == "PRIMARY"
+        ],
+        "SECONDARY": [
+            idx for idx, slot in enumerate(stage_slots) if slot.get("stage") == "SECONDARY"
+        ],
+    }
 
     created = []
-    for index, subject in enumerate(subjects):
-        day_offset = index // len(hour_map)
-        slot_idx = index % len(hour_map)
-        start_naive = datetime(
-            year=monday.year,
-            month=monday.month,
-            day=monday.day,
-            hour=hour_map[slot_idx],
-            minute=minute_map[slot_idx],
-        ) + timedelta(days=day_offset)
-        start_time = timezone.make_aware(start_naive, timezone.get_current_timezone())
-        end_time = start_time + timedelta(hours=1)
+    for subject in subjects:
+        stage_code = session_stage_code(
+            session={"group": subject.group, "subject": subject}
+        )
+        slot_pool = stage_slot_indices.get(stage_code) or stage_slot_indices["PRIMARY"]
+        cursor = stage_slot_cursor.get(stage_code, 0)
+        if cursor >= len(slot_pool):
+            cursor = 0
+        slot_idx = slot_pool[cursor]
+        stage_slot_cursor[stage_code] = cursor + 1
+
+        slot = stage_slots[slot_idx]
+        start_time = slot["start"]
+        end_time = slot["end"]
 
         required_type = (subject.required_classroom_type or "").strip().casefold()
         classroom = next(

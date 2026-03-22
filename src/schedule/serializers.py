@@ -8,6 +8,7 @@ class ScheduleSerializer(serializers.ModelSerializer):
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     classroom_name = serializers.CharField(source="classroom.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
+    group_stage = serializers.CharField(source="group.stage", read_only=True)
     subject_name = serializers.CharField(source="subject.name", read_only=True)
 
     class Meta:
@@ -24,6 +25,7 @@ class ScheduleSerializer(serializers.ModelSerializer):
             "classroom_name",
             "group",
             "group_name",
+            "group_stage",
             "subject",
             "subject_name",
             "users",
@@ -34,6 +36,7 @@ class ScheduleSerializer(serializers.ModelSerializer):
             "teacher_name",
             "classroom_name",
             "group_name",
+            "group_stage",
             "subject_name",
             *AUDIT_FIELD_NAMES,
         ]

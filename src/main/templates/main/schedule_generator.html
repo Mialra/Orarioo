@@ -1259,23 +1259,53 @@
             teacherFilter.disabled = false;
         };
 
-        const buildWeeklySlotOptions = () => {
+        const STAGE_SLOT_TEMPLATE = {
+            preschool: [
+                ["09:00", "10:00"],
+                ["10:00", "10:30"],
+                ["11:00", "12:00"],
+                ["12:00", "13:00"],
+                ["13:00", "13:30"],
+            ],
+            primary: [
+                ["09:00", "10:00"],
+                ["10:00", "11:00"],
+                ["11:00", "11:30"],
+                ["12:00", "13:00"],
+                ["13:00", "14:00"],
+            ],
+            secondary: [
+                ["08:00", "09:00"],
+                ["09:00", "10:00"],
+                ["10:00", "11:00"],
+                ["11:30", "12:30"],
+                ["12:30", "13:30"],
+                ["13:30", "14:30"],
+            ],
+        };
+
+        const STAGE_OFFSET = {
+            preschool: 0,
+            primary: 5,
+            secondary: 10,
+        };
+
+        const DAY_LABELS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+
+        const buildWeeklySlotOptions = (stage) => {
+            const normalized = normalizeStage(stage) || "primary";
+            const ranges = STAGE_SLOT_TEMPLATE[normalized] || STAGE_SLOT_TEMPLATE.primary;
+            const perDay = 16;
+            const stageOffset = STAGE_OFFSET[normalized] || STAGE_OFFSET.primary;
             const dayCodes = ["MON", "TUE", "WED", "THU", "FRI"];
-            const dayLabels = {
-                MON: "Lunes",
-                TUE: "Martes",
-                WED: "Miércoles",
-                THU: "Jueves",
-                FRI: "Viernes",
-            };
-            const hours = ["08:30", "09:30", "10:30", "12:00", "13:00", "14:00"];
             const options = [];
 
             for (let d = 0; d < dayCodes.length; d += 1) {
-                for (let h = 0; h < hours.length; h += 1) {
+                for (let h = 0; h < ranges.length; h += 1) {
+                    const [start, end] = ranges[h];
                     options.push({
-                        value: d * hours.length + h,
-                        label: `${dayLabels[dayCodes[d]]} ${hours[h]}`,
+                        value: d * perDay + stageOffset + h,
+                        label: `${DAY_LABELS[d]} ${start}-${end}`,
                     });
                 }
             }
@@ -1292,15 +1322,16 @@
                 return null;
             }
 
-            const hour = String(start.getHours()).padStart(2, "0");
-            const minute = String(start.getMinutes()).padStart(2, "0");
-            const time = `${hour}:${minute}`;
-            const hours = ["08:30", "09:30", "10:30", "12:00", "13:00", "14:00"];
-            const hourIdx = hours.indexOf(time);
-            if (hourIdx < 0) {
+            const stage = normalizeStage(schedule.group_stage) || "primary";
+            const ranges = STAGE_SLOT_TEMPLATE[stage] || STAGE_SLOT_TEMPLATE.primary;
+            const startHM = `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`;
+            const end = new Date(schedule.end_time);
+            const endHM = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
+            const withinStage = ranges.findIndex(([s, e]) => s === startHM && e === endHM);
+            if (withinStage < 0) {
                 return null;
             }
-            return dayIdx * hours.length + hourIdx;
+            return dayIdx * 16 + (STAGE_OFFSET[stage] || STAGE_OFFSET.primary) + withinStage;
         };
 
         const renderSavedManualChangeControls = () => {
@@ -1323,7 +1354,7 @@
             }
 
             const sessions = getSelectedSavedTimetableSessions();
-            const slotOptions = buildWeeklySlotOptions();
+            const sessionsById = new Map(sessions.map((s) => [String(s.id), s]));
 
             sessionSelect.innerHTML =
                 '<option value="">Selecciona clase</option>' +
@@ -1335,15 +1366,33 @@
                     })
                     .join("");
 
+            const selectedSession = sessions[0] || null;
+            const initialStage = selectedSession ? normalizeStage(selectedSession.group_stage) : "primary";
+            const initialSlotOptions = buildWeeklySlotOptions(initialStage);
+
             slotSelect.innerHTML =
                 '<option value="">Selecciona destino</option>' +
-                slotOptions
+                initialSlotOptions
                     .map((o) => `<option value="${o.value}">${o.label} (slot ${o.value})</option>`)
                     .join("");
 
             sessionSelect.disabled = sessions.length === 0;
             slotSelect.disabled = sessions.length === 0;
             applyBtn.disabled = true;
+
+            sessionSelect.onchange = () => {
+                const selected = sessionsById.get(sessionSelect.value);
+                const stage = selected ? normalizeStage(selected.group_stage) : initialStage;
+                const slotOptions = buildWeeklySlotOptions(stage);
+                slotSelect.innerHTML =
+                    '<option value="">Selecciona destino</option>' +
+                    slotOptions
+                        .map((o) => `<option value="${o.value}">${o.label} (slot ${o.value})</option>`)
+                        .join("");
+                const hasSession = !!sessionSelect.value;
+                const hasSlot = !!slotSelect.value;
+                applyBtn.disabled = !(hasSession && hasSlot);
+            };
         };
 
         const clearSavedTimetableFilters = () => {
@@ -1437,10 +1486,14 @@
             }
 
             const sessions = getSelectedSavedTimetableSessions();
+            const selectedGroup = document.getElementById("savedTimetableGroupFilter").value;
+            const selectedTeacher = document.getElementById("savedTimetableTeacherFilter").value;
+            const viewMode = selectedGroup ? "course" : selectedTeacher ? "teacher" : "mixed";
             displaySchedules(
                 sessions,
                 output,
-                `Horario guardado: ${group.name}`
+                `Horario guardado: ${group.name}`,
+                { mode: viewMode }
             );
             renderSavedManualChangeControls();
         };
@@ -1807,7 +1860,10 @@
 
         const renderFilteredSchedules = () => {
             const filtered = getFilteredSchedules(latestGeneratedSchedules);
-            displaySchedules(filtered);
+            const selectedCourse = document.getElementById("scheduleCourseFilter").value;
+            displaySchedules(filtered, null, "Detalle de sesiones", {
+                mode: selectedCourse ? "course" : "mixed",
+            });
         };
 
         document.getElementById("scheduleCourseFilter").onchange = () => {
@@ -1820,12 +1876,6 @@
 
         document.getElementById("savedTimetableTeacherFilter").onchange = () => {
             renderSavedTimetablePreview();
-        };
-
-        document.getElementById("savedManualSessionSelect").onchange = () => {
-            const hasSession = !!document.getElementById("savedManualSessionSelect").value;
-            const hasSlot = !!document.getElementById("savedManualSlotSelect").value;
-            document.getElementById("applySavedManualChangeBtn").disabled = !(hasSession && hasSlot);
         };
 
         document.getElementById("savedManualSlotSelect").onchange = () => {
@@ -2175,7 +2225,61 @@
             loadAllData();
         };
 
-        const displaySchedules = (schedules, outputElement = null, detailTitle = "Detalle de sesiones") => {
+        const STAGE_GRID_CONFIG = {
+            preschool: {
+                label: "Infantil",
+                rows: [
+                    { type: "class", start: "09:00", end: "10:00" },
+                    { type: "class", start: "10:00", end: "10:30" },
+                    { type: "break", start: "10:30", end: "11:00", label: "Recreo" },
+                    { type: "class", start: "11:00", end: "12:00" },
+                    { type: "class", start: "12:00", end: "13:00" },
+                    { type: "class", start: "13:00", end: "13:30" },
+                    { type: "break", start: "13:30", end: "14:00", label: "Recreo" },
+                ],
+            },
+            primary: {
+                label: "Primaria",
+                rows: [
+                    { type: "class", start: "09:00", end: "10:00" },
+                    { type: "class", start: "10:00", end: "11:00" },
+                    { type: "class", start: "11:00", end: "11:30" },
+                    { type: "break", start: "11:30", end: "12:00", label: "Recreo" },
+                    { type: "class", start: "12:00", end: "13:00" },
+                    { type: "class", start: "13:00", end: "14:00" },
+                ],
+            },
+            secondary: {
+                label: "ESO",
+                rows: [
+                    { type: "class", start: "08:00", end: "09:00" },
+                    { type: "class", start: "09:00", end: "10:00" },
+                    { type: "class", start: "10:00", end: "11:00" },
+                    { type: "break", start: "11:00", end: "11:30", label: "Recreo" },
+                    { type: "class", start: "11:30", end: "12:30" },
+                    { type: "class", start: "12:30", end: "13:30" },
+                    { type: "class", start: "13:30", end: "14:30" },
+                ],
+            },
+        };
+
+        const normalizeStage = (raw) => {
+            const value = (raw || "").toString().trim().toLowerCase();
+            if (!value) return null;
+            if (value.includes("preschool") || value.includes("infantil")) return "preschool";
+            if (value.includes("primary") || value.includes("primaria")) return "primary";
+            if (value.includes("secondary") || value.includes("eso")) return "secondary";
+            return value;
+        };
+
+        const detectSessionsStage = (sessions) => {
+            const stages = [...new Set((sessions || []).map((s) => normalizeStage(s.group_stage)).filter(Boolean))];
+            return stages.length === 1 ? stages[0] : null;
+        };
+
+        const toHM = (date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+
+        const displaySchedules = (schedules, outputElement = null, detailTitle = "Detalle de sesiones", options = {}) => {
             const output = outputElement || document.getElementById("generatorOutput");
             if (!schedules.length) {
                 output.style.display = "none";
@@ -2208,10 +2312,149 @@
                 .filter((s) => visibleDays.includes(s.dayName))
                 .sort((a, b) => a.start - b.start);
 
-            const hourKeys = [...new Set(sessions.map((s) => s.hourKey))].sort();
+            const detectedStage = detectSessionsStage(sessions);
+            const config = options.mode === "course" ? STAGE_GRID_CONFIG[detectedStage] : null;
+            const teacherConfig = options.mode === "teacher" ? STAGE_GRID_CONFIG[detectedStage] : null;
+
+            if (config) {
+                const cellByDayAndRange = {};
+                sessions.forEach((s) => {
+                    const key = `${s.dayName}|${toHM(s.start)}-${toHM(s.end)}`;
+                    if (!cellByDayAndRange[key]) {
+                        cellByDayAndRange[key] = [];
+                    }
+                    cellByDayAndRange[key].push(s);
+                });
+
+                const rowsHtml = config.rows
+                    .map((row) => {
+                        const range = `${row.start}-${row.end}`;
+                        const dayCells = visibleDays
+                            .map((day) => {
+                                if (row.type === "break") {
+                                    return `<td class="schedule-cell" style="background:#fff4d6; text-align:center; font-weight:600; color:#7a5a00;">${row.label}</td>`;
+                                }
+
+                                const key = `${day}|${range}`;
+                                const cellSessions = cellByDayAndRange[key] || [];
+                                if (!cellSessions.length) {
+                                    return '<td class="schedule-cell"></td>';
+                                }
+                                const cards = cellSessions
+                                    .map(
+                                        (s) => `
+                                        <div class="schedule-card">
+                                            <strong>${s.subject_name || "Sin asignatura"}</strong>
+                                            <div>${s.teacher_name || "Sin profesor"}</div>
+                                            <div>${s.group_name || "Sin grupo"} | ${s.classroom_name || "Sin aula"}</div>
+                                        </div>
+                                    `
+                                    )
+                                    .join("");
+                                return `<td class="schedule-cell">${cards}</td>`;
+                            })
+                            .join("");
+
+                        return `
+                            <tr>
+                                <td class="schedule-time-col">${row.start} - ${row.end}</td>
+                                ${dayCells}
+                            </tr>
+                        `;
+                    })
+                    .join("");
+
+                output.innerHTML = `
+                    <div class="schedule-grid-wrap">
+                        <table class="schedule-grid">
+                            <thead>
+                                <tr>
+                                    <th>Hora (${config.label})</th>
+                                    ${visibleDays.map((day) => `<th>${day}</th>`).join("")}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3 class="schedule-detail-title">${detailTitle}</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Asignatura</th>
+                                <th>Profesor</th>
+                                <th>Aula</th>
+                                <th>Grupo</th>
+                                <th>Día</th>
+                                <th>Inicio</th>
+                                <th>Fin</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${sessions
+                                .map(
+                                    (s) => `
+                                    <tr>
+                                        <td>${s.subject_name || "-"}</td>
+                                        <td>${s.teacher_name || "-"}</td>
+                                        <td>${s.classroom_name || "-"}</td>
+                                        <td>${s.group_name || "-"}</td>
+                                        <td>${s.dayName}</td>
+                                        <td>${s.start.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</td>
+                                        <td>${s.end.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</td>
+                                    </tr>
+                                `
+                                )
+                                .join("")}
+                        </tbody>
+                    </table>
+                `;
+                output.style.display = "block";
+                return;
+            }
+
+            let sessionsForGenericGrid = [...sessions];
+            if (teacherConfig) {
+                const breakRows = teacherConfig.rows.filter((row) => row.type === "break");
+                const synthetic = [];
+
+                for (const dayName of visibleDays) {
+                    const daySample = sessions.find((s) => s.dayName === dayName);
+                    if (!daySample) {
+                        continue;
+                    }
+                    const dayDate = daySample.start;
+                    for (const brk of breakRows) {
+                        const [startHour, startMinute] = brk.start.split(":").map(Number);
+                        const [endHour, endMinute] = brk.end.split(":").map(Number);
+                        const start = new Date(dayDate);
+                        start.setHours(startHour, startMinute, 0, 0);
+                        const end = new Date(dayDate);
+                        end.setHours(endHour, endMinute, 0, 0);
+                        synthetic.push({
+                            subject_name: "Trabajo de Centro",
+                            teacher_name: sessions[0]?.teacher_name || "Profesor",
+                            classroom_name: "Patio",
+                            group_name: "-",
+                            dayName,
+                            start,
+                            end,
+                            hourKey: brk.start,
+                        });
+                    }
+                }
+
+                sessionsForGenericGrid = [...sessionsForGenericGrid, ...synthetic].sort(
+                    (a, b) => a.start - b.start
+                );
+            }
+
+            const hourKeys = [...new Set(sessionsForGenericGrid.map((s) => s.hourKey))].sort();
 
             const groupedByDayHour = {};
-            for (const session of sessions) {
+            for (const session of sessionsForGenericGrid) {
                 const key = `${session.dayName}|${session.hourKey}`;
                 if (!groupedByDayHour[key]) {
                     groupedByDayHour[key] = [];

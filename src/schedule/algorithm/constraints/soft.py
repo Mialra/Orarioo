@@ -2,7 +2,11 @@ from schedule.algorithm.constraints.hard import (
     session_preference_state,
     teacher_preference_state,
 )
-from schedule.algorithm.slots import build_slot_day_index, build_slot_preference_index
+from schedule.algorithm.slots import (
+    build_slot_day_index,
+    build_slot_preference_index,
+    slot_time_bounds,
+)
 from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 
@@ -234,7 +238,7 @@ def _build_slots_by_day(*, slots):
     for slot_idx, day_idx in slot_day_index.items():
         slots_by_day.setdefault(day_idx, []).append(slot_idx)
     for day_idx in slots_by_day:
-        slots_by_day[day_idx].sort()
+        slots_by_day[day_idx].sort(key=lambda idx: slot_time_bounds(slot=slots[idx])[0])
     return slots_by_day
 
 

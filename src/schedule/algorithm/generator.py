@@ -9,8 +9,9 @@ from schedule.algorithm.assignment import solve_session_assignment
 from schedule.algorithm.constraints import validate_group_and_teacher_capacity
 from schedule.algorithm.errors import ScheduleGenerationError
 from schedule.algorithm.slots import (
+    session_stage_code,
+    slot_instance_key,
     build_weekly_slots,
-    slot_preference_key_from_datetime,
 )
 from schedule.constants import AUTO_GENERATED_OBSERVATION
 from schedule.models import Schedule
@@ -59,8 +60,8 @@ class BasicScheduleGenerator:
 
         created = []
         for session_index, slot_index in enumerate(slot_by_session):
-            start_time = slots[slot_index]
-            end_time = start_time + timedelta(hours=1)
+            start_time = slots[slot_index]["start"]
+            end_time = slots[slot_index]["end"]
             session = sessions[session_index]
 
             schedule = Schedule.objects.create(
@@ -190,7 +191,7 @@ class ScheduleReplanner:
         classrooms = cls._build_classroom_pool(fallback_classroom=fallback_classroom)
         slots = build_weekly_slots()
         slot_index_by_key = {
-            slot_preference_key_from_datetime(slot=slot): idx
+            slot_instance_key(slot=slot): idx
             for idx, slot in enumerate(slots)
         }
 
@@ -290,7 +291,18 @@ class ScheduleReplanner:
                 }
             )
 
-            slot_key = slot_preference_key_from_datetime(slot=schedule.start_time)
+            slot_key = slot_instance_key(
+                slot={
+                    "start": schedule.start_time,
+                    "end": schedule.end_time,
+                    "stage": session_stage_code(
+                        session={
+                            "group": schedule.group,
+                            "subject": schedule.subject,
+                        }
+                    ),
+                }
+            )
             if slot_key not in slot_index_by_key:
                 raise ScheduleGenerationError(
                     "Could not map existing schedule slot to current weekly slot model."
@@ -320,8 +332,8 @@ class ScheduleReplanner:
         updated = []
 
         for idx, schedule in enumerate(schedules):
-            start_time = slots[slot_by_session[idx]]
-            end_time = start_time + timedelta(hours=1)
+            start_time = slots[slot_by_session[idx]]["start"]
+            end_time = slots[slot_by_session[idx]]["end"]
             session = sessions[idx]
             observation = (schedule.observations or "").strip()
 

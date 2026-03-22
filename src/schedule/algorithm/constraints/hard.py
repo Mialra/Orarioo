@@ -1,6 +1,13 @@
 from group.models import EducationalStage
 from schedule.algorithm.errors import ScheduleGenerationError
-from schedule.algorithm.slots import build_slot_day_index, build_slot_preference_index
+from schedule.algorithm.slots import (
+    build_slot_day_index,
+    build_slot_preference_index,
+    build_stage_allowed_slot_index,
+    session_stage_code,
+    slot_overlaps,
+    slot_time_bounds,
+)
 from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 
@@ -135,6 +142,7 @@ def _session_resource_id(*, session, resource_key):
 def add_resource_non_overlap_constraints(
     *, model, x, sessions, slot_count, resource_key
 ):
+    del slot_count
     resource_to_sessions = {}
 
     for idx, session in enumerate(sessions):
@@ -143,9 +151,23 @@ def add_resource_non_overlap_constraints(
             continue
         resource_to_sessions.setdefault(resource_id, []).append(idx)
 
+    # Non-overlap is enforced with explicit pair constraints in assignment.py,
+    # where slot intervals are available. Keep this function as no-op for API
+    # compatibility.
     for resource_sessions in resource_to_sessions.values():
-        for p_idx in range(slot_count):
-            model.Add(sum(x[(s_idx, p_idx)] for s_idx in resource_sessions) <= 1)
+        if not resource_sessions:
+            continue
+
+
+def add_stage_slot_hard_constraints(*, model, x, sessions, slots):
+    allowed_slots_by_stage = build_stage_allowed_slot_index(slots=slots)
+
+    for s_idx, session in enumerate(sessions):
+        stage_code = session_stage_code(session=session)
+        allowed_slots = allowed_slots_by_stage.get(stage_code, set())
+        for p_idx in range(len(slots)):
+            if p_idx not in allowed_slots:
+                model.Add(x[(s_idx, p_idx)] == 0)
 
 
 def add_group_daily_capacity_constraints(*, model, x, sessions, slots):
@@ -188,19 +210,28 @@ def add_group_no_intraday_gap_constraints(*, model, x, sessions, slots):
     group_to_sessions = _build_group_session_index(sessions=sessions)
 
     for group_id, group_sessions in group_to_sessions.items():
+        group_stage = session_stage_code(session=sessions[group_sessions[0]])
+        stage_allowed_slots = build_stage_allowed_slot_index(slots=slots).get(
+            group_stage, set()
+        )
         for day_idx, day_slot_list in slots_by_day.items():
+            filtered_day_slots = [
+                slot_idx for slot_idx in day_slot_list if slot_idx in stage_allowed_slots
+            ]
+            if len(filtered_day_slots) < 3:
+                continue
             occupancy_by_slot = _build_group_day_occupancy_vars(
                 model=model,
                 x=x,
                 group_id=group_id,
                 group_sessions=group_sessions,
                 day_idx=day_idx,
-                day_slot_list=day_slot_list,
+                day_slot_list=filtered_day_slots,
             )
             _add_no_gap_triplets(
                 model=model,
                 occupancy_by_slot=occupancy_by_slot,
-                day_slot_list=day_slot_list,
+                day_slot_list=filtered_day_slots,
             )
 
 
@@ -210,7 +241,7 @@ def _build_slots_by_day(*, slots):
     for slot_idx, day_idx in slot_day_index.items():
         slots_by_day.setdefault(day_idx, []).append(slot_idx)
     for day_idx in slots_by_day:
-        slots_by_day[day_idx].sort()
+        slots_by_day[day_idx].sort(key=lambda idx: slot_time_bounds(slot=slots[idx])[0])
     return slots_by_day
 
 
