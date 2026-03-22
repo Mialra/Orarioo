@@ -74,7 +74,7 @@ def _cp_sat_session_assignment(
         compatible_classrooms_by_session=compatible_classrooms_by_session,
         slot_count=slot_count,
     )
-    
+
     # Apply fixed assignments (manual change constraints)
     if fixed_assignments:
         for session_idx, slot_idx in fixed_assignments.items():

@@ -236,15 +236,6 @@ class ScheduleViewSet(AuditableModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check if schedule exists and belongs to user
-        try:
-            schedule_to_move = Schedule.objects.get(id=schedule_id, users=request.user)
-        except Schedule.DoesNotExist:
-            return Response(
-                {"detail": f"Schedule with id {schedule_id} not found or not accessible."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
         try:
             new_schedules = ScheduleReplanner.replan_with_manual_change(
                 user=request.user,

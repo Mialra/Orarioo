@@ -30,8 +30,8 @@ from django.utils import timezone  # noqa: E402
 from classroom.models import Classroom  # noqa: E402
 from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
 from group.models import Group  # noqa: E402
-from schedule.models import Schedule  # noqa: E402
 from schedule.constants import SAVED_TIMETABLE_PREFIX  # noqa: E402
+from schedule.models import Schedule  # noqa: E402
 from subject.models import EducationalStage  # noqa: E402
 from subject.models import Subject  # noqa: E402
 from subject.models import SubjectTimePreferenceState  # noqa: E402
@@ -788,7 +788,9 @@ def create_admin_saved_timetable(*, users):
     saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {saved_name}"
 
     # Build a deterministic small timetable to keep load_test_data fast.
-    subjects = list(Subject.objects.select_related("teacher", "group").order_by("id")[:12])
+    subjects = list(
+        Subject.objects.select_related("teacher", "group").order_by("id")[:12]
+    )
     if not subjects:
         raise RuntimeError("No subjects found while creating saved admin timetable.")
 

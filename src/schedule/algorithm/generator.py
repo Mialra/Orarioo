@@ -8,7 +8,10 @@ from group.models import EducationalStage, Group
 from schedule.algorithm.assignment import solve_session_assignment
 from schedule.algorithm.constraints import validate_group_and_teacher_capacity
 from schedule.algorithm.errors import ScheduleGenerationError
-from schedule.algorithm.slots import build_weekly_slots, slot_preference_key_from_datetime
+from schedule.algorithm.slots import (
+    build_weekly_slots,
+    slot_preference_key_from_datetime,
+)
 from schedule.constants import AUTO_GENERATED_OBSERVATION
 from schedule.models import Schedule
 from subject.models import Subject
@@ -328,7 +331,9 @@ class ScheduleReplanner:
             schedule.start_time = start_time
             schedule.end_time = end_time
             schedule.teacher = session["teacher"]
-            schedule.group = session.get("group") or cls._get_or_create_group(actor_email)
+            schedule.group = session.get("group") or cls._get_or_create_group(
+                actor_email
+            )
             schedule.subject = session["subject"]
             schedule.classroom = classroom_by_session[idx]
             schedule.updated_by = actor_email

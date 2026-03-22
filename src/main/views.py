@@ -11,4 +11,3 @@ def schedule_generator(request):
 
 def manual_change(request):
     return render(request, "main/manual_change.html")
-
