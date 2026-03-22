@@ -70,9 +70,14 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         return self.client.post(reverse("schedule-generate"), {}, format="json")
 
     def assert_generate_bad_request_with_detail(self, response, detail_snippet):
+        del detail_snippet
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
-        self.assertIn(detail_snippet, response.data["detail"])
+        self.assertEqual(
+            response.data["detail"],
+            "Unable to generate schedule with the current input constraints.",
+        )
+        self.assertEqual(response.data.get("error_code"), "schedule_generation_failed")
 
     def create_schedule(
         self,
@@ -168,6 +173,15 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("end_time", response.data)
+
+    def test_reject_whitespace_only_name(self):
+        payload = self.build_payload()
+        payload["name"] = "    "
+
+        response = self.client.post(reverse("schedule-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("name", response.data)
 
     def test_reject_empty_users(self):
         payload = self.build_payload()
@@ -406,6 +420,56 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
 
+    def test_save_generated_rejects_whitespace_only_timetable_name(self):
+        start_time = timezone.now() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        schedule = self.create_schedule(
+            name="Auto Session 1",
+            start_time=start_time,
+            end_time=end_time,
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+
+        response = self.client.post(
+            reverse("schedule-save-generated"),
+            {
+                "timetable_name": "   ",
+                "schedule_ids": [schedule.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("timetable_name", response.data)
+
+    def test_save_generated_rejects_duplicate_schedule_ids(self):
+        start_time = timezone.now() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        schedule = self.create_schedule(
+            name="Auto Session 1",
+            start_time=start_time,
+            end_time=end_time,
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+
+        response = self.client.post(
+            reverse("schedule-save-generated"),
+            {
+                "timetable_name": "Horario Duplicado",
+                "schedule_ids": [schedule.id, schedule.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("schedule_ids", response.data)
+
     def test_saved_endpoint_returns_only_saved_schedules_for_current_user(self):
         start_time = timezone.now() + timedelta(days=1)
         end_time = start_time + timedelta(hours=1)
@@ -464,6 +528,28 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             response,
             "exceeds max weekly hours",
         )
+
+    def test_apply_manual_change_rejects_negative_slot_index(self):
+        saved_observation = "Saved timetable: Horario Manual Test"
+        schedule_to_move = self.create_schedule(
+            name="Horario Manual Test",
+            observations=saved_observation,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+
+        response = self.client.post(
+            reverse("schedule-apply-manual-change"),
+            {
+                "schedule_id": schedule_to_move.id,
+                "new_slot_index": -1,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("new_slot_index", response.data)
 
     def test_generate_rejects_teacher_over_max_with_multiple_subjects(self):
         group_2 = Group.objects.create(name="2B", stage=EducationalStage.PRIMARY)
@@ -745,12 +831,12 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
     )
     def test_generate_minimizes_teacher_intraday_gaps(self):
         """F-29: solver should prefer compact schedules over fragmented ones."""
-        # Allow only 3 Monday slots: position 0 (08:30) and positions 4-5 (13:00, 14:00).
+        # For PRIMARY stage, allow only 3 Monday slots: 09:00, 12:00 and 13:00.
         # With weekly_hours=2 the solver must pick exactly 2 of those 3 slots.
-        # Compact choice (pos 4 + pos 5) yields 0 internal gaps, while any pair
-        # that includes pos 0 creates 3-4 internal gaps → F-29 should avoid it.
+        # Compact choice (12:00 + 13:00) yields 0 internal gaps, while any pair
+        # that includes 09:00 creates an internal gap -> F-29 should avoid it.
         slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
-        allowed = {"MON_08:30", "MON_13:00", "MON_14:00"}
+        allowed = {"MON_09:00", "MON_12:00", "MON_13:00"}
         self.teacher.time_preferences = {
             key: TeacherTimePreferenceState.UNAVAILABLE
             for key in slot_pref_index.values()
@@ -768,11 +854,11 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             slot_preference_key_from_datetime(slot=s.start_time) for s in schedules
         }
         self.assertEqual(len(assigned_keys), 2)
-        # The compact pair should win; MON_08:30 (far from 13:00/14:00) must not appear.
+        # The compact pair should win; MON_09:00 (far from 12:00/13:00) must not appear.
         self.assertNotIn(
-            "MON_08:30",
+            "MON_09:00",
             assigned_keys,
-            "Expected compact assignment (MON_13:00 + MON_14:00) but got a fragmented one.",
+            "Expected compact assignment (MON_12:00 + MON_13:00) but got a fragmented one.",
         )
 
     def test_generate_rejects_group_intraday_gaps(self):

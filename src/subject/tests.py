@@ -166,3 +166,81 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("group", response.data)
+
+    def test_reject_whitespace_only_name(self):
+        payload = {
+            "name": "   ",
+            "weekly_hours": 3,
+            "stage": EducationalStage.SECONDARY,
+            "type": SubjectType.NORMAL,
+            "teacher": self.teacher.id,
+            "group": self.group.id,
+        }
+
+        response = self.client.post(reverse("subject-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("name", response.data)
+
+    def test_normalize_optional_text_fields(self):
+        payload = {
+            "name": "Biology",
+            "weekly_hours": 3,
+            "preferred_time_slot": "  Morning  ",
+            "required_classroom_type": "  LAB  ",
+            "stage": EducationalStage.SECONDARY,
+            "type": SubjectType.NORMAL,
+            "teacher": self.teacher.id,
+            "group": self.group.id,
+        }
+
+        response = self.client.post(reverse("subject-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["preferred_time_slot"], "Morning")
+        self.assertEqual(response.data["required_classroom_type"], "LAB")
+
+    def test_reject_case_insensitive_duplicate_name(self):
+        Subject.objects.create(
+            name="Historia",
+            weekly_hours=3,
+            duration=1.0,
+            stage=EducationalStage.SECONDARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=self.group,
+        )
+
+        payload = {
+            "name": "historia",
+            "weekly_hours": 2,
+            "stage": EducationalStage.SECONDARY,
+            "type": SubjectType.NORMAL,
+            "teacher": self.teacher.id,
+            "group": self.group.id,
+        }
+
+        response = self.client.post(reverse("subject-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("name", response.data)
+
+    def test_allow_same_name_as_teacher_in_different_entity(self):
+        teacher_named_pedro = Teacher.objects.create(
+            name="Pedro",
+            max_weekly_hours=20,
+            working_hours=10,
+        )
+
+        payload = {
+            "name": "Pedro",
+            "weekly_hours": 2,
+            "stage": EducationalStage.SECONDARY,
+            "type": SubjectType.NORMAL,
+            "teacher": teacher_named_pedro.id,
+            "group": self.group.id,
+        }
+
+        response = self.client.post(reverse("subject-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)

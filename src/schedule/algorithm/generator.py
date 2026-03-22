@@ -176,9 +176,14 @@ class ScheduleReplanner:
         Returns:
             List of newly created Schedules
         """
-        schedule_to_move = Schedule.objects.select_related(
-            "teacher", "classroom", "group", "subject"
-        ).get(id=schedule_to_move_id, users=user)
+        try:
+            schedule_to_move = Schedule.objects.select_related(
+                "teacher", "classroom", "group", "subject"
+            ).get(id=schedule_to_move_id, users=user)
+        except Schedule.DoesNotExist as exc:
+            raise ScheduleGenerationError(
+                "The selected schedule was not found for the current user."
+            ) from exc
 
         timetable_schedules = list(
             cls._fetch_timetable_schedules(user=user, anchor_schedule=schedule_to_move)

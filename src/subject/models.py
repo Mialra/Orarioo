@@ -1,5 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import UniqueConstraint
+from django.db.models.functions import Lower
 
 from auditableEntity.models import AuditableEntity
 
@@ -60,6 +62,12 @@ class Subject(AuditableEntity):
     class Meta:
         db_table = "subject"
         ordering = ["name", "id"]
+        constraints = [
+            UniqueConstraint(
+                Lower("name"),
+                name="subject_name_ci_unique",
+            )
+        ]
 
     def clean(self):
         if self.duration <= 0:

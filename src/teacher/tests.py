@@ -81,3 +81,20 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("working_hours", response.data)
+
+    def test_reject_case_insensitive_duplicate_name(self):
+        Teacher.objects.create(
+            name="Pedro",
+            max_weekly_hours=20,
+            working_hours=10,
+        )
+
+        payload = {
+            "name": "pedro",
+            "max_weekly_hours": 18,
+            "working_hours": 8,
+        }
+        response = self.client.post(reverse("teacher-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("name", response.data)
