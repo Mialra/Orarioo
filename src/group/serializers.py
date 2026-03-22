@@ -2,9 +2,12 @@ from rest_framework import serializers
 
 from common.serializer_utils import AUDIT_FIELD_NAMES
 from group.models import Group
+from namedEntity.serializers import NamedEntityNameValidationMixin
 
 
-class GroupSerializer(serializers.ModelSerializer):
+class GroupSerializer(NamedEntityNameValidationMixin, serializers.ModelSerializer):
+    enforce_case_insensitive_unique_name = True
+
     stage_display = serializers.SerializerMethodField()
 
     class Meta:

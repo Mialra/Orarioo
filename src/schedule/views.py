@@ -14,11 +14,13 @@ from user.models import User
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 
 class ScheduleViewSet(AuditableModelViewSet):
     """CRUD API for schedules."""
+
+    GENERATION_FAILED_DETAIL = (
+        "Unable to generate schedule with the current input constraints."
+    )
 
     queryset = Schedule.objects.all().select_related(
         "teacher", "classroom", "group", "subject"
@@ -46,8 +48,16 @@ class ScheduleViewSet(AuditableModelViewSet):
                 random_seed=generation_seed,
             )
         except ScheduleGenerationError as exc:
+            logger.warning(
+                "Schedule generation rejected: actor=%s, reason=%s",
+                actor,
+                exc,
+            )
             return Response(
-                {"detail": str(exc)},
+                {
+                    "detail": self.GENERATION_FAILED_DETAIL,
+                    "error_code": "schedule_generation_failed",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         serialized = self.get_serializer(schedules, many=True)
@@ -93,12 +103,26 @@ class ScheduleViewSet(AuditableModelViewSet):
             )
 
         try:
-            return [int(value) for value in raw_values], None
+            normalized_values = [int(value) for value in raw_values]
         except (TypeError, ValueError):
             return None, Response(
                 {"detail": f"{field_name} must contain integer values."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        if any(value <= 0 for value in normalized_values):
+            return None, Response(
+                {field_name: f"{field_name} must contain positive integer values."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(set(normalized_values)) != len(normalized_values):
+            return None, Response(
+                {field_name: f"{field_name} cannot contain duplicated values."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return normalized_values, None
 
     @staticmethod
     def _ensure_request_user_in_user_ids(request_user_id, normalized_user_ids):
@@ -160,7 +184,7 @@ class ScheduleViewSet(AuditableModelViewSet):
 
         if not timetable_name:
             return Response(
-                {"detail": "timetable_name is required."},
+                {"timetable_name": "timetable_name is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -241,6 +265,18 @@ class ScheduleViewSet(AuditableModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if schedule_id <= 0:
+            return Response(
+                {"schedule_id": "schedule_id must be a positive integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if new_slot_index < 0:
+            return Response(
+                {"new_slot_index": "new_slot_index must be zero or greater."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             new_schedules = ScheduleReplanner.replan_with_manual_change(
                 user=request.user,
@@ -249,7 +285,7 @@ class ScheduleViewSet(AuditableModelViewSet):
                 actor_email=actor,
             )
         except ScheduleGenerationError:
-            logger.exception(
+            logger.warning(
                 "ScheduleGenerationError while applying manual change: "
                 "schedule_id=%s, new_slot_index=%s, actor=%s",
                 schedule_id,
