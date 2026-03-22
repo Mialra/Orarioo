@@ -5,7 +5,6 @@ from schedule.algorithm.slots import (
     build_slot_preference_index,
     build_stage_allowed_slot_index,
     session_stage_code,
-    slot_overlaps,
     slot_time_bounds,
 )
 from subject.models import SubjectTimePreferenceState
@@ -216,7 +215,9 @@ def add_group_no_intraday_gap_constraints(*, model, x, sessions, slots):
         )
         for day_idx, day_slot_list in slots_by_day.items():
             filtered_day_slots = [
-                slot_idx for slot_idx in day_slot_list if slot_idx in stage_allowed_slots
+                slot_idx
+                for slot_idx in day_slot_list
+                if slot_idx in stage_allowed_slots
             ]
             if len(filtered_day_slots) < 3:
                 continue

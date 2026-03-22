@@ -366,42 +366,71 @@ def _add_classroom_non_overlap_constraints(*, model, y, slots, classrooms):
 def _add_resource_interval_non_overlap_constraints(
     *, model, x, sessions, slots, resource_key
 ):
+    resource_to_sessions = _index_sessions_by_resource(
+        sessions=sessions,
+        resource_key=resource_key,
+    )
+    overlapping_slot_pairs = _build_overlapping_slot_pairs(slots=slots)
+
+    for resource_sessions in resource_to_sessions.values():
+        _add_resource_pair_constraints(
+            model=model,
+            x=x,
+            resource_sessions=resource_sessions,
+            overlapping_slot_pairs=overlapping_slot_pairs,
+        )
+
+
+def _index_sessions_by_resource(*, sessions, resource_key):
     resource_to_sessions = {}
     for idx, session in enumerate(sessions):
-        if resource_key == "group_id":
-            group = session.get("group")
-            resource_id = getattr(group, "id", None)
-        else:
-            resource_id = session.get(resource_key)
+        resource_id = _session_resource_id(session=session, resource_key=resource_key)
         if resource_id is None:
             continue
         resource_to_sessions.setdefault(resource_id, []).append(idx)
+    return resource_to_sessions
 
+
+def _session_resource_id(*, session, resource_key):
+    if resource_key == "group_id":
+        group = session.get("group")
+        return getattr(group, "id", None)
+    return session.get(resource_key)
+
+
+def _build_overlapping_slot_pairs(*, slots):
     overlapping_slot_pairs = []
     slot_count = len(slots)
     for left_idx in range(slot_count):
         for right_idx in range(left_idx, slot_count):
             if slot_overlaps(left_slot=slots[left_idx], right_slot=slots[right_idx]):
                 overlapping_slot_pairs.append((left_idx, right_idx))
+    return overlapping_slot_pairs
 
-    for resource_sessions in resource_to_sessions.values():
-        for first_pos, first_session in enumerate(resource_sessions):
-            for second_session in resource_sessions[first_pos + 1 :]:
-                for left_idx, right_idx in overlapping_slot_pairs:
-                    if left_idx == right_idx:
-                        model.Add(
-                            x[(first_session, left_idx)] + x[(second_session, right_idx)]
-                            <= 1
-                        )
-                    else:
-                        model.Add(
-                            x[(first_session, left_idx)] + x[(second_session, right_idx)]
-                            <= 1
-                        )
-                        model.Add(
-                            x[(first_session, right_idx)] + x[(second_session, left_idx)]
-                            <= 1
-                        )
+
+def _add_resource_pair_constraints(
+    *, model, x, resource_sessions, overlapping_slot_pairs
+):
+    for first_pos, first_session in enumerate(resource_sessions):
+        for second_session in resource_sessions[first_pos + 1 :]:
+            _add_session_pair_overlap_constraints(
+                model=model,
+                x=x,
+                first_session=first_session,
+                second_session=second_session,
+                overlapping_slot_pairs=overlapping_slot_pairs,
+            )
+
+
+def _add_session_pair_overlap_constraints(
+    *, model, x, first_session, second_session, overlapping_slot_pairs
+):
+    for left_idx, right_idx in overlapping_slot_pairs:
+        model.Add(x[(first_session, left_idx)] + x[(second_session, right_idx)] <= 1)
+        if left_idx != right_idx:
+            model.Add(
+                x[(first_session, right_idx)] + x[(second_session, left_idx)] <= 1
+            )
 
 
 def _extract_slot_and_classroom_assignment(

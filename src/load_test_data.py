@@ -11,7 +11,6 @@ Dataset target:
 
 import os
 import sys
-from datetime import datetime, timedelta
 
 # Add the src directory to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -25,12 +24,12 @@ django.setup()
 
 # NOTE: These imports must come after django.setup() - ignore E402
 from django.contrib.auth import get_user_model  # noqa: E402
-from django.utils import timezone  # noqa: E402
 
 from classroom.models import Classroom  # noqa: E402
 from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
 from group.models import Group  # noqa: E402
-from schedule.algorithm.slots import build_weekly_slots, session_stage_code  # noqa: E402
+from schedule.algorithm.slots import build_weekly_slots  # noqa: E402
+from schedule.algorithm.slots import session_stage_code  # noqa: E402
 from schedule.constants import SAVED_TIMETABLE_PREFIX  # noqa: E402
 from schedule.models import Schedule  # noqa: E402
 from subject.models import EducationalStage  # noqa: E402
@@ -807,13 +806,19 @@ def create_admin_saved_timetable(*, users):
     }
     stage_slot_indices = {
         "PRESCHOOL": [
-            idx for idx, slot in enumerate(stage_slots) if slot.get("stage") == "PRESCHOOL"
+            idx
+            for idx, slot in enumerate(stage_slots)
+            if slot.get("stage") == "PRESCHOOL"
         ],
         "PRIMARY": [
-            idx for idx, slot in enumerate(stage_slots) if slot.get("stage") == "PRIMARY"
+            idx
+            for idx, slot in enumerate(stage_slots)
+            if slot.get("stage") == "PRIMARY"
         ],
         "SECONDARY": [
-            idx for idx, slot in enumerate(stage_slots) if slot.get("stage") == "SECONDARY"
+            idx
+            for idx, slot in enumerate(stage_slots)
+            if slot.get("stage") == "SECONDARY"
         ],
     }
 

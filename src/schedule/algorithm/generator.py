@@ -1,5 +1,4 @@
 import random
-from datetime import timedelta
 
 from django.db import transaction
 
@@ -9,9 +8,9 @@ from schedule.algorithm.assignment import solve_session_assignment
 from schedule.algorithm.constraints import validate_group_and_teacher_capacity
 from schedule.algorithm.errors import ScheduleGenerationError
 from schedule.algorithm.slots import (
+    build_weekly_slots,
     session_stage_code,
     slot_instance_key,
-    build_weekly_slots,
 )
 from schedule.constants import AUTO_GENERATED_OBSERVATION
 from schedule.models import Schedule
@@ -191,8 +190,7 @@ class ScheduleReplanner:
         classrooms = cls._build_classroom_pool(fallback_classroom=fallback_classroom)
         slots = build_weekly_slots()
         slot_index_by_key = {
-            slot_instance_key(slot=slot): idx
-            for idx, slot in enumerate(slots)
+            slot_instance_key(slot=slot): idx for idx, slot in enumerate(slots)
         }
 
         if new_slot_index < 0 or new_slot_index >= len(slots):

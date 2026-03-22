@@ -345,6 +345,49 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertTrue(schedule.users.filter(id=self.user.id).exists())
         self.assertTrue(schedule.users.filter(id=self.other_user.id).exists())
 
+    def test_apply_manual_change_replans_saved_timetable(self):
+        slots = build_weekly_slots()
+        primary_slots = [slot for slot in slots if slot.get("stage") == "PRIMARY"]
+        self.assertGreaterEqual(len(primary_slots), 3)
+
+        saved_observation = "Saved timetable: Horario Manual Test"
+        schedule_to_move = self.create_schedule(
+            name="Horario Manual Test",
+            start_time=primary_slots[0]["start"],
+            end_time=primary_slots[0]["end"],
+            observations=saved_observation,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+        self.create_schedule(
+            name="Horario Manual Test",
+            start_time=primary_slots[1]["start"],
+            end_time=primary_slots[1]["end"],
+            observations=saved_observation,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+
+        target_slot_index = slots.index(primary_slots[2])
+
+        response = self.client.post(
+            reverse("schedule-apply-manual-change"),
+            {
+                "schedule_id": schedule_to_move.id,
+                "new_slot_index": target_slot_index,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("schedules", response.data)
+
+        schedule_to_move.refresh_from_db()
+        self.assertEqual(schedule_to_move.start_time, primary_slots[2]["start"])
+        self.assertEqual(schedule_to_move.end_time, primary_slots[2]["end"])
+
     def test_save_generated_rejects_non_auto_generated_sessions(self):
         schedule = self.create_schedule()
         schedule.created_by = self.user.email

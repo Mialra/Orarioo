@@ -157,7 +157,9 @@ def slot_instance_key(*, slot):
 
 
 def build_slot_instance_index(*, slots):
-    return {slot_idx: slot_instance_key(slot=slot) for slot_idx, slot in enumerate(slots)}
+    return {
+        slot_idx: slot_instance_key(slot=slot) for slot_idx, slot in enumerate(slots)
+    }
 
 
 def build_stage_allowed_slot_index(*, slots):
