@@ -1,5 +1,6 @@
 import logging
 import random
+import logging
 
 from rest_framework import status
 from rest_framework.response import Response
@@ -11,6 +12,8 @@ from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFI
 from schedule.models import Schedule
 from schedule.serializers import ScheduleSerializer
 from user.models import User
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
