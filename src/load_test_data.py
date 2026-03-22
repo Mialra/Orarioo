@@ -11,6 +11,7 @@ Dataset target:
 
 import os
 import sys
+from datetime import datetime, timedelta
 
 # Add the src directory to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -24,11 +25,13 @@ django.setup()
 
 # NOTE: These imports must come after django.setup() - ignore E402
 from django.contrib.auth import get_user_model  # noqa: E402
+from django.utils import timezone  # noqa: E402
 
 from classroom.models import Classroom  # noqa: E402
 from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
 from group.models import Group  # noqa: E402
 from schedule.models import Schedule  # noqa: E402
+from schedule.constants import SAVED_TIMETABLE_PREFIX  # noqa: E402
 from subject.models import EducationalStage  # noqa: E402
 from subject.models import Subject  # noqa: E402
 from subject.models import SubjectTimePreferenceState  # noqa: E402
@@ -773,6 +776,77 @@ def create_subjects(teachers, groups):
     return subjects
 
 
+def create_admin_saved_timetable(*, users):
+    """Create one saved timetable owned by admin user for manual testing."""
+    print("\n🗓️ Creating saved timetable for admin...")
+
+    admin_user = next((user for user in users if user.email == "admin@test.com"), None)
+    if admin_user is None:
+        raise RuntimeError("Admin user not found while creating saved timetable.")
+
+    saved_name = "Horario demo admin"
+    saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {saved_name}"
+
+    # Build a deterministic small timetable to keep load_test_data fast.
+    subjects = list(Subject.objects.select_related("teacher", "group").order_by("id")[:12])
+    if not subjects:
+        raise RuntimeError("No subjects found while creating saved admin timetable.")
+
+    classrooms = list(Classroom.objects.order_by("id"))
+    if not classrooms:
+        raise RuntimeError("No classrooms found while creating saved admin timetable.")
+
+    # Monday of current week in local timezone as deterministic base.
+    now_local = timezone.localtime()
+    monday = (now_local - timedelta(days=now_local.weekday())).date()
+    hour_map = [8, 9, 10, 12, 13, 14]
+    minute_map = [30, 30, 30, 0, 0, 0]
+
+    created = []
+    for index, subject in enumerate(subjects):
+        day_offset = index // len(hour_map)
+        slot_idx = index % len(hour_map)
+        start_naive = datetime(
+            year=monday.year,
+            month=monday.month,
+            day=monday.day,
+            hour=hour_map[slot_idx],
+            minute=minute_map[slot_idx],
+        ) + timedelta(days=day_offset)
+        start_time = timezone.make_aware(start_naive, timezone.get_current_timezone())
+        end_time = start_time + timedelta(hours=1)
+
+        required_type = (subject.required_classroom_type or "").strip().casefold()
+        classroom = next(
+            (
+                room
+                for room in classrooms
+                if (room.classroom_type or "").strip().casefold() == required_type
+            ),
+            None,
+        )
+        if classroom is None:
+            classroom = classrooms[0]
+
+        schedule = Schedule.objects.create(
+            name=saved_name,
+            start_time=start_time,
+            end_time=end_time,
+            observations=saved_observation,
+            teacher=subject.teacher,
+            classroom=classroom,
+            group=subject.group,
+            subject=subject,
+            created_by=admin_user.email,
+            updated_by="system",
+        )
+        schedule.users.add(admin_user)
+        created.append(schedule)
+
+    print(f"  ✓ Created saved timetable for admin with {len(created)} sessions")
+    return created
+
+
 def main():
     """Main function to load all test data"""
     print("🚀 Starting test data load...")
@@ -787,6 +861,7 @@ def main():
         groups = create_groups()
         classrooms = create_classrooms()
         subjects = create_subjects(teachers, groups)
+        saved_admin_timetable = create_admin_saved_timetable(users=users)
         # schedules = create_schedules(teachers, subjects, classrooms, groups, users)
 
         print("\n" + "=" * 60)
@@ -797,6 +872,7 @@ def main():
         print(f"  • {len(subjects)} subjects created")
         print(f"  • {len(classrooms)} classrooms created")
         print(f"  • {len(groups)} groups created")
+        print(f"  • {len(saved_admin_timetable)} saved schedules for admin")
         # print(f"  • {len(schedules)} schedules created")
         print("\n🔑 Login credentials:")
         print("  Admin: admin@test.com / admin123")

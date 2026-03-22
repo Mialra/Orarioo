@@ -385,6 +385,25 @@
             border-left: 4px solid #667eea;
         }
 
+        .manual-change-box {
+            margin-top: 18px;
+            padding: 16px;
+            border: 1px solid #d9dfef;
+            border-radius: 8px;
+            background: #f8f9ff;
+        }
+
+        .manual-change-box h4 {
+            margin-bottom: 10px;
+            color: #2f3a66;
+        }
+
+        .manual-change-help {
+            margin-top: 8px;
+            color: #666;
+            font-size: 0.9em;
+        }
+
         .subject-preferences-panel {
             margin-top: 18px;
             border: 1px solid #d9dfef;
@@ -640,6 +659,31 @@
                     <select id="savedTimetableTeacherFilter" class="schedule-filter-select" disabled>
                         <option value="">Todos los profesores</option>
                     </select>
+                </div>
+                <div class="manual-change-box">
+                    <h4>🔁 Cambio Manual en Horario Guardado</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="savedManualSessionSelect">Clase a mover</label>
+                            <select id="savedManualSessionSelect" disabled>
+                                <option value="">Selecciona un horario guardado</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="savedManualSlotSelect">Nuevo slot</label>
+                            <select id="savedManualSlotSelect" disabled>
+                                <option value="">Selecciona destino</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="button-group" style="margin-top: 0;">
+                        <button class="btn-primary" id="applySavedManualChangeBtn" disabled>
+                            Aplicar Cambio Manual
+                        </button>
+                    </div>
+                    <p class="manual-change-help">
+                        Se mantiene este horario guardado y se reoptimiza con cambios mínimos, fijando la clase elegida en el slot seleccionado.
+                    </p>
                 </div>
                 <div id="savedTimetableOutput" class="table-container" style="display: none; margin-top: 20px;"></div>
             </div>
@@ -959,6 +1003,7 @@
             let currentUsers = [];
             let savedTimetableGroups = [];
             let selectedSavedTimetableIndex = null;
+            let selectedSavedTimetableName = null;
 
         // Utility Functions
         const showAlert = (type, message) => {
@@ -1214,6 +1259,93 @@
             teacherFilter.disabled = false;
         };
 
+        const buildWeeklySlotOptions = () => {
+            const dayCodes = ["MON", "TUE", "WED", "THU", "FRI"];
+            const dayLabels = {
+                MON: "Lunes",
+                TUE: "Martes",
+                WED: "Miércoles",
+                THU: "Jueves",
+                FRI: "Viernes",
+            };
+            const hours = ["08:30", "09:30", "10:30", "12:00", "13:00", "14:00"];
+            const options = [];
+
+            for (let d = 0; d < dayCodes.length; d += 1) {
+                for (let h = 0; h < hours.length; h += 1) {
+                    options.push({
+                        value: d * hours.length + h,
+                        label: `${dayLabels[dayCodes[d]]} ${hours[h]}`,
+                    });
+                }
+            }
+
+            return options;
+        };
+
+        const getSlotIndexFromSchedule = (schedule) => {
+            const start = new Date(schedule.start_time);
+            const weekday = start.getDay();
+            const dayToIndex = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4 };
+            const dayIdx = dayToIndex[weekday];
+            if (dayIdx === undefined) {
+                return null;
+            }
+
+            const hour = String(start.getHours()).padStart(2, "0");
+            const minute = String(start.getMinutes()).padStart(2, "0");
+            const time = `${hour}:${minute}`;
+            const hours = ["08:30", "09:30", "10:30", "12:00", "13:00", "14:00"];
+            const hourIdx = hours.indexOf(time);
+            if (hourIdx < 0) {
+                return null;
+            }
+            return dayIdx * hours.length + hourIdx;
+        };
+
+        const renderSavedManualChangeControls = () => {
+            const sessionSelect = document.getElementById("savedManualSessionSelect");
+            const slotSelect = document.getElementById("savedManualSlotSelect");
+            const applyBtn = document.getElementById("applySavedManualChangeBtn");
+
+            const group =
+                selectedSavedTimetableIndex !== null
+                    ? savedTimetableGroups[selectedSavedTimetableIndex]
+                    : null;
+
+            if (!group) {
+                sessionSelect.innerHTML = '<option value="">Selecciona un horario guardado</option>';
+                slotSelect.innerHTML = '<option value="">Selecciona destino</option>';
+                sessionSelect.disabled = true;
+                slotSelect.disabled = true;
+                applyBtn.disabled = true;
+                return;
+            }
+
+            const sessions = getSelectedSavedTimetableSessions();
+            const slotOptions = buildWeeklySlotOptions();
+
+            sessionSelect.innerHTML =
+                '<option value="">Selecciona clase</option>' +
+                sessions
+                    .map((s) => {
+                        const currentSlot = getSlotIndexFromSchedule(s);
+                        const currentSlotText = currentSlot === null ? "slot desconocido" : `slot ${currentSlot}`;
+                        return `<option value="${s.id}">${s.subject_name || "Sin asignatura"} | ${s.group_name || "Sin grupo"} | ${currentSlotText}</option>`;
+                    })
+                    .join("");
+
+            slotSelect.innerHTML =
+                '<option value="">Selecciona destino</option>' +
+                slotOptions
+                    .map((o) => `<option value="${o.value}">${o.label} (slot ${o.value})</option>`)
+                    .join("");
+
+            sessionSelect.disabled = sessions.length === 0;
+            slotSelect.disabled = sessions.length === 0;
+            applyBtn.disabled = true;
+        };
+
         const clearSavedTimetableFilters = () => {
             const groupFilter = document.getElementById("savedTimetableGroupFilter");
             const teacherFilter = document.getElementById("savedTimetableTeacherFilter");
@@ -1300,6 +1432,7 @@
                 output.style.display = "none";
                 output.innerHTML = "";
                 clearSavedTimetableFilters();
+                renderSavedManualChangeControls();
                 return;
             }
 
@@ -1309,18 +1442,17 @@
                 output,
                 `Horario guardado: ${group.name}`
             );
+            renderSavedManualChangeControls();
         };
 
         const renderSavedSchedules = (schedules) => {
             savedTimetableGroups = buildSavedTimetableGroups(schedules);
             const tbody = document.getElementById("savedSchedulesList");
-            const selectedName =
-                selectedSavedTimetableIndex !== null
-                    ? savedTimetableGroups[selectedSavedTimetableIndex]?.name
-                    : null;
+            const selectedName = selectedSavedTimetableName;
 
             if (!savedTimetableGroups.length) {
                 selectedSavedTimetableIndex = null;
+                selectedSavedTimetableName = null;
                 renderSavedTimetablePreview();
                 tbody.innerHTML =
                     '<tr><td colspan="4" class="empty-state">No hay horarios guardados todavía</td></tr>';
@@ -1354,6 +1486,9 @@
                 selectedSavedTimetableIndex = 0;
             }
 
+            selectedSavedTimetableName =
+                savedTimetableGroups[selectedSavedTimetableIndex]?.name || null;
+
             const selectedGroup = savedTimetableGroups[selectedSavedTimetableIndex];
             if (selectedGroup) {
                 populateSavedTimetableFilters(selectedGroup.sessions);
@@ -1369,6 +1504,7 @@
             }
 
             selectedSavedTimetableIndex = index;
+            selectedSavedTimetableName = group.name;
             populateSavedTimetableFilters(group.sessions);
             renderSavedTimetablePreview();
         };
@@ -1398,6 +1534,7 @@
                 showAlert("success", "✓ Horario eliminado correctamente");
                 if (selectedSavedTimetableIndex === index) {
                     selectedSavedTimetableIndex = null;
+                    selectedSavedTimetableName = null;
                 }
             }
             loadAllData();
@@ -1683,6 +1820,54 @@
 
         document.getElementById("savedTimetableTeacherFilter").onchange = () => {
             renderSavedTimetablePreview();
+        };
+
+        document.getElementById("savedManualSessionSelect").onchange = () => {
+            const hasSession = !!document.getElementById("savedManualSessionSelect").value;
+            const hasSlot = !!document.getElementById("savedManualSlotSelect").value;
+            document.getElementById("applySavedManualChangeBtn").disabled = !(hasSession && hasSlot);
+        };
+
+        document.getElementById("savedManualSlotSelect").onchange = () => {
+            const hasSession = !!document.getElementById("savedManualSessionSelect").value;
+            const hasSlot = !!document.getElementById("savedManualSlotSelect").value;
+            document.getElementById("applySavedManualChangeBtn").disabled = !(hasSession && hasSlot);
+        };
+
+        document.getElementById("applySavedManualChangeBtn").onclick = async () => {
+            const scheduleIdRaw = document.getElementById("savedManualSessionSelect").value;
+            const newSlotRaw = document.getElementById("savedManualSlotSelect").value;
+
+            if (!scheduleIdRaw || !newSlotRaw) {
+                showAlert("error", "Selecciona clase y slot de destino.");
+                return;
+            }
+
+            const scheduleId = parseInt(scheduleIdRaw, 10);
+            const newSlotIndex = parseInt(newSlotRaw, 10);
+
+            if (Number.isNaN(scheduleId) || Number.isNaN(newSlotIndex)) {
+                showAlert("error", "Datos inválidos para aplicar el cambio manual.");
+                return;
+            }
+
+            const applyBtn = document.getElementById("applySavedManualChangeBtn");
+            applyBtn.disabled = true;
+
+            const result = await apiCall("/schedules/apply-manual-change/", "POST", {
+                schedule_id: scheduleId,
+                new_slot_index: newSlotIndex,
+            });
+
+            if (!result.ok) {
+                showAlert("error", result.data.detail || "No se pudo aplicar el cambio manual");
+                renderSavedManualChangeControls();
+                return;
+            }
+
+            showAlert("success", "✓ Cambio manual aplicado en horario guardado");
+            await loadAllData();
+            renderSavedManualChangeControls();
         };
 
         document.getElementById("refreshBtn").onclick = loadAllData;

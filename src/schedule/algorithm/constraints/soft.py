@@ -15,7 +15,7 @@ SUBJECT_DAY_SPREAD_WEIGHT = 3
 TEACHER_GAP_PENALTY_WEIGHT = 4
 
 
-def apply_soft_constraints(*, model, x, sessions, slots):
+def apply_soft_constraints(*, model, x, sessions, slots, extra_objective_terms=None):
     """Apply optional optimization goals without breaking hard constraints."""
     objective_terms = []
     objective_terms.extend(
@@ -35,6 +35,8 @@ def apply_soft_constraints(*, model, x, sessions, slots):
             model=model, x=x, sessions=sessions, slots=slots
         )
     )
+    if extra_objective_terms:
+        objective_terms.extend(extra_objective_terms)
 
     if objective_terms:
         model.Maximize(sum(objective_terms))

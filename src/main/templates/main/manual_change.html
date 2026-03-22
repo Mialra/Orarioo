@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orarioo - Cambios Manuales</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 40px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            border-left: 4px solid;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border-left-color: #28a745;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left-color: #dc3545;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left-color: #17a2b8;
+        }
+
+        .auth-panel {
+            background: white;
+            padding: 16px;
+            border-radius: 10px;
+            margin-bottom: 18px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .auth-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto auto;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .auth-grid input {
+            border: 1px solid #d9dee5;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 0.95em;
+        }
+
+        .auth-status {
+            font-size: 0.9em;
+            color: #444;
+            margin-top: 8px;
+        }
+
+        .auth-status.ok {
+            color: #1b7f3a;
+        }
+
+        .auth-status.error {
+            color: #b42318;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .panel {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .panel h2 {
+            font-size: 1.3em;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .schedule-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .schedule-item {
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .schedule-item:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .schedule-item.selected {
+            border-color: #667eea;
+            background: #f0f3ff;
+            font-weight: 500;
+        }
+
+        .schedule-item-title {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .schedule-item-details {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .slot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
+        .slot-btn {
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.3s;
+            text-align: center;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .slot-btn:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .slot-btn.selected {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .slot-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .slot-day {
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        .slot-time {
+            font-size: 0.8em;
+            opacity: 0.8;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #e9ecef;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #dee2e6;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 30px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .info-text {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                padding: 20px 25px;
+            }
+
+            .header h1 {
+                font-size: 1.5em;
+            }
+
+            .slot-grid {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Cambios Manuales en Horario</h1>
+            <p>Selecciona una clase y cámbiala a otro horario. El sistema replanificará automáticamente.</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="auth-panel">
+            <div class="auth-grid">
+                <input id="emailInput" type="email" placeholder="Email (ej: admin@test.com)" />
+                <input id="passwordInput" type="password" placeholder="Contraseña" />
+                <button class="btn-primary" onclick="login()">Entrar</button>
+                <button class="btn-secondary" onclick="logout()">Salir</button>
+            </div>
+            <div id="authStatus" class="auth-status">No autenticado</div>
+        </div>
+
+        <div class="content">
+            <!-- Sección de Clases Actuales -->
+            <div class="panel">
+                <h2>📅 Clases Actuales</h2>
+                <div id="scheduleList" class="schedule-list">
+                    <p style="color: #999; text-align: center;">Cargando clases...</p>
+                </div>
+            </div>
+
+            <!-- Sección de Selección de Nuevo Slot -->
+            <div class="panel">
+                <h2>🕐 Selecciona Nuevo Horario</h2>
+                <div id="selectionPanel" style="display: none;">
+                    <div class="form-group">
+                        <label>Clase Seleccionada:</label>
+                        <div id="selectedScheduleDisplay" style="padding: 12px; background: #f8f9ff; border-radius: 8px; color: #667eea; font-weight: 500;">
+                            Ninguna seleccionada
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Nuevos Horarios Disponibles:</label>
+                        <div id="slotGrid" class="slot-grid">
+                            <!-- Se llenará con JavaScript -->
+                        </div>
+                    </div>
+
+                    <div class="info-text" id="selectedSlotInfo" style="display: none;">
+                        ✓ Nuevo horario seleccionado:<br>
+                        <strong id="selectedSlotDisplay"></strong>
+                    </div>
+
+                    <div class="button-group">
+                        <button class="btn-primary" id="applyBtn" onclick="applyManualChange()" disabled>
+                            Aplicar Cambio
+                        </button>
+                        <button class="btn-secondary" onclick="resetSelection()">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+
+                <div id="emptyState" style="text-align: center; color: #999; padding: 40px 0;">
+                    <p>Selecciona una clase para comenzar</p>
+                </div>
+
+                <div id="loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Replanificando horario...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        const AUTH_STORAGE_KEY = 'orarioo_access_token';
+        let schedules = [];
+        let slots = [];
+        let selectedScheduleId = null;
+        let selectedSlotIndex = null;
+
+        // Configuración de días y horas (asume 30 slots = 5 días × 6 horas)
+        const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+        const HOURS = ['08:30', '09:30', '10:30', '11:30', '12:30', '13:30'];
+
+        function getStoredToken() {
+            return localStorage.getItem(AUTH_STORAGE_KEY) || '';
+        }
+
+        function setStoredToken(token) {
+            if (token) {
+                localStorage.setItem(AUTH_STORAGE_KEY, token);
+            } else {
+                localStorage.removeItem(AUTH_STORAGE_KEY);
+            }
+        }
+
+        function getAuthHeaders() {
+            const token = getStoredToken();
+            const headers = {};
+            if (token) {
+                headers.Authorization = `Bearer ${token}`;
+            }
+            return headers;
+        }
+
+        function renderAuthStatus(message, isError = false) {
+            const status = document.getElementById('authStatus');
+            status.textContent = message;
+            status.classList.remove('ok', 'error');
+            status.classList.add(isError ? 'error' : 'ok');
+        }
+
+        async function login() {
+            const email = document.getElementById('emailInput').value.trim();
+            const password = document.getElementById('passwordInput').value;
+
+            if (!email || !password) {
+                showAlert('Introduce email y contraseña', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/login/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password }),
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.access) {
+                    throw new Error(data.detail || 'No se pudo iniciar sesión');
+                }
+
+                setStoredToken(data.access);
+                renderAuthStatus(`Autenticado como ${email}`);
+                showAlert('Sesión iniciada correctamente', 'success');
+                await loadSchedules();
+            } catch (error) {
+                renderAuthStatus('Error de autenticación', true);
+                showAlert(`Error de login: ${error.message}`, 'error');
+            }
+        }
+
+        function logout() {
+            setStoredToken('');
+            schedules = [];
+            renderSchedules();
+            renderAuthStatus('No autenticado', true);
+            showAlert('Sesión cerrada', 'info');
+        }
+
+        async function loadSchedules() {
+            try {
+                const response = await fetch(`${API_BASE}/schedules/`, {
+                    headers: {
+                        ...getAuthHeaders(),
+                    },
+                });
+                if (response.status === 401) {
+                    throw new Error('401 Unauthorized. Inicia sesión para continuar.');
+                }
+                if (!response.ok) throw new Error('Error cargando schedules');
+                
+                const data = await response.json();
+                schedules = data.results || [];
+                
+                renderSchedules();
+            } catch (error) {
+                showAlert('Error cargando los horarios: ' + error.message, 'error');
+            }
+        }
+
+        async function generateSlots() {
+            // Generar slots teóricos (5 días × 6 horas = 30 slots)
+            // En un implementación real, obtendrías esto del backend
+            slots = [];
+            for (let dayIdx = 0; dayIdx < DAYS.length; dayIdx++) {
+                for (let hourIdx = 0; hourIdx < HOURS.length; hourIdx++) {
+                    slots.push({
+                        index: dayIdx * HOURS.length + hourIdx,
+                        day: DAYS[dayIdx],
+                        hour: HOURS[hourIdx]
+                    });
+                }
+            }
+        }
+
+        function renderSchedules() {
+            const container = document.getElementById('scheduleList');
+            
+            if (!schedules.length) {
+                container.innerHTML = '<p style="color: #999; text-align: center;">No hay clases disponibles</p>';
+                return;
+            }
+
+            container.innerHTML = schedules.map(schedule => `
+                <div class="schedule-item" onclick="selectSchedule(event, ${schedule.id}, '${escapeHtml(schedule.name)}')">
+                    <div class="schedule-item-title">${escapeHtml(schedule.name)}</div>
+                    <div class="schedule-item-details">
+                        👨‍🏫 ${schedule.teacher_name || 'N/A'}<br>
+                        📍 ${schedule.classroom_name || 'N/A'}<br>
+                        🕐 ${formatDateTime(schedule.start_time)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderSlots() {
+            const container = document.getElementById('slotGrid');
+            container.innerHTML = slots.map(slot => `
+                <button 
+                    class="slot-btn" 
+                    onclick="selectSlot(${slot.index}, '${slot.day}', '${slot.hour}')"
+                    id="slot-${slot.index}"
+                >
+                    <div class="slot-day">${slot.day}</div>
+                    <div class="slot-time">${slot.hour}</div>
+                </button>
+            `).join('');
+        }
+
+        function selectSchedule(event, scheduleId, name) {
+            // Actualizar selección visual
+            document.querySelectorAll('.schedule-item').forEach(el => {
+                el.classList.remove('selected');
+            });
+            event.target.closest('.schedule-item').classList.add('selected');
+
+            selectedScheduleId = scheduleId;
+            selectedSlotIndex = null;
+
+            // Mostrar panel de selección
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('selectionPanel').style.display = 'block';
+            document.getElementById('selectedScheduleDisplay').textContent = name;
+            document.getElementById('selectedSlotInfo').style.display = 'none';
+            document.getElementById('applyBtn').disabled = true;
+
+            // Limpiar selección de slots
+            document.querySelectorAll('.slot-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+        }
+
+        function selectSlot(slotIndex, day, hour) {
+            selectedSlotIndex = slotIndex;
+
+            // Actualizar visual de slots
+            document.querySelectorAll('.slot-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            document.getElementById(`slot-${slotIndex}`).classList.add('selected');
+
+            // Mostrar confirmación
+            document.getElementById('selectedSlotInfo').style.display = 'block';
+            document.getElementById('selectedSlotDisplay').textContent = `${day} ${hour}`;
+
+            // Habilitar botón de aplicar
+            document.getElementById('applyBtn').disabled = false;
+        }
+
+        function resetSelection() {
+            selectedScheduleId = null;
+            selectedSlotIndex = null;
+
+            document.getElementById('emptyState').style.display = 'block';
+            document.getElementById('selectionPanel').style.display = 'none';
+
+            document.querySelectorAll('.schedule-item').forEach(el => {
+                el.classList.remove('selected');
+            });
+            document.querySelectorAll('.slot-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+        }
+
+        async function applyManualChange() {
+            if (!selectedScheduleId || selectedSlotIndex === null) {
+                showAlert('Debes seleccionar una clase y un nuevo horario', 'error');
+                return;
+            }
+
+            document.getElementById('selectionPanel').style.display = 'none';
+            document.getElementById('loading').classList.add('show');
+
+            try {
+                const response = await fetch(`${API_BASE}/schedules/apply-manual-change/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders(),
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    body: JSON.stringify({
+                        schedule_id: selectedScheduleId,
+                        new_slot_index: selectedSlotIndex,
+                    }),
+                });
+
+                if (response.status === 401) {
+                    throw new Error('401 Unauthorized. Inicia sesión para aplicar cambios.');
+                }
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Error al reasignar');
+                }
+
+                const result = await response.json();
+                showAlert(`✓ Horario replanificado exitosamente con ${result.generated_count} clases`, 'success');
+                
+                // Recargar y resetear
+                document.getElementById('loading').classList.remove('show');
+                await loadSchedules();
+                resetSelection();
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'error');
+                document.getElementById('loading').classList.remove('show');
+                document.getElementById('selectionPanel').style.display = 'block';
+            }
+        }
+
+        function showAlert(message, type) {
+            const alertEl = document.getElementById('alert');
+            alertEl.textContent = message;
+            alertEl.className = `alert alert-${type} show`;
+            setTimeout(() => alertEl.classList.remove('show'), 5000);
+        }
+
+        function formatDateTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleDateString('es-ES') + ' ' + date.toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit'});
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Inicializar
+        window.addEventListener('load', async () => {
+            generateSlots();
+            renderSlots();
+            if (getStoredToken()) {
+                renderAuthStatus('Autenticado con token guardado');
+            } else {
+                renderAuthStatus('No autenticado', true);
+            }
+            await loadSchedules();
+        });
+    </script>
+</body>
+</html>

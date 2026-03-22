@@ -14,7 +14,15 @@ from schedule.algorithm.constraints import (
 from schedule.algorithm.errors import ScheduleGenerationError
 
 
-def solve_session_assignment(*, sessions, slots, classrooms, random_seed=None):
+def solve_session_assignment(
+    *,
+    sessions,
+    slots,
+    classrooms,
+    random_seed=None,
+    fixed_assignments=None,
+    previous_assignment_by_session=None,
+):
     if cp_model is None:  # pragma: no cover
         raise ScheduleGenerationError(
             "OR-Tools (cp_model) is required for schedule generation and is not available. "
@@ -31,11 +39,19 @@ def solve_session_assignment(*, sessions, slots, classrooms, random_seed=None):
         slots=slots,
         compatible_classrooms_by_session=compatible_classrooms_by_session,
         random_seed=random_seed,
+        fixed_assignments=fixed_assignments,
+        previous_assignment_by_session=previous_assignment_by_session,
     )
 
 
 def _cp_sat_session_assignment(
-    *, sessions, slots, compatible_classrooms_by_session, random_seed
+    *,
+    sessions,
+    slots,
+    compatible_classrooms_by_session,
+    random_seed,
+    fixed_assignments,
+    previous_assignment_by_session,
 ):
     model = cp_model.CpModel()
     session_count = len(sessions)
@@ -58,6 +74,15 @@ def _cp_sat_session_assignment(
         compatible_classrooms_by_session=compatible_classrooms_by_session,
         slot_count=slot_count,
     )
+    
+    # Apply fixed assignments (manual change constraints)
+    if fixed_assignments:
+        for session_idx, slot_idx in fixed_assignments.items():
+            if session_idx < 0 or session_idx >= session_count:
+                raise ScheduleGenerationError(f"Invalid session index: {session_idx}")
+            if slot_idx < 0 or slot_idx >= slot_count:
+                raise ScheduleGenerationError(f"Invalid slot index: {slot_idx}")
+            model.Add(x[(session_idx, slot_idx)] == 1)
     add_resource_non_overlap_constraints(
         model=model,
         x=x,
@@ -128,7 +153,18 @@ def _cp_sat_session_assignment(
         )
 
     # Phase 2: optimize soft constraints, starting from feasible solution.
-    apply_soft_constraints(model=model, x=x, sessions=sessions, slots=slots)
+    stability_terms = _build_schedule_stability_terms(
+        x=x,
+        y=y,
+        previous_assignment_by_session=previous_assignment_by_session,
+    )
+    apply_soft_constraints(
+        model=model,
+        x=x,
+        sessions=sessions,
+        slots=slots,
+        extra_objective_terms=stability_terms,
+    )
     _add_solution_hints(
         model=model,
         solver=feasible_solver,
@@ -342,6 +378,39 @@ def _build_compatible_classroom_index(*, sessions, classrooms):
             )
         compatible_classrooms_by_session[session_index] = compatible_classrooms
     return compatible_classrooms_by_session
+
+
+def _build_schedule_stability_terms(*, x, y, previous_assignment_by_session):
+    """
+    Build soft terms that reward keeping sessions in their original slot/classroom.
+
+    Higher reward on slot stability minimises timetable perturbation after a manual
+    change; classroom stability acts as a secondary tie-breaker.
+    """
+    if not previous_assignment_by_session:
+        return []
+
+    slot_stability_weight = 100
+    classroom_stability_weight = 20
+    weighted_terms = []
+
+    for s_idx, previous in previous_assignment_by_session.items():
+        slot_idx = previous.get("slot_index")
+        classroom_id = previous.get("classroom_id")
+
+        if slot_idx is not None and (s_idx, slot_idx) in x:
+            weighted_terms.append(slot_stability_weight * x[(s_idx, slot_idx)])
+
+        if (
+            slot_idx is not None
+            and classroom_id is not None
+            and (s_idx, slot_idx, classroom_id) in y
+        ):
+            weighted_terms.append(
+                classroom_stability_weight * y[(s_idx, slot_idx, classroom_id)]
+            )
+
+    return weighted_terms
 
 
 def _is_classroom_compatible(*, session, classroom):

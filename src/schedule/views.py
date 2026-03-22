@@ -5,6 +5,7 @@ from rest_framework.response import Response
 
 from common.drf import AuditableModelViewSet
 from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
+from schedule.algorithm.generator import ScheduleReplanner
 from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule
 from schedule.serializers import ScheduleSerializer
@@ -202,6 +203,67 @@ class ScheduleViewSet(AuditableModelViewSet):
                 "detail": "Generated schedules saved successfully.",
                 "saved_count": len(schedules),
                 "schedules": serialized.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def apply_manual_change(self, request):
+        """Apply a manual session-to-slot change and replan the entire schedule."""
+        actor = getattr(request.user, "email", "")
+
+        schedule_id = request.data.get("schedule_id")
+        new_slot_index = request.data.get("new_slot_index")
+
+        # Validate inputs
+        if schedule_id is None:
+            return Response(
+                {"detail": "schedule_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if new_slot_index is None:
+            return Response(
+                {"detail": "new_slot_index is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            schedule_id = int(schedule_id)
+            new_slot_index = int(new_slot_index)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "schedule_id and new_slot_index must be integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check if schedule exists and belongs to user
+        try:
+            schedule_to_move = Schedule.objects.get(id=schedule_id, users=request.user)
+        except Schedule.DoesNotExist:
+            return Response(
+                {"detail": f"Schedule with id {schedule_id} not found or not accessible."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            new_schedules = ScheduleReplanner.replan_with_manual_change(
+                user=request.user,
+                schedule_to_move_id=schedule_id,
+                new_slot_index=new_slot_index,
+                actor_email=actor,
+            )
+        except ScheduleGenerationError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serialized = self.get_serializer(new_schedules, many=True)
+        return Response(
+            {
+                "detail": "Schedule replanned with manual change successfully.",
+                "schedules": serialized.data,
+                "generated_count": len(serialized.data),
             },
             status=status.HTTP_200_OK,
         )
