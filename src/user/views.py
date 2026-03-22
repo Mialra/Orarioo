@@ -24,8 +24,7 @@ class IsAdministrator(permissions.BasePermission):
         return bool(
             request.user
             and request.user.is_authenticated
-            and request.user.role
-            in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECTOR]
+            and request.user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECTOR]
         )
 
 

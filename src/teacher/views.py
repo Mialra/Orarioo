@@ -1,5 +1,4 @@
 from common.drf import AuditableModelViewSet
-
 from teacher.models import Teacher
 from teacher.serializers import TeacherSerializer
 

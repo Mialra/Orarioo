@@ -1,7 +1,6 @@
-from common.drf import AuditableModelViewSet
-
 from classroom.models import Classroom
 from classroom.serializers import ClassroomSerializer
+from common.drf import AuditableModelViewSet
 
 
 class ClassroomViewSet(AuditableModelViewSet):

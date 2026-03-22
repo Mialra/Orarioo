@@ -1,5 +1,4 @@
 from common.drf import AuditableModelViewSet
-
 from group.models import Group
 from group.serializers import GroupSerializer
 

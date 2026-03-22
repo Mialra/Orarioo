@@ -1,5 +1,4 @@
 from common.drf import AuditableModelViewSet
-
 from subject.models import Subject
 from subject.serializers import SubjectSerializer
 

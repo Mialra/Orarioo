@@ -269,7 +269,12 @@ def create_teachers():
             20,
             build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])),
         ),
-        ("orientacion", "Laura Medina", 20, build_time_preferences(prefer_no=last_slot)),
+        (
+            "orientacion",
+            "Laura Medina",
+            20,
+            build_time_preferences(prefer_no=last_slot),
+        ),
     ]
 
     teachers = {}

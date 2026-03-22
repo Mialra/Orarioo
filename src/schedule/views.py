@@ -135,7 +135,9 @@ class ScheduleViewSet(AuditableModelViewSet):
         return schedules, None
 
     @staticmethod
-    def _persist_saved_schedules(*, schedules, timetable_name, actor_email, target_users):
+    def _persist_saved_schedules(
+        *, schedules, timetable_name, actor_email, target_users
+    ):
         saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
         for schedule in schedules:
             schedule.name = timetable_name
