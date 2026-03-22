@@ -1,7 +1,7 @@
 import logging
 import random
 
-from rest_framework import serializers, status
+from rest_framework import status
 from rest_framework.response import Response
 
 from common.drf import AuditableModelViewSet
@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 class ScheduleViewSet(AuditableModelViewSet):
     """CRUD API for schedules."""
 
+    GENERATION_FAILED_DETAIL = (
+        "Unable to generate schedule with the current input constraints."
+    )
+
     queryset = Schedule.objects.all().select_related(
         "teacher", "classroom", "group", "subject"
     )
@@ -32,8 +36,9 @@ class ScheduleViewSet(AuditableModelViewSet):
             try:
                 generation_seed = int(raw_seed)
             except (TypeError, ValueError):
-                raise serializers.ValidationError(
-                    {"seed": "seed must be an integer value."}
+                return Response(
+                    {"detail": "seed must be an integer value."},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
         try:
@@ -43,7 +48,18 @@ class ScheduleViewSet(AuditableModelViewSet):
                 random_seed=generation_seed,
             )
         except ScheduleGenerationError as exc:
-            raise serializers.ValidationError({"detail": str(exc)})
+            logger.warning(
+                "Schedule generation rejected: actor=%s, reason=%s",
+                actor,
+                exc,
+            )
+            return Response(
+                {
+                    "detail": self.GENERATION_FAILED_DETAIL,
+                    "error_code": "schedule_generation_failed",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         serialized = self.get_serializer(schedules, many=True)
         return Response(
             {
@@ -76,35 +92,37 @@ class ScheduleViewSet(AuditableModelViewSet):
         raw_values = payload.get(field_name) or []
         if field_name == "schedule_ids":
             if not isinstance(raw_values, list) or not raw_values:
-                raise serializers.ValidationError(
-                    {"schedule_ids": "schedule_ids must be a non-empty list."}
+                return None, Response(
+                    {"detail": "schedule_ids must be a non-empty list."},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
         elif not isinstance(raw_values, list):
-            raise serializers.ValidationError(
-                {field_name: f"{field_name} must be a list."}
+            return None, Response(
+                {"detail": f"{field_name} must be a list."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        normalized = []
-        for value in raw_values:
-            try:
-                int_value = int(value)
-            except (TypeError, ValueError) as exc:
-                raise serializers.ValidationError(
-                    {field_name: f"{field_name} must contain integer values."}
-                ) from exc
-
-            if int_value <= 0:
-                raise serializers.ValidationError(
-                    {field_name: f"{field_name} must contain positive integer values."}
-                )
-            normalized.append(int_value)
-
-        if len(set(normalized)) != len(normalized):
-            raise serializers.ValidationError(
-                {field_name: f"{field_name} cannot contain duplicated values."}
+        try:
+            normalized_values = [int(value) for value in raw_values]
+        except (TypeError, ValueError):
+            return None, Response(
+                {"detail": f"{field_name} must contain integer values."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return normalized
+        if any(value <= 0 for value in normalized_values):
+            return None, Response(
+                {field_name: f"{field_name} must contain positive integer values."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(set(normalized_values)) != len(normalized_values):
+            return None, Response(
+                {field_name: f"{field_name} cannot contain duplicated values."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return normalized_values, None
 
     @staticmethod
     def _ensure_request_user_in_user_ids(request_user_id, normalized_user_ids):
@@ -117,10 +135,11 @@ class ScheduleViewSet(AuditableModelViewSet):
         requested_ids = set(normalized_user_ids)
         target_users = list(User.objects.filter(id__in=requested_ids))
         if len(target_users) != len(requested_ids):
-            raise serializers.ValidationError(
-                {"user_ids": "Some user_ids do not exist."}
+            return None, Response(
+                {"detail": "Some user_ids do not exist."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        return target_users
+        return target_users, None
 
     @staticmethod
     def _fetch_eligible_schedules(normalized_ids, request_user, actor_email):
@@ -134,15 +153,16 @@ class ScheduleViewSet(AuditableModelViewSet):
             )
         )
         if len(schedules) != len(requested_ids):
-            raise serializers.ValidationError(
+            return None, Response(
                 {
                     "detail": (
                         "Some schedules were not found or are not eligible to be saved "
                         "(must belong to current user and be auto-generated)."
                     )
-                }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        return schedules
+        return schedules, None
 
     @staticmethod
     def _persist_saved_schedules(
@@ -163,40 +183,41 @@ class ScheduleViewSet(AuditableModelViewSet):
         timetable_name = (request.data.get("timetable_name") or "").strip()
 
         if not timetable_name:
-            raise serializers.ValidationError(
-                {"timetable_name": "timetable_name is required."}
-            )
-        if len(timetable_name) > 150:
-            raise serializers.ValidationError(
-                {
-                    "timetable_name": (
-                        "timetable_name cannot be longer than 150 characters."
-                    )
-                }
+            return Response(
+                {"timetable_name": "timetable_name is required."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        normalized_ids = self._parse_int_list(
+        normalized_ids, error_response = self._parse_int_list(
             request.data,
             "schedule_ids",
         )
+        if error_response is not None:
+            return error_response
 
-        normalized_user_ids = self._parse_int_list(
+        normalized_user_ids, error_response = self._parse_int_list(
             request.data,
             "user_ids",
         )
+        if error_response is not None:
+            return error_response
 
         normalized_user_ids = self._ensure_request_user_in_user_ids(
             request.user.id,
             normalized_user_ids,
         )
 
-        target_users = self._fetch_target_users(normalized_user_ids)
+        target_users, error_response = self._fetch_target_users(normalized_user_ids)
+        if error_response is not None:
+            return error_response
 
-        schedules = self._fetch_eligible_schedules(
+        schedules, error_response = self._fetch_eligible_schedules(
             normalized_ids,
             request.user,
             actor,
         )
+        if error_response is not None:
+            return error_response
 
         self._persist_saved_schedules(
             schedules=schedules,
@@ -224,32 +245,36 @@ class ScheduleViewSet(AuditableModelViewSet):
 
         # Validate inputs
         if schedule_id is None:
-            raise serializers.ValidationError(
-                {"schedule_id": "schedule_id is required."}
+            return Response(
+                {"detail": "schedule_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if new_slot_index is None:
-            raise serializers.ValidationError(
-                {"new_slot_index": "new_slot_index is required."}
+            return Response(
+                {"detail": "new_slot_index is required."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             schedule_id = int(schedule_id)
             new_slot_index = int(new_slot_index)
         except (TypeError, ValueError):
-            raise serializers.ValidationError(
-                {
-                    "detail": "schedule_id and new_slot_index must be integers.",
-                }
+            return Response(
+                {"detail": "schedule_id and new_slot_index must be integers."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if schedule_id <= 0:
-            raise serializers.ValidationError(
-                {"schedule_id": "schedule_id must be a positive integer."}
+            return Response(
+                {"schedule_id": "schedule_id must be a positive integer."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
+
         if new_slot_index < 0:
-            raise serializers.ValidationError(
-                {"new_slot_index": "new_slot_index must be zero or greater."}
+            return Response(
+                {"new_slot_index": "new_slot_index must be zero or greater."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
@@ -259,16 +284,18 @@ class ScheduleViewSet(AuditableModelViewSet):
                 new_slot_index=new_slot_index,
                 actor_email=actor,
             )
-        except ScheduleGenerationError as exc:
+        except ScheduleGenerationError:
             logger.warning(
-                "Manual schedule replan rejected: schedule_id=%s, new_slot_index=%s, "
-                "actor=%s, reason=%s",
+                "ScheduleGenerationError while applying manual change: "
+                "schedule_id=%s, new_slot_index=%s, actor=%s",
                 schedule_id,
                 new_slot_index,
                 actor,
-                exc,
             )
-            raise serializers.ValidationError({"detail": str(exc)})
+            return Response(
+                {"detail": "Failed to replan schedule with manual change."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         serialized = self.get_serializer(new_schedules, many=True)
         return Response(
