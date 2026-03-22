@@ -9,6 +9,7 @@ from schedule.algorithm.assignment import solve_session_assignment
 from schedule.algorithm.constraints import validate_group_and_teacher_capacity
 from schedule.algorithm.errors import ScheduleGenerationError
 from schedule.algorithm.slots import build_weekly_slots
+from schedule.constants import AUTO_GENERATED_OBSERVATION
 from schedule.models import Schedule
 from subject.models import Subject
 from teacher.models import Teacher
@@ -63,7 +64,7 @@ class BasicScheduleGenerator:
                 name=f"Auto {session['name']} {start_time:%Y-%m-%d %H:%M}",
                 start_time=start_time,
                 end_time=end_time,
-                observations="Auto-generated with CP-SAT basic constraints.",
+                observations=AUTO_GENERATED_OBSERVATION,
                 teacher=session["teacher"],
                 classroom=classroom_by_session[session_index],
                 group=session.get("group") or group,
@@ -82,7 +83,7 @@ class BasicScheduleGenerator:
         Schedule.objects.filter(
             users=user,
             created_by=actor_email,
-            observations="Auto-generated with CP-SAT basic constraints.",
+            observations=AUTO_GENERATED_OBSERVATION,
         ).delete()
 
     @staticmethod

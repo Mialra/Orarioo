@@ -1,19 +1,12 @@
 from django.urls import path
 
+from common.drf import build_crud_views
 from schedule.views import ScheduleViewSet
 
-schedule_list = ScheduleViewSet.as_view({"get": "list", "post": "create"})
+schedule_list, schedule_detail = build_crud_views(ScheduleViewSet)
 schedule_generate = ScheduleViewSet.as_view({"post": "generate"})
 schedule_saved = ScheduleViewSet.as_view({"get": "saved"})
 schedule_save_generated = ScheduleViewSet.as_view({"post": "save_generated"})
-schedule_detail = ScheduleViewSet.as_view(
-    {
-        "get": "retrieve",
-        "put": "update",
-        "patch": "partial_update",
-        "delete": "destroy",
-    }
-)
 
 urlpatterns = [
     path("schedules/", schedule_list, name="schedule-list"),

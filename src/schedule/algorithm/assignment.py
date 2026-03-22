@@ -1,5 +1,3 @@
-import random
-
 try:
     from ortools.sat.python import cp_model
 except ModuleNotFoundError:  # pragma: no cover - depends on local Python version
@@ -12,29 +10,22 @@ from schedule.algorithm.constraints import (
     add_subject_time_hard_constraints,
     add_teacher_time_hard_constraints,
     apply_soft_constraints,
-    group_daily_limit,
-    session_preference_state,
-    teacher_preference_state,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
-from schedule.algorithm.slots import build_slot_day_index, build_slot_preference_index
-from subject.models import SubjectTimePreferenceState
-from teacher.models import TeacherTimePreferenceState
 
 
 def solve_session_assignment(*, sessions, slots, classrooms, random_seed=None):
+    if cp_model is None:  # pragma: no cover
+        raise ScheduleGenerationError(
+            "OR-Tools (cp_model) is required for schedule generation and is not available. "
+            "Please install ortools: pip install ortools"
+        )
+
     compatible_classrooms_by_session = _build_compatible_classroom_index(
         sessions=sessions,
         classrooms=classrooms,
     )
-    rng = random.Random(random_seed)
-    if cp_model is None:
-        return _greedy_session_assignment(
-            sessions=sessions,
-            slots=slots,
-            compatible_classrooms_by_session=compatible_classrooms_by_session,
-            rng=rng,
-        )
+
     return _cp_sat_session_assignment(
         sessions=sessions,
         slots=slots,
@@ -112,28 +103,134 @@ def _cp_sat_session_assignment(
         slots=slots,
     )
 
-    apply_soft_constraints(model=model, x=x, sessions=sessions, slots=slots)
+    timeout_seconds = _cp_sat_timeout_seconds(
+        session_count=session_count,
+        slot_count=slot_count,
+    )
+    feasible_timeout = _phase_feasible_timeout(total_timeout=timeout_seconds)
+    optimization_timeout = max(1.0, timeout_seconds - feasible_timeout)
 
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 5.0
-    if random_seed is not None:
-        solver.parameters.random_seed = int(random_seed)
-        if hasattr(solver.parameters, "randomize_search"):
-            solver.parameters.randomize_search = True
-    status = solver.Solve(model)
-    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+    # Phase 1: find any feasible assignment with hard constraints only.
+    feasible_solver = _build_solver(
+        timeout_seconds=feasible_timeout,
+        random_seed=random_seed,
+        session_count=session_count,
+        slot_count=slot_count,
+        stop_after_first_solution=True,
+    )
+    feasible_status = feasible_solver.Solve(model)
+
+    if feasible_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         raise ScheduleGenerationError(
-            "Could not generate a feasible schedule with current basic constraints."
+            f"Could not generate a feasible schedule with current basic constraints. "
+            f"(Solver status: {_solver_status_name(feasible_status)}, "
+            f"timeout: {feasible_timeout}s, sessions: {session_count}, slots: {slot_count})"
         )
 
+    # Phase 2: optimize soft constraints, starting from feasible solution.
+    apply_soft_constraints(model=model, x=x, sessions=sessions, slots=slots)
+    _add_solution_hints(
+        model=model,
+        solver=feasible_solver,
+        x=x,
+        y=y,
+    )
+
+    optimization_solver = _build_solver(
+        timeout_seconds=optimization_timeout,
+        random_seed=random_seed,
+        session_count=session_count,
+        slot_count=slot_count,
+        stop_after_first_solution=False,
+    )
+    optimization_status = optimization_solver.Solve(model)
+
+    if optimization_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return _extract_slot_and_classroom_assignment(
+            solver=optimization_solver,
+            x=x,
+            y=y,
+            compatible_classrooms_by_session=compatible_classrooms_by_session,
+            session_count=session_count,
+            slot_count=slot_count,
+        )
+
+    # Fallback: keep feasible phase solution if optimization phase times out/fails.
     return _extract_slot_and_classroom_assignment(
-        solver=solver,
+        solver=feasible_solver,
         x=x,
         y=y,
         compatible_classrooms_by_session=compatible_classrooms_by_session,
         session_count=session_count,
         slot_count=slot_count,
     )
+
+
+def _build_solver(
+    *,
+    timeout_seconds,
+    random_seed,
+    session_count,
+    slot_count,
+    stop_after_first_solution,
+):
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = timeout_seconds
+    solver.parameters.log_search_progress = False
+    if random_seed is not None:
+        solver.parameters.random_seed = int(random_seed)
+    if hasattr(solver.parameters, "randomize_search"):
+        solver.parameters.randomize_search = True
+    if session_count >= 40 or slot_count >= 25:
+        solver.parameters.num_workers = 8
+    if stop_after_first_solution and hasattr(
+        solver.parameters, "stop_after_first_solution"
+    ):
+        solver.parameters.stop_after_first_solution = True
+    return solver
+
+
+def _add_solution_hints(*, model, solver, x, y):
+    for variable in x.values():
+        model.AddHint(variable, solver.Value(variable))
+    for variable in y.values():
+        model.AddHint(variable, solver.Value(variable))
+
+
+def _phase_feasible_timeout(*, total_timeout):
+    # Keep most of the budget for feasibility, but reserve some for soft optimization.
+    if total_timeout >= 120.0:
+        return total_timeout - 30.0
+    if total_timeout >= 60.0:
+        return total_timeout - 15.0
+    return max(5.0, min(total_timeout * 0.75, total_timeout - 1.0))
+
+
+def _cp_sat_timeout_seconds(*, session_count, slot_count):
+    """Calculate timeout based on subproblem size."""
+    if session_count >= 300 or slot_count >= 45:
+        return 600.0
+    if session_count >= 150 or slot_count >= 40:
+        return 300.0
+    if session_count >= 80 or slot_count >= 35:
+        return 180.0
+    if session_count >= 40 or slot_count >= 25:
+        return 120.0
+    if session_count >= 20 or slot_count >= 15:
+        return 60.0
+    return 30.0
+
+
+def _solver_status_name(status):
+    """Return human-readable solver status name."""
+    status_map = {
+        cp_model.UNKNOWN: "UNKNOWN",
+        cp_model.MODEL_INVALID: "MODEL_INVALID",
+        cp_model.FEASIBLE: "FEASIBLE",
+        cp_model.INFEASIBLE: "INFEASIBLE",
+        cp_model.OPTIMAL: "OPTIMAL",
+    }
+    return status_map.get(status, f"UNKNOWN_STATUS_{status}")
 
 
 def _build_classroom_slot_decision_variables(
@@ -226,408 +323,6 @@ def _extract_slot_and_classroom_assignment(
         classroom_by_session.append(selected_classroom)
 
     return slot_by_session, classroom_by_session
-
-
-def _greedy_session_assignment(
-    *, sessions, slots, compatible_classrooms_by_session, rng
-):
-    teacher_busy_slots = {}
-    teacher_day_slots = {}  # {teacher_id: {day_idx: set of slot positions within day}}
-    classroom_busy_slots = {}
-    group_busy_slots = {}
-    group_day_slots = {}  # {group_id: {day_idx: set of slot positions within day}}
-    group_daily_load = {}
-    subject_day_load = {}
-    day_index_by_slot = build_slot_day_index(slots=slots)
-    slot_preference_by_idx = build_slot_preference_index(slots=slots)
-
-    # Build slot_day_order: slot_idx → position (0-based) within its day.
-    slots_by_day_ordered = {}
-    for slot_idx, day_idx in day_index_by_slot.items():
-        slots_by_day_ordered.setdefault(day_idx, []).append(slot_idx)
-    slot_day_order = {}
-    for day_slot_list in slots_by_day_ordered.values():
-        for pos, slot_idx in enumerate(sorted(day_slot_list)):
-            slot_day_order[slot_idx] = pos
-
-    slot_by_session = []
-    classroom_by_session = []
-    slot_tie_break = {slot_idx: rng.random() for slot_idx in range(len(slots))}
-
-    for session_index, session in enumerate(sessions):
-        teacher_id, group_id, daily_limit, subj_id = _prepare_greedy_session_state(
-            session=session,
-            session_index=session_index,
-            compatible_classrooms_by_session=compatible_classrooms_by_session,
-            teacher_busy_slots=teacher_busy_slots,
-            teacher_day_slots=teacher_day_slots,
-            classroom_busy_slots=classroom_busy_slots,
-            group_busy_slots=group_busy_slots,
-            group_day_slots=group_day_slots,
-            group_daily_load=group_daily_load,
-            subject_day_load=subject_day_load,
-        )
-
-        sorted_slots = _ordered_greedy_slots(
-            slot_count=len(slots),
-            subj_id=subj_id,
-            subject_day_load=subject_day_load,
-            day_index_by_slot=day_index_by_slot,
-            group_id=group_id,
-            group_day_slots=group_day_slots,
-            teacher_id=teacher_id,
-            teacher_day_slots=teacher_day_slots,
-            slot_day_order=slot_day_order,
-            slot_tie_break=slot_tie_break,
-        )
-
-        selected_slot = None
-        selected_classroom = None
-        for p_idx in sorted_slots:
-            available_classroom = _pick_greedy_compatible_classroom(
-                session=session,
-                session_index=session_index,
-                slot_idx=p_idx,
-                compatible_classrooms_by_session=compatible_classrooms_by_session,
-                classroom_busy_slots=classroom_busy_slots,
-                teacher_id=teacher_id,
-                group_id=group_id,
-                daily_limit=daily_limit if group_id else None,
-                teacher_busy_slots=teacher_busy_slots,
-                group_busy_slots=group_busy_slots,
-                group_day_slots=group_day_slots,
-                group_daily_load=group_daily_load,
-                day_index_by_slot=day_index_by_slot,
-                slot_day_order=slot_day_order,
-                slot_preference_by_idx=slot_preference_by_idx,
-            )
-            if available_classroom is None:
-                continue
-            selected_slot = p_idx
-            selected_classroom = available_classroom
-            break
-
-        if selected_slot is None or selected_classroom is None:
-            raise ScheduleGenerationError(
-                "Could not generate a feasible schedule with current basic constraints."
-            )
-
-        slot_by_session.append(selected_slot)
-        classroom_by_session.append(selected_classroom)
-        _update_greedy_tracking(
-            selected_slot=selected_slot,
-            selected_classroom_id=selected_classroom.id,
-            teacher_id=teacher_id,
-            subj_id=subj_id,
-            group_id=group_id,
-            teacher_busy_slots=teacher_busy_slots,
-            teacher_day_slots=teacher_day_slots,
-            classroom_busy_slots=classroom_busy_slots,
-            subject_day_load=subject_day_load,
-            group_busy_slots=group_busy_slots,
-            group_day_slots=group_day_slots,
-            group_daily_load=group_daily_load,
-            day_index_by_slot=day_index_by_slot,
-            slot_day_order=slot_day_order,
-        )
-
-    return slot_by_session, classroom_by_session
-
-
-def _prepare_greedy_session_state(
-    *,
-    session,
-    session_index,
-    compatible_classrooms_by_session,
-    teacher_busy_slots,
-    teacher_day_slots,
-    classroom_busy_slots,
-    group_busy_slots,
-    group_day_slots,
-    group_daily_load,
-    subject_day_load,
-):
-    teacher_id = session["teacher_id"]
-    teacher_busy_slots.setdefault(teacher_id, set())
-    teacher_day_slots.setdefault(teacher_id, {})
-    for classroom in compatible_classrooms_by_session[session_index]:
-        classroom_busy_slots.setdefault(classroom.id, set())
-
-    group = session.get("group")
-    group_id = group.id if group else None
-    daily_limit = None
-    if group_id:
-        group_busy_slots.setdefault(group_id, set())
-        group_day_slots.setdefault(group_id, {})
-        group_daily_load.setdefault(group_id, {})
-        daily_limit = group_daily_limit(group)
-
-    subject = session.get("subject")
-    subj_id = subject.id if subject else None
-    if subj_id:
-        subject_day_load.setdefault(subj_id, {})
-
-    return teacher_id, group_id, daily_limit, subj_id
-
-
-def _ordered_greedy_slots(
-    *,
-    slot_count,
-    subj_id,
-    subject_day_load,
-    day_index_by_slot,
-    group_id,
-    group_day_slots,
-    teacher_id,
-    teacher_day_slots,
-    slot_day_order,
-    slot_tie_break,
-):
-    return sorted(
-        range(slot_count),
-        key=lambda p: (
-            (
-                0
-                if (
-                    subj_id is None
-                    or subject_day_load[subj_id].get(day_index_by_slot[p], 0) == 0
-                )
-                else 1
-            ),
-            _group_gap_score(
-                slot_idx=p,
-                group_id=group_id,
-                group_day_slots=group_day_slots,
-                day_index_by_slot=day_index_by_slot,
-                slot_day_order=slot_day_order,
-            ),
-            _teacher_gap_score(
-                slot_idx=p,
-                teacher_id=teacher_id,
-                teacher_day_slots=teacher_day_slots,
-                day_index_by_slot=day_index_by_slot,
-                slot_day_order=slot_day_order,
-            ),
-            slot_tie_break[p],
-        ),
-    )
-
-
-def _update_greedy_tracking(
-    *,
-    selected_slot,
-    selected_classroom_id,
-    teacher_id,
-    subj_id,
-    group_id,
-    teacher_busy_slots,
-    teacher_day_slots,
-    classroom_busy_slots,
-    subject_day_load,
-    group_busy_slots,
-    group_day_slots,
-    group_daily_load,
-    day_index_by_slot,
-    slot_day_order,
-):
-    teacher_busy_slots[teacher_id].add(selected_slot)
-    classroom_busy_slots[selected_classroom_id].add(selected_slot)
-    selected_day = day_index_by_slot[selected_slot]
-    teacher_day_slots[teacher_id].setdefault(selected_day, set()).add(
-        slot_day_order[selected_slot]
-    )
-    if subj_id:
-        subject_day_load[subj_id][selected_day] = (
-            subject_day_load[subj_id].get(selected_day, 0) + 1
-        )
-    if group_id:
-        group_day_slots[group_id].setdefault(selected_day, set()).add(
-            slot_day_order[selected_slot]
-        )
-        _mark_group_greedy_assignment(
-            selected_slot=selected_slot,
-            group_id=group_id,
-            group_busy_slots=group_busy_slots,
-            group_daily_load=group_daily_load,
-            day_index_by_slot=day_index_by_slot,
-        )
-
-
-def _is_greedy_slot_available(
-    *,
-    session,
-    slot_idx,
-    teacher_id,
-    group_id,
-    daily_limit,
-    teacher_busy_slots,
-    group_busy_slots,
-    group_day_slots,
-    group_daily_load,
-    day_index_by_slot,
-    slot_day_order,
-    slot_preference_by_idx,
-):
-    slot_key = slot_preference_by_idx.get(slot_idx)
-    if slot_key is not None:
-        teacher_slot_state = teacher_preference_state(
-            session=session,
-            slot_preference_key=slot_key,
-        )
-        if teacher_slot_state == TeacherTimePreferenceState.UNAVAILABLE:
-            return False
-
-        slot_state = session_preference_state(
-            session=session,
-            slot_preference_key=slot_key,
-        )
-        if slot_state == SubjectTimePreferenceState.UNAVAILABLE:
-            return False
-
-    if slot_idx in teacher_busy_slots[teacher_id]:
-        return False
-
-    if not group_id:
-        return True
-
-    if slot_idx in group_busy_slots[group_id]:
-        return False
-
-    day_idx = day_index_by_slot[slot_idx]
-    assigned_today = group_daily_load[group_id].get(day_idx, 0)
-    if daily_limit is not None and assigned_today >= daily_limit:
-        return False
-
-    if _would_create_group_intraday_gap(
-        slot_idx=slot_idx,
-        group_id=group_id,
-        group_day_slots=group_day_slots,
-        day_index_by_slot=day_index_by_slot,
-        slot_day_order=slot_day_order,
-    ):
-        return False
-
-    return True
-
-
-def _pick_greedy_compatible_classroom(
-    *,
-    session,
-    session_index,
-    slot_idx,
-    compatible_classrooms_by_session,
-    classroom_busy_slots,
-    teacher_id,
-    group_id,
-    daily_limit,
-    teacher_busy_slots,
-    group_busy_slots,
-    group_day_slots,
-    group_daily_load,
-    day_index_by_slot,
-    slot_day_order,
-    slot_preference_by_idx,
-):
-    if not _is_greedy_slot_available(
-        session=session,
-        slot_idx=slot_idx,
-        teacher_id=teacher_id,
-        group_id=group_id,
-        daily_limit=daily_limit,
-        teacher_busy_slots=teacher_busy_slots,
-        group_busy_slots=group_busy_slots,
-        group_day_slots=group_day_slots,
-        group_daily_load=group_daily_load,
-        day_index_by_slot=day_index_by_slot,
-        slot_day_order=slot_day_order,
-        slot_preference_by_idx=slot_preference_by_idx,
-    ):
-        return None
-
-    for classroom in compatible_classrooms_by_session[session_index]:
-        if slot_idx not in classroom_busy_slots[classroom.id]:
-            return classroom
-    return None
-
-
-def _mark_group_greedy_assignment(
-    *,
-    selected_slot,
-    group_id,
-    group_busy_slots,
-    group_daily_load,
-    day_index_by_slot,
-):
-    group_busy_slots[group_id].add(selected_slot)
-    selected_day = day_index_by_slot[selected_slot]
-    group_daily_load[group_id][selected_day] = (
-        group_daily_load[group_id].get(selected_day, 0) + 1
-    )
-
-
-def _teacher_gap_score(
-    *,
-    slot_idx,
-    teacher_id,
-    teacher_day_slots,
-    day_index_by_slot,
-    slot_day_order,
-):
-    """
-    Return the number of intra-day gaps that would exist if this slot were
-    added to the teacher's already-assigned slots on the same day (F-29).
-
-    A gap is any day-position between the earliest and latest assigned
-    positions that has no session. Zero means no fragmentation.
-    """
-    day_idx = day_index_by_slot[slot_idx]
-    existing_positions = teacher_day_slots.get(teacher_id, {}).get(day_idx, set())
-    if not existing_positions:
-        return 0
-    new_pos = slot_day_order[slot_idx]
-    all_positions = sorted(existing_positions | {new_pos})
-    span = all_positions[-1] - all_positions[0]
-    return span - (len(all_positions) - 1)
-
-
-def _group_gap_score(
-    *,
-    slot_idx,
-    group_id,
-    group_day_slots,
-    day_index_by_slot,
-    slot_day_order,
-):
-    """Heuristic score for building contiguous group blocks under hard F-30."""
-    if not group_id:
-        return 0
-
-    day_idx = day_index_by_slot[slot_idx]
-    existing_positions = group_day_slots.get(group_id, {}).get(day_idx, set())
-    if not existing_positions:
-        last_pos = max(slot_day_order.values()) if slot_day_order else 0
-        return abs(slot_day_order[slot_idx] - (last_pos / 2))
-
-    new_pos = slot_day_order[slot_idx]
-    all_positions = sorted(existing_positions | {new_pos})
-    span = all_positions[-1] - all_positions[0]
-    return span - (len(all_positions) - 1)
-
-
-def _would_create_group_intraday_gap(
-    *, slot_idx, group_id, group_day_slots, day_index_by_slot, slot_day_order
-):
-    if not group_id:
-        return False
-
-    day_idx = day_index_by_slot[slot_idx]
-    existing_positions = group_day_slots.get(group_id, {}).get(day_idx, set())
-    if not existing_positions:
-        return False
-
-    all_positions = sorted(existing_positions | {slot_day_order[slot_idx]})
-    span = all_positions[-1] - all_positions[0]
-    return span != len(all_positions) - 1
 
 
 def _build_compatible_classroom_index(*, sessions, classrooms):

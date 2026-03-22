@@ -1,30 +1,23 @@
 import random
 
-from rest_framework import permissions, status, viewsets
+from rest_framework import status
 from rest_framework.response import Response
 
+from common.drf import AuditableModelViewSet
 from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
+from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule
 from schedule.serializers import ScheduleSerializer
 from user.models import User
 
 
-class ScheduleViewSet(viewsets.ModelViewSet):
+class ScheduleViewSet(AuditableModelViewSet):
     """CRUD API for schedules."""
 
     queryset = Schedule.objects.all().select_related(
         "teacher", "classroom", "group", "subject"
     )
     serializer_class = ScheduleSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def perform_create(self, serializer):
-        actor = getattr(self.request.user, "email", "")
-        serializer.save(created_by=actor, updated_by=actor)
-
-    def perform_update(self, serializer):
-        actor = getattr(self.request.user, "email", "")
-        serializer.save(updated_by=actor)
 
     def generate(self, request):
         actor = getattr(request.user, "email", "")
@@ -63,10 +56,9 @@ class ScheduleViewSet(viewsets.ModelViewSet):
         )
 
     def saved(self, request):
-        auto_observation = "Auto-generated with CP-SAT basic constraints."
         saved_queryset = (
             self.get_queryset()
-            .exclude(observations=auto_observation)
+            .exclude(observations=AUTO_GENERATED_OBSERVATION)
             .filter(users=request.user)
             .order_by("start_time", "id")
         )
@@ -102,6 +94,58 @@ class ScheduleViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+    @staticmethod
+    def _ensure_request_user_in_user_ids(request_user_id, normalized_user_ids):
+        if request_user_id not in normalized_user_ids:
+            normalized_user_ids.append(request_user_id)
+        return normalized_user_ids
+
+    @staticmethod
+    def _fetch_target_users(normalized_user_ids):
+        requested_ids = set(normalized_user_ids)
+        target_users = list(User.objects.filter(id__in=requested_ids))
+        if len(target_users) != len(requested_ids):
+            return None, Response(
+                {"detail": "Some user_ids do not exist."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return target_users, None
+
+    @staticmethod
+    def _fetch_eligible_schedules(normalized_ids, request_user, actor_email):
+        requested_ids = set(normalized_ids)
+        schedules = list(
+            Schedule.objects.filter(
+                id__in=normalized_ids,
+                users=request_user,
+                created_by=actor_email,
+                observations=AUTO_GENERATED_OBSERVATION,
+            )
+        )
+        if len(schedules) != len(requested_ids):
+            return None, Response(
+                {
+                    "detail": (
+                        "Some schedules were not found or are not eligible to be saved "
+                        "(must belong to current user and be auto-generated)."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return schedules, None
+
+    @staticmethod
+    def _persist_saved_schedules(*, schedules, timetable_name, actor_email, target_users):
+        saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
+        for schedule in schedules:
+            schedule.name = timetable_name
+            schedule.observations = saved_observation
+            schedule.updated_by = actor_email
+            schedule.save(
+                update_fields=["name", "observations", "updated_by", "updated_at"]
+            )
+            schedule.users.add(*target_users)
+
     def save_generated(self, request):
         actor = getattr(request.user, "email", "")
         timetable_name = (request.data.get("timetable_name") or "").strip()
@@ -126,46 +170,29 @@ class ScheduleViewSet(viewsets.ModelViewSet):
         if error_response is not None:
             return error_response
 
-        if request.user.id not in normalized_user_ids:
-            normalized_user_ids.append(request.user.id)
-
-        target_users = list(User.objects.filter(id__in=set(normalized_user_ids)))
-        if len(target_users) != len(set(normalized_user_ids)):
-            return Response(
-                {"detail": "Some user_ids do not exist."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        auto_observation = "Auto-generated with CP-SAT basic constraints."
-        schedules = list(
-            Schedule.objects.filter(
-                id__in=normalized_ids,
-                users=request.user,
-                created_by=actor,
-                observations=auto_observation,
-            )
+        normalized_user_ids = self._ensure_request_user_in_user_ids(
+            request.user.id,
+            normalized_user_ids,
         )
 
-        if len(schedules) != len(set(normalized_ids)):
-            return Response(
-                {
-                    "detail": (
-                        "Some schedules were not found or are not eligible to be saved "
-                        "(must belong to current user and be auto-generated)."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        target_users, error_response = self._fetch_target_users(normalized_user_ids)
+        if error_response is not None:
+            return error_response
 
-        saved_observation = f"Saved timetable: {timetable_name}"
-        for schedule in schedules:
-            schedule.name = timetable_name
-            schedule.observations = saved_observation
-            schedule.updated_by = actor
-            schedule.save(
-                update_fields=["name", "observations", "updated_by", "updated_at"]
-            )
-            schedule.users.add(*target_users)
+        schedules, error_response = self._fetch_eligible_schedules(
+            normalized_ids,
+            request.user,
+            actor,
+        )
+        if error_response is not None:
+            return error_response
+
+        self._persist_saved_schedules(
+            schedules=schedules,
+            timetable_name=timetable_name,
+            actor_email=actor,
+            target_users=target_users,
+        )
 
         serialized = self.get_serializer(schedules, many=True)
         return Response(

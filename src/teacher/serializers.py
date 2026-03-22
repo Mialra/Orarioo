@@ -1,29 +1,23 @@
 from rest_framework import serializers
 
+from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
+from common.validation import (
+    collect_invalid_time_preference_entries,
+    normalize_time_preferences,
+)
 from teacher.models import Teacher, TeacherTimePreferenceState
 
 
 class TeacherSerializer(serializers.ModelSerializer):
     class Meta:
         model = Teacher
-        fields = [
-            "id",
+        fields = with_audit_fields(
             "name",
             "max_weekly_hours",
             "working_hours",
             "time_preferences",
-            "created_at",
-            "updated_at",
-            "created_by",
-            "updated_by",
-        ]
-        read_only_fields = [
-            "id",
-            "created_at",
-            "updated_at",
-            "created_by",
-            "updated_by",
-        ]
+        )
+        read_only_fields = AUDIT_READ_ONLY_FIELD_NAMES
 
     def validate(self, attrs):
         max_weekly_hours = attrs.get(
@@ -48,21 +42,18 @@ class TeacherSerializer(serializers.ModelSerializer):
             "time_preferences",
             self.instance.time_preferences if self.instance else {},
         )
-        if time_preferences in (None, ""):
-            attrs["time_preferences"] = {}
-            return attrs
-
-        if not isinstance(time_preferences, dict):
+        try:
+            normalized_time_preferences = normalize_time_preferences(time_preferences)
+        except serializers.ValidationError as exc:
             raise serializers.ValidationError(
-                {"time_preferences": "time_preferences must be an object."}
-            )
+                {"time_preferences": str(exc.detail[0])}
+            ) from exc
 
         valid_states = {state.value for state in TeacherTimePreferenceState}
-        invalid_values = [
-            {"slot": key, "state": state}
-            for key, state in time_preferences.items()
-            if not isinstance(key, str) or state not in valid_states
-        ]
+        _, invalid_values = collect_invalid_time_preference_entries(
+            normalized_time_preferences,
+            valid_states,
+        )
 
         if invalid_values:
             raise serializers.ValidationError(
@@ -74,4 +65,5 @@ class TeacherSerializer(serializers.ModelSerializer):
                 }
             )
 
+        attrs["time_preferences"] = normalized_time_preferences
         return attrs

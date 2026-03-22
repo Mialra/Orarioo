@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from classroom.models import Classroom
+from common.test_utils import AuthenticatedAdminAPIMixin
 from group.models import EducationalStage, Group
 from schedule.algorithm import assignment as schedule_assignment
 from schedule.algorithm.slots import (
@@ -14,30 +15,23 @@ from schedule.algorithm.slots import (
     build_weekly_slots,
     slot_preference_key_from_datetime,
 )
+from schedule.constants import AUTO_GENERATED_OBSERVATION
 from schedule.models import Schedule
 from subject.models import EducationalStage as SubjectEducationalStage
 from subject.models import Subject, SubjectTimePreferenceState, SubjectType
 from teacher.models import Teacher, TeacherTimePreferenceState
-from user.models import RoleChoices, User
+from user.models import RoleChoices
 
 
-class ScheduleApiTests(APITestCase):
+class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="schedule-api@test.com",
-            password="StrongPassword123!",
-            given_name="Api",
-            family_name="Tester",
-            role=RoleChoices.ADMINISTRATOR,
-        )
-        self.other_user = User.objects.create_user(
+        self.authenticate_admin(email_prefix="schedule-api")
+        self.other_user = self.create_user(
             email="schedule-api-2@test.com",
-            password="StrongPassword123!",
+            role=RoleChoices.DIRECTOR,
             given_name="Api2",
             family_name="Tester2",
-            role=RoleChoices.DIRECTOR,
         )
-        self.client.force_authenticate(self.user)
 
         self.teacher = Teacher.objects.create(
             name="Ana Perez",
@@ -80,18 +74,37 @@ class ScheduleApiTests(APITestCase):
         self.assertIn("detail", response.data)
         self.assertIn(detail_snippet, response.data["detail"])
 
-    def create_schedule(self):
+    def create_schedule(
+        self,
+        *,
+        name="Science",
+        start_time=None,
+        end_time=None,
+        observations="Lab class",
+        created_by="",
+        updated_by="",
+        teacher=None,
+        classroom=None,
+        group=None,
+        subject=None,
+        users=None,
+    ):
+        start_time = start_time or (timezone.now() + timedelta(days=1))
+        end_time = end_time or (start_time + timedelta(hours=1))
         schedule = Schedule.objects.create(
-            name="Science",
-            start_time=timezone.now() + timedelta(days=1),
-            end_time=timezone.now() + timedelta(days=1, hours=2),
-            observations="Lab class",
-            teacher=self.teacher,
-            classroom=self.classroom,
-            group=self.group,
-            subject=self.subject,
+            name=name,
+            start_time=start_time,
+            end_time=end_time,
+            observations=observations,
+            teacher=teacher or self.teacher,
+            classroom=classroom or self.classroom,
+            group=group or self.group,
+            subject=subject or self.subject,
+            created_by=created_by,
+            updated_by=updated_by,
         )
-        schedule.users.add(self.user)
+        for user in users or [self.user]:
+            schedule.users.add(user)
         return schedule
 
     def test_create_schedule(self):
@@ -265,35 +278,25 @@ class ScheduleApiTests(APITestCase):
     def test_save_generated_schedules_in_bulk(self):
         start_time = timezone.now() + timedelta(days=1)
         end_time = start_time + timedelta(hours=1)
-        auto_observation = "Auto-generated with CP-SAT basic constraints."
-
-        schedule_1 = Schedule.objects.create(
+        schedule_1 = self.create_schedule(
             name="Auto Session 1",
             start_time=start_time,
             end_time=end_time,
-            observations=auto_observation,
-            teacher=self.teacher,
-            classroom=self.classroom,
-            group=self.group,
-            subject=self.subject,
+            observations=AUTO_GENERATED_OBSERVATION,
             created_by=self.user.email,
             updated_by=self.user.email,
+            users=[self.user],
         )
-        schedule_1.users.add(self.user)
 
-        schedule_2 = Schedule.objects.create(
+        schedule_2 = self.create_schedule(
             name="Auto Session 2",
             start_time=start_time + timedelta(hours=1),
             end_time=end_time + timedelta(hours=1),
-            observations=auto_observation,
-            teacher=self.teacher,
-            classroom=self.classroom,
-            group=self.group,
-            subject=self.subject,
+            observations=AUTO_GENERATED_OBSERVATION,
             created_by=self.user.email,
             updated_by=self.user.email,
+            users=[self.user],
         )
-        schedule_2.users.add(self.user)
 
         response = self.client.post(
             reverse("schedule-save-generated"),
@@ -317,21 +320,15 @@ class ScheduleApiTests(APITestCase):
     def test_save_generated_schedules_in_bulk_assigns_additional_users(self):
         start_time = timezone.now() + timedelta(days=1)
         end_time = start_time + timedelta(hours=1)
-        auto_observation = "Auto-generated with CP-SAT basic constraints."
-
-        schedule = Schedule.objects.create(
+        schedule = self.create_schedule(
             name="Auto Session 1",
             start_time=start_time,
             end_time=end_time,
-            observations=auto_observation,
-            teacher=self.teacher,
-            classroom=self.classroom,
-            group=self.group,
-            subject=self.subject,
+            observations=AUTO_GENERATED_OBSERVATION,
             created_by=self.user.email,
             updated_by=self.user.email,
+            users=[self.user],
         )
-        schedule.users.add(self.user)
 
         response = self.client.post(
             reverse("schedule-save-generated"),
@@ -369,49 +366,35 @@ class ScheduleApiTests(APITestCase):
     def test_saved_endpoint_returns_only_saved_schedules_for_current_user(self):
         start_time = timezone.now() + timedelta(days=1)
         end_time = start_time + timedelta(hours=1)
-        auto_observation = "Auto-generated with CP-SAT basic constraints."
-
-        saved_schedule = Schedule.objects.create(
+        saved_schedule = self.create_schedule(
             name="Horario Guardado",
             start_time=start_time,
             end_time=end_time,
             observations="Saved timetable: Horario Guardado",
-            teacher=self.teacher,
-            classroom=self.classroom,
-            group=self.group,
-            subject=self.subject,
             created_by=self.user.email,
             updated_by=self.user.email,
+            users=[self.user],
         )
-        saved_schedule.users.add(self.user)
 
-        auto_schedule = Schedule.objects.create(
+        self.create_schedule(
             name="Auto Session",
             start_time=start_time + timedelta(hours=1),
             end_time=end_time + timedelta(hours=1),
-            observations=auto_observation,
-            teacher=self.teacher,
-            classroom=self.classroom,
-            group=self.group,
-            subject=self.subject,
+            observations=AUTO_GENERATED_OBSERVATION,
             created_by=self.user.email,
             updated_by=self.user.email,
+            users=[self.user],
         )
-        auto_schedule.users.add(self.user)
 
-        other_user_schedule = Schedule.objects.create(
+        self.create_schedule(
             name="Horario Otro Usuario",
             start_time=start_time + timedelta(hours=2),
             end_time=end_time + timedelta(hours=2),
             observations="Saved timetable: Horario Otro Usuario",
-            teacher=self.teacher,
-            classroom=self.classroom,
-            group=self.group,
-            subject=self.subject,
             created_by=self.other_user.email,
             updated_by=self.other_user.email,
+            users=[self.other_user],
         )
-        other_user_schedule.users.add(self.other_user)
 
         response = self.client.get(reverse("schedule-saved"))
 

@@ -4,15 +4,20 @@ from schedule.algorithm.slots import build_slot_day_index, build_slot_preference
 from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 
+PRESCHOOL_AND_PRIMARY_STAGES = {
+    EducationalStage.PRESCHOOL,
+    EducationalStage.PRIMARY,
+}
+
 
 def group_weekly_limit(group):
-    if group.stage in (EducationalStage.PRESCHOOL, EducationalStage.PRIMARY):
+    if group.stage in PRESCHOOL_AND_PRIMARY_STAGES:
         return 25
     return 30
 
 
 def group_daily_limit(group):
-    if group.stage in (EducationalStage.PRESCHOOL, EducationalStage.PRIMARY):
+    if group.stage in PRESCHOOL_AND_PRIMARY_STAGES:
         return 5
     return 6
 
@@ -244,51 +249,69 @@ def _add_no_gap_triplets(*, model, occupancy_by_slot, day_slot_list):
                 )
 
 
+def _preference_state_for_entity(*, entity, slot_preference_key, state_enum, default):
+    if entity is None:
+        return default
+
+    preferences = getattr(entity, "time_preferences", None) or {}
+    state = preferences.get(slot_preference_key)
+    if state in state_enum.values:
+        return state
+    return default
+
+
 def session_preference_state(*, session, slot_preference_key):
     subject = session.get("subject")
-    if subject is None:
-        return SubjectTimePreferenceState.AVAILABLE
-
-    preferences = getattr(subject, "time_preferences", None) or {}
-    state = preferences.get(slot_preference_key)
-    if state in SubjectTimePreferenceState.values:
-        return state
-    return SubjectTimePreferenceState.AVAILABLE
+    return _preference_state_for_entity(
+        entity=subject,
+        slot_preference_key=slot_preference_key,
+        state_enum=SubjectTimePreferenceState,
+        default=SubjectTimePreferenceState.AVAILABLE,
+    )
 
 
 def teacher_preference_state(*, session, slot_preference_key):
     teacher = session.get("teacher")
-    if teacher is None:
-        return TeacherTimePreferenceState.AVAILABLE
-
-    preferences = getattr(teacher, "time_preferences", None) or {}
-    state = preferences.get(slot_preference_key)
-    if state in TeacherTimePreferenceState.values:
-        return state
-    return TeacherTimePreferenceState.AVAILABLE
+    return _preference_state_for_entity(
+        entity=teacher,
+        slot_preference_key=slot_preference_key,
+        state_enum=TeacherTimePreferenceState,
+        default=TeacherTimePreferenceState.AVAILABLE,
+    )
 
 
 def add_subject_time_hard_constraints(*, model, x, sessions, slots):
-    slot_preference_by_idx = build_slot_preference_index(slots=slots)
-
-    for s_idx, session in enumerate(sessions):
-        for p_idx, slot_key in slot_preference_by_idx.items():
-            state = session_preference_state(
-                session=session,
-                slot_preference_key=slot_key,
-            )
-            if state == SubjectTimePreferenceState.UNAVAILABLE:
-                model.Add(x[(s_idx, p_idx)] == 0)
+    _add_unavailable_time_hard_constraints(
+        model=model,
+        x=x,
+        sessions=sessions,
+        slots=slots,
+        state_resolver=session_preference_state,
+        unavailable_state=SubjectTimePreferenceState.UNAVAILABLE,
+    )
 
 
 def add_teacher_time_hard_constraints(*, model, x, sessions, slots):
+    _add_unavailable_time_hard_constraints(
+        model=model,
+        x=x,
+        sessions=sessions,
+        slots=slots,
+        state_resolver=teacher_preference_state,
+        unavailable_state=TeacherTimePreferenceState.UNAVAILABLE,
+    )
+
+
+def _add_unavailable_time_hard_constraints(
+    *, model, x, sessions, slots, state_resolver, unavailable_state
+):
     slot_preference_by_idx = build_slot_preference_index(slots=slots)
 
     for s_idx, session in enumerate(sessions):
         for p_idx, slot_key in slot_preference_by_idx.items():
-            state = teacher_preference_state(
+            state = state_resolver(
                 session=session,
                 slot_preference_key=slot_key,
             )
-            if state == TeacherTimePreferenceState.UNAVAILABLE:
+            if state == unavailable_state:
                 model.Add(x[(s_idx, p_idx)] == 0)

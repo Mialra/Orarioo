@@ -1,5 +1,10 @@
 from rest_framework import serializers
 
+from common.serializer_utils import AUDIT_FIELD_NAMES
+from common.validation import (
+    collect_invalid_time_preference_entries,
+    normalize_time_preferences,
+)
 from subject.models import Subject, SubjectTimePreferenceState
 
 
@@ -23,18 +28,12 @@ class SubjectSerializer(serializers.ModelSerializer):
             "teacher_name",
             "group",
             "group_name",
-            "created_at",
-            "updated_at",
-            "created_by",
-            "updated_by",
+            *AUDIT_FIELD_NAMES,
         ]
         read_only_fields = [
             "id",
             "duration",
-            "created_at",
-            "updated_at",
-            "created_by",
-            "updated_by",
+            *AUDIT_FIELD_NAMES,
             "teacher_name",
             "group_name",
         ]
@@ -45,21 +44,13 @@ class SubjectSerializer(serializers.ModelSerializer):
         return value
 
     def validate_time_preferences(self, value):
-        if value in (None, ""):
-            return {}
-        if not isinstance(value, dict):
-            raise serializers.ValidationError("time_preferences must be an object.")
+        value = normalize_time_preferences(value)
 
         valid_states = {state.value for state in SubjectTimePreferenceState}
-        invalid_keys = []
-        invalid_values = []
-
-        for key, state in value.items():
-            if not isinstance(key, str):
-                invalid_keys.append(key)
-                continue
-            if state not in valid_states:
-                invalid_values.append({"slot": key, "state": state})
+        invalid_keys, invalid_values = collect_invalid_time_preference_entries(
+            value,
+            valid_states,
+        )
 
         if invalid_keys:
             raise serializers.ValidationError(

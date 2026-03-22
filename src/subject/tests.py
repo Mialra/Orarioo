@@ -2,23 +2,16 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from common.test_utils import AuthenticatedAdminAPIMixin
 from group.models import EducationalStage as GroupEducationalStage
 from group.models import Group
 from subject.models import EducationalStage, Subject, SubjectType
 from teacher.models import Teacher
-from user.models import RoleChoices, User
 
 
-class SubjectApiTests(APITestCase):
+class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="subject-api@test.com",
-            password="StrongPassword123!",
-            given_name="Api",
-            family_name="Tester",
-            role=RoleChoices.ADMINISTRATOR,
-        )
-        self.client.force_authenticate(self.user)
+        self.authenticate_admin(email_prefix="subject-api")
 
         self.teacher = Teacher.objects.create(
             name="John Doe",

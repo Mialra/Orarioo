@@ -1,16 +1,9 @@
 from django.urls import path
 
+from common.drf import build_crud_views
 from group.views import GroupViewSet
 
-group_list = GroupViewSet.as_view({"get": "list", "post": "create"})
-group_detail = GroupViewSet.as_view(
-    {
-        "get": "retrieve",
-        "put": "update",
-        "patch": "partial_update",
-        "delete": "destroy",
-    }
-)
+group_list, group_detail = build_crud_views(GroupViewSet)
 
 urlpatterns = [
     path("groups/", group_list, name="group-list"),
