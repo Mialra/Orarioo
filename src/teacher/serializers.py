@@ -1,31 +1,23 @@
 from rest_framework import serializers
 
-from teacher.models import Teacher
+from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
+from common.validation import (
+    collect_invalid_time_preference_entries,
+    normalize_time_preferences,
+)
+from teacher.models import Teacher, TeacherTimePreferenceState
 
 
 class TeacherSerializer(serializers.ModelSerializer):
     class Meta:
         model = Teacher
-        fields = [
-            "id",
+        fields = with_audit_fields(
             "name",
             "max_weekly_hours",
             "working_hours",
-            "preferences",
-            "availability",
-            "unavailability",
-            "created_at",
-            "updated_at",
-            "created_by",
-            "updated_by",
-        ]
-        read_only_fields = [
-            "id",
-            "created_at",
-            "updated_at",
-            "created_by",
-            "updated_by",
-        ]
+            "time_preferences",
+        )
+        read_only_fields = AUDIT_READ_ONLY_FIELD_NAMES
 
     def validate(self, attrs):
         max_weekly_hours = attrs.get(
@@ -46,4 +38,32 @@ class TeacherSerializer(serializers.ModelSerializer):
                 }
             )
 
+        time_preferences = attrs.get(
+            "time_preferences",
+            self.instance.time_preferences if self.instance else {},
+        )
+        try:
+            normalized_time_preferences = normalize_time_preferences(time_preferences)
+        except serializers.ValidationError as exc:
+            raise serializers.ValidationError(
+                {"time_preferences": str(exc.detail[0])}
+            ) from exc
+
+        valid_states = {state.value for state in TeacherTimePreferenceState}
+        _, invalid_values = collect_invalid_time_preference_entries(
+            normalized_time_preferences,
+            valid_states,
+        )
+
+        if invalid_values:
+            raise serializers.ValidationError(
+                {
+                    "time_preferences": {
+                        "invalid_states": invalid_values,
+                        "allowed": sorted(valid_states),
+                    }
+                }
+            )
+
+        attrs["time_preferences"] = normalized_time_preferences
         return attrs

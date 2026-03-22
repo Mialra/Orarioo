@@ -5,6 +5,22 @@ from rest_framework import serializers
 from user.models import RoleChoices, User
 
 
+class UserNameEmailValidationMixin:
+    @staticmethod
+    def validate_given_name(value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Name cannot be empty.")
+        return value
+
+    def validate_email(self, value):
+        queryset = User.objects.filter(email=value)
+        if self.instance is not None:
+            queryset = queryset.exclude(id=self.instance.id)
+        if queryset.exists():
+            raise serializers.ValidationError("This email is already registered.")
+        return value
+
+
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for displaying user information"""
 
@@ -31,7 +47,7 @@ class UserSerializer(serializers.ModelSerializer):
         return obj.get_role_display()
 
 
-class UserCreateSerializer(serializers.ModelSerializer):
+class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerializer):
     """Serializer for creating new users"""
 
     given_name = serializers.CharField(source="name")
@@ -67,18 +83,6 @@ class UserCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"password": "Passwords do not match."})
         return data
 
-    def validate_email(self, value):
-        """Validates that the email is unique"""
-        if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("This email is already registered.")
-        return value
-
-    def validate_given_name(self, value):
-        """Validates that the name is not empty"""
-        if not value or not value.strip():
-            raise serializers.ValidationError("Name cannot be empty.")
-        return value
-
     @transaction.atomic
     def create(self, validated_data):
         """Creates a new user"""
@@ -89,7 +93,59 @@ class UserCreateSerializer(serializers.ModelSerializer):
         return user
 
 
-class UserUpdateSerializer(serializers.ModelSerializer):
+class UserManagementCreateSerializer(
+    UserNameEmailValidationMixin,
+    serializers.ModelSerializer,
+):
+    """Serializer for creating users from admin/direction panel with optional login."""
+
+    given_name = serializers.CharField(source="name")
+    role = serializers.ChoiceField(
+        choices=RoleChoices.choices,
+        default=RoleChoices.DIRECTOR,
+        help_text="User role (administrator, director)",
+    )
+    can_login = serializers.BooleanField(default=False)
+    password = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        validators=[validate_password],
+        help_text="Optional password. Required only if can_login=true.",
+    )
+
+    class Meta:
+        model = User
+        fields = [
+            "given_name",
+            "family_name",
+            "email",
+            "role",
+            "can_login",
+            "password",
+            "is_enabled",
+        ]
+
+    def validate(self, data):
+        can_login = data.get("can_login", False)
+        password = data.get("password", "")
+        if can_login and not password:
+            raise serializers.ValidationError(
+                {"password": "Password is required when can_login is true."}
+            )
+        return data
+
+    @transaction.atomic
+    def create(self, validated_data):
+        can_login = validated_data.pop("can_login", False)
+        password = validated_data.pop("password", "")
+        if not can_login:
+            password = None
+        user = User.objects.create_user(**validated_data, password=password)
+        return user
+
+
+class UserUpdateSerializer(UserNameEmailValidationMixin, serializers.ModelSerializer):
     """Serializer for updating user information"""
 
     given_name = serializers.CharField(source="name")
@@ -105,29 +161,10 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             "is_enabled",
         ]
 
-    def validate_email(self, value):
-        """Validates that the email is unique (excluding current user)"""
-        user = self.instance
-        if User.objects.filter(email=value).exclude(id=user.id).exists():
-            raise serializers.ValidationError("This email is already registered.")
-        return value
-
-    def validate_given_name(self, value):
-        """Validates that the name is not empty"""
-        if not value or not value.strip():
-            raise serializers.ValidationError("Name cannot be empty.")
-        return value
-
     @transaction.atomic
     def update(self, instance, validated_data):
-        """Updates user data"""
-        instance.name = validated_data.get("name", instance.name)
-        instance.family_name = validated_data.get("family_name", instance.family_name)
-        instance.email = validated_data.get("email", instance.email)
-        instance.role = validated_data.get("role", instance.role)
-        instance.is_enabled = validated_data.get("is_enabled", instance.is_enabled)
-        instance.save()
-        return instance
+        """Updates user data atomically."""
+        return super().update(instance, validated_data)
 
 
 class UserChangePasswordSerializer(serializers.Serializer):

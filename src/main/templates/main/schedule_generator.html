@@ -385,6 +385,110 @@
             border-left: 4px solid #667eea;
         }
 
+        .manual-change-box {
+            margin-top: 18px;
+            padding: 16px;
+            border: 1px solid #d9dfef;
+            border-radius: 8px;
+            background: #f8f9ff;
+        }
+
+        .manual-change-box h4 {
+            margin-bottom: 10px;
+            color: #2f3a66;
+        }
+
+        .manual-change-help {
+            margin-top: 8px;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .subject-preferences-panel {
+            margin-top: 18px;
+            border: 1px solid #d9dfef;
+            border-radius: 8px;
+            background: #fff;
+            padding: 14px;
+        }
+
+        .subject-preferences-toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .subject-preferences-legend {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            font-size: 0.86em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .legend-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+            border: 1px solid #b7c0d5;
+        }
+
+        .legend-available { background: #d8f3df; }
+        .legend-prefer-yes { background: #a8e6b0; }
+        .legend-prefer-no { background: #ffe4b8; }
+        .legend-unavailable { background: #f7c5c5; }
+
+        .subject-pref-grid-wrap {
+            overflow-x: auto;
+        }
+
+        .subject-pref-grid {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 820px;
+            font-size: 0.86em;
+        }
+
+        .subject-pref-grid th,
+        .subject-pref-grid td {
+            border: 1px solid #d8dfea;
+            text-align: center;
+            padding: 8px;
+        }
+
+        .subject-pref-grid th {
+            background: #f3f6ff;
+            font-weight: 600;
+        }
+
+        .subject-pref-grid .hour-col {
+            background: #f8f9fb;
+            font-weight: 600;
+            width: 80px;
+        }
+
+        .pref-cell {
+            cursor: pointer;
+            transition: transform 0.12s, box-shadow 0.12s;
+            user-select: none;
+            min-width: 110px;
+        }
+
+        .pref-cell:hover {
+            transform: translateY(-1px);
+            box-shadow: inset 0 0 0 2px rgba(59, 91, 219, 0.24);
+        }
+
+        .pref-state-AVAILABLE { background: #d8f3df; }
+        .pref-state-PREFER_YES { background: #a8e6b0; }
+        .pref-state-PREFER_NO { background: #ffe4b8; }
+        .pref-state-UNAVAILABLE { background: #f7c5c5; }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 1.5em;
@@ -479,6 +583,8 @@
             <!-- Tabs -->
             <div class="tabs">
                 <button class="tab-btn active" data-tab="generator">⚙️ Generador</button>
+                <button class="tab-btn" data-tab="savedSchedules">🗂️ Horarios Guardados</button>
+                <button class="tab-btn" data-tab="users">👤 Usuarios</button>
                 <button class="tab-btn" data-tab="teachers">👨‍🏫 Profesores</button>
                 <button class="tab-btn" data-tab="classrooms">🏫 Aulas</button>
                 <button class="tab-btn" data-tab="groups">👥 Grupos</button>
@@ -502,6 +608,23 @@
                 <button class="btn-primary" id="generateBtn" style="width: 100%; padding: 15px; font-size: 1.1em;">
                     🚀 Generar Horario Automático
                 </button>
+                <div class="form-row" style="margin-top: 14px;">
+                    <div class="form-group">
+                        <label>Nombre para guardar el horario generado</label>
+                        <input type="text" id="generatedTimetableName" placeholder="Ej: Horario 1º ESO - Semana Base" />
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: end;">
+                        <button class="btn-secondary" id="saveGeneratedTimetableBtn" style="width: 100%;" disabled>
+                            💾 Guardar Horario Generado
+                        </button>
+                    </div>
+                </div>
+                <div class="form-row" style="margin-top: 8px;">
+                    <div class="form-group" style="width: 100%;">
+                        <label>Usuarios que podrán ver este horario (multi-selección)</label>
+                        <select id="generatedTimetableUsers" multiple style="min-height: 90px;"></select>
+                    </div>
+                </div>
                 <div class="schedule-filter-bar">
                     <label for="scheduleCourseFilter">Filtrar por curso:</label>
                     <select id="scheduleCourseFilter" class="schedule-filter-select">
@@ -509,6 +632,116 @@
                     </select>
                 </div>
                 <div id="generatorOutput" class="table-container" style="display: none; margin-top: 30px;"></div>
+            </div>
+
+            <!-- Saved Schedules Tab -->
+            <div class="tab-content" data-tab="savedSchedules">
+                <div class="section-title">🗂️ Horarios Guardados</div>
+                <div class="table-container" style="margin-top: 10px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Nombre del Horario</th>
+                                <th>Sesiones</th>
+                                <th>Última Actualización</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="savedSchedulesList"></tbody>
+                    </table>
+                </div>
+                <div class="schedule-filter-bar" style="margin-top: 16px;">
+                    <label for="savedTimetableGroupFilter">Filtrar por grupo:</label>
+                    <select id="savedTimetableGroupFilter" class="schedule-filter-select" disabled>
+                        <option value="">Todos los grupos</option>
+                    </select>
+                    <label for="savedTimetableTeacherFilter">Filtrar por profesor:</label>
+                    <select id="savedTimetableTeacherFilter" class="schedule-filter-select" disabled>
+                        <option value="">Todos los profesores</option>
+                    </select>
+                </div>
+                <div class="manual-change-box">
+                    <h4>🔁 Cambio Manual en Horario Guardado</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="savedManualSessionSelect">Clase a mover</label>
+                            <select id="savedManualSessionSelect" disabled>
+                                <option value="">Selecciona un horario guardado</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="savedManualSlotSelect">Nuevo slot</label>
+                            <select id="savedManualSlotSelect" disabled>
+                                <option value="">Selecciona destino</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="button-group" style="margin-top: 0;">
+                        <button class="btn-primary" id="applySavedManualChangeBtn" disabled>
+                            Aplicar Cambio Manual
+                        </button>
+                    </div>
+                    <p class="manual-change-help">
+                        Se mantiene este horario guardado y se reoptimiza con cambios mínimos, fijando la clase elegida en el slot seleccionado.
+                    </p>
+                </div>
+                <div id="savedTimetableOutput" class="table-container" style="display: none; margin-top: 20px;"></div>
+            </div>
+
+            <!-- Users Tab -->
+            <div class="tab-content" data-tab="users">
+                <div class="section-title">👤 Gestión de Usuarios</div>
+                <div class="form-section">
+                    <h3 style="margin-bottom: 15px;">Crear Nuevo Usuario</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nombre (obligatorio)</label>
+                            <input type="text" id="managedUserName" placeholder="Ej: Marta" />
+                        </div>
+                        <div class="form-group">
+                            <label>Apellidos (opcional)</label>
+                            <input type="text" id="managedUserFamilyName" placeholder="Ej: Pérez López" />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="managedUserEmail" placeholder="direccion@centro.es" />
+                        </div>
+                        <div class="form-group">
+                            <label>Rol</label>
+                            <select id="managedUserRole">
+                                <option value="administrator">Administrador</option>
+                                <option value="director" selected>Dirección</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="managedUserCanLogin" />
+                            <label for="managedUserCanLogin" style="margin-bottom: 0;">Puede iniciar sesión</label>
+                        </div>
+                        <div class="form-group" id="managedUserPasswordWrap" style="display: none;">
+                            <label>Contraseña inicial</label>
+                            <input type="password" id="managedUserPassword" placeholder="Contraseña segura" />
+                        </div>
+                    </div>
+                    <button class="btn-primary" id="createManagedUserBtn">Crear Usuario</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Email</th>
+                                <th>Rol</th>
+                                <th>Activo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersList"></tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- Teachers Tab -->
@@ -525,20 +758,26 @@
                             <label>Máximo Horas Semanales</label>
                             <input type="number" id="teacherMaxHours" placeholder="20" value="20" />
                         </div>
-                        <div class="form-group">
-                            <label>Horas Actuales</label>
-                            <input type="number" id="teacherCurrentHours" placeholder="0" value="0" />
-                        </div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Preferencias</label>
-                            <input type="text" id="teacherPreferences" placeholder="Ej: Mañanas" />
+                    <div class="subject-preferences-panel">
+                        <h4 style="margin-bottom: 10px;">Disponibilidad Semanal del Profesor</h4>
+                        <div class="subject-preferences-legend">
+                            <span><span class="legend-dot legend-available"></span>Available</span>
+                            <span><span class="legend-dot legend-prefer-yes"></span>Preferably yes</span>
+                            <span><span class="legend-dot legend-prefer-no"></span>Preferably no</span>
+                            <span><span class="legend-dot legend-unavailable"></span>Unavailable</span>
                         </div>
-                        <div class="form-group">
-                            <label>Disponibilidad</label>
-                            <input type="text" id="teacherAvailability" placeholder="Ej: Lun-Vie 08:30-15:00" />
+                        <div class="subject-preferences-toolbar">
+                            <label style="margin-bottom: 0;" for="teacherPreferenceBrush">Estado a pintar</label>
+                            <select id="teacherPreferenceBrush" style="max-width: 220px;">
+                                <option value="AVAILABLE" selected>Available</option>
+                                <option value="PREFER_YES">Preferably yes</option>
+                                <option value="PREFER_NO">Preferably no</option>
+                                <option value="UNAVAILABLE">Unavailable</option>
+                            </select>
+                            <button class="btn-secondary" id="teacherPreferenceClearBtn" type="button">Reiniciar cuadrícula</button>
                         </div>
+                        <div class="subject-pref-grid-wrap" id="teacherPreferencesGrid"></div>
                     </div>
                     <button class="btn-primary" id="createTeacherBtn">Crear Profesor</button>
                 </div>
@@ -549,7 +788,6 @@
                                 <th>ID</th>
                                 <th>Nombre</th>
                                 <th>Max Horas</th>
-                                <th>Horas Actuales</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -563,9 +801,24 @@
                 <div class="section-title">🏫 Gestión de Aulas</div>
                 <div class="form-section">
                     <h3 style="margin-bottom: 15px;">Crear Nueva Aula</h3>
-                    <div class="form-group">
-                        <label>Nombre del Aula</label>
-                        <input type="text" id="classroomName" placeholder="Ej: Aula 1A" />
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nombre del Aula</label>
+                            <input type="text" id="classroomName" placeholder="Ej: Aula 1A" />
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo de Aula</label>
+                            <select id="classroomTypeSelect">
+                                <option value="">Sin tipo</option>
+                                <option value="__NEW__">+ Nuevo tipo...</option>
+                            </select>
+                            <input
+                                type="text"
+                                id="classroomTypeNew"
+                                placeholder="Escribe nuevo tipo (Ej: LAB)"
+                                style="margin-top: 8px; display: none;"
+                            />
+                        </div>
                     </div>
                     <button class="btn-primary" id="createClassroomBtn">Crear Aula</button>
                 </div>
@@ -575,6 +828,7 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Nombre</th>
+                                <th>Tipo</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -596,9 +850,9 @@
                         <div class="form-group">
                             <label>Etapa Educativa</label>
                             <select id="groupStage">
-                                <option value="preschool">Educación Infantil</option>
-                                <option value="primary" selected>Educación Primaria</option>
-                                <option value="secondary">Educación Secundaria</option>
+                                <option value="preschool">Infantil</option>
+                                <option value="primary" selected>Primaria</option>
+                                <option value="secondary">Secundaria</option>
                             </select>
                         </div>
                     </div>
@@ -633,25 +887,21 @@
                             <label>Horas Semanales</label>
                             <input type="number" id="subjectWeeklyHours" placeholder="5" value="5" />
                         </div>
-                        <div class="form-group">
-                            <label>Duración Sesión (horas)</label>
-                            <input type="number" id="subjectDuration" placeholder="1.5" value="1" step="0.5" />
-                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Etapa</label>
                             <select id="subjectStage">
-                                <option value="PRESCHOOL">Educación Infantil</option>
-                                <option value="PRIMARY" selected>Educación Primaria</option>
-                                <option value="SECONDARY">Educación Secundaria</option>
+                                <option value="PRESCHOOL">Infantil</option>
+                                <option value="PRIMARY" selected>Primaria</option>
+                                <option value="SECONDARY">Secundaria</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label>Tipo</label>
                             <select id="subjectType">
                                 <option value="NORMAL" selected>Normal</option>
-                                <option value="TC">Transversal Compartida</option>
+                                <option value="TC">Trabajo de Centro</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -666,6 +916,32 @@
                                 <option value="">-- Selecciona Curso --</option>
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label>Tipo de Aula Requerida</label>
+                            <select id="subjectRequiredClassroomType">
+                                <option value="">Sin requisito</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="subject-preferences-panel">
+                        <h4 style="margin-bottom: 10px;">Disponibilidad Semanal de la Asignatura</h4>
+                        <div class="subject-preferences-legend">
+                            <span><span class="legend-dot legend-available"></span>Available</span>
+                            <span><span class="legend-dot legend-prefer-yes"></span>Preferably yes</span>
+                            <span><span class="legend-dot legend-prefer-no"></span>Preferably no</span>
+                            <span><span class="legend-dot legend-unavailable"></span>Unavailable</span>
+                        </div>
+                        <div class="subject-preferences-toolbar">
+                            <label style="margin-bottom: 0;" for="subjectPreferenceBrush">Estado a pintar</label>
+                            <select id="subjectPreferenceBrush" style="max-width: 220px;">
+                                <option value="AVAILABLE" selected>Available</option>
+                                <option value="PREFER_YES">Preferably yes</option>
+                                <option value="PREFER_NO">Preferably no</option>
+                                <option value="UNAVAILABLE">Unavailable</option>
+                            </select>
+                            <button class="btn-secondary" id="subjectPreferenceClearBtn" type="button">Reiniciar cuadrícula</button>
+                        </div>
+                        <div class="subject-pref-grid-wrap" id="subjectPreferencesGrid"></div>
                     </div>
                     <button class="btn-primary" id="createSubjectBtn">Crear Asignatura</button>
                 </div>
@@ -678,6 +954,7 @@
                                 <th>Horas Semanales</th>
                                 <th>Profesor</th>
                                 <th>Curso</th>
+                                <th>Aula Requerida</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -693,6 +970,40 @@
             const API_BASE = "/api";
             let authToken = localStorage.getItem("access_token") || "";
             let latestGeneratedSchedules = [];
+            const SUBJECT_PREF_DAY_CODES = ["MON", "TUE", "WED", "THU", "FRI"];
+            const SUBJECT_PREF_DAY_LABELS = [
+                "Lunes",
+                "Martes",
+                "Miércoles",
+                "Jueves",
+                "Viernes",
+            ];
+            const SUBJECT_PREF_HOURS = ["08:30", "09:30", "10:30", "12:00", "13:00", "14:00"];
+            const SUBJECT_PREF_STATES = {
+                AVAILABLE: "Available",
+                PREFER_YES: "Preferably yes",
+                PREFER_NO: "Preferably no",
+                UNAVAILABLE: "Unavailable",
+            };
+            const AUTO_GENERATED_OBSERVATION =
+                "Auto-generated with CP-SAT basic constraints.";
+            const ENTITY_ENDPOINTS = {
+                teachers: "/teachers/",
+                classrooms: "/classrooms/",
+                groups: "/groups/",
+                subjects: "/subjects/",
+            };
+            const subjectPreferenceMap = {};
+            const teacherPreferenceMap = {};
+            let currentTeachers = [];
+            let currentClassrooms = [];
+            let currentGroups = [];
+            let currentSubjects = [];
+            let currentSchedules = [];
+            let currentUsers = [];
+            let savedTimetableGroups = [];
+            let selectedSavedTimetableIndex = null;
+            let selectedSavedTimetableName = null;
 
         // Utility Functions
         const showAlert = (type, message) => {
@@ -728,6 +1039,598 @@
             } catch (error) {
                 console.error(`API Error for ${endpoint}:`, error);
                 return { ok: false, status: 0, data: { detail: error.message } };
+            }
+        };
+
+        const defaultSubjectPreferenceMap = () => {
+            const map = {};
+            for (const dayCode of SUBJECT_PREF_DAY_CODES) {
+                for (const hour of SUBJECT_PREF_HOURS) {
+                    map[`${dayCode}_${hour}`] = "AVAILABLE";
+                }
+            }
+            return map;
+        };
+
+        const setAllSubjectPreferences = (state) => {
+            const defaults = defaultSubjectPreferenceMap();
+            Object.keys(defaults).forEach((key) => {
+                subjectPreferenceMap[key] = state;
+            });
+        };
+
+        const resetSubjectPreferences = () => {
+            Object.assign(subjectPreferenceMap, defaultSubjectPreferenceMap());
+            renderSubjectPreferencesGrid();
+        };
+
+        const resetTeacherPreferences = () => {
+            Object.assign(teacherPreferenceMap, defaultSubjectPreferenceMap());
+            renderTeacherPreferencesGrid();
+        };
+
+        const renderSubjectPreferencesGrid = () => {
+            const wrap = document.getElementById("subjectPreferencesGrid");
+            if (!wrap) return;
+
+            const headCells = SUBJECT_PREF_DAY_LABELS
+                .map((label) => `<th>${label}</th>`)
+                .join("");
+
+            const bodyRows = SUBJECT_PREF_HOURS
+                .map((hour) => {
+                    const cells = SUBJECT_PREF_DAY_CODES
+                        .map((dayCode) => {
+                            const key = `${dayCode}_${hour}`;
+                            const state = subjectPreferenceMap[key] || "AVAILABLE";
+                            const stateLabel = SUBJECT_PREF_STATES[state] || state;
+                            return `
+                                <td
+                                    class="pref-cell pref-state-${state}"
+                                    data-pref-key="${key}"
+                                    title="${key} - ${stateLabel}"
+                                >
+                                    ${stateLabel}
+                                </td>
+                            `;
+                        })
+                        .join("");
+
+                    return `
+                        <tr>
+                            <td class="hour-col">${hour}</td>
+                            ${cells}
+                        </tr>
+                    `;
+                })
+                .join("");
+
+            wrap.innerHTML = `
+                <table class="subject-pref-grid">
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            ${headCells}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${bodyRows}
+                    </tbody>
+                </table>
+            `;
+        };
+
+        const collectSubjectTimePreferences = () => {
+            const nonDefault = {};
+            Object.entries(subjectPreferenceMap).forEach(([key, state]) => {
+                if (state && state !== "AVAILABLE") {
+                    nonDefault[key] = state;
+                }
+            });
+            return nonDefault;
+        };
+
+        const renderTeacherPreferencesGrid = () => {
+            const wrap = document.getElementById("teacherPreferencesGrid");
+            if (!wrap) return;
+
+            const headCells = SUBJECT_PREF_DAY_LABELS
+                .map((label) => `<th>${label}</th>`)
+                .join("");
+
+            const bodyRows = SUBJECT_PREF_HOURS
+                .map((hour) => {
+                    const cells = SUBJECT_PREF_DAY_CODES
+                        .map((dayCode) => {
+                            const key = `${dayCode}_${hour}`;
+                            const state = teacherPreferenceMap[key] || "AVAILABLE";
+                            const stateLabel = SUBJECT_PREF_STATES[state] || state;
+                            return `
+                                <td
+                                    class="pref-cell pref-state-${state}"
+                                    data-teacher-pref-key="${key}"
+                                    title="${key} - ${stateLabel}"
+                                >
+                                    ${stateLabel}
+                                </td>
+                            `;
+                        })
+                        .join("");
+
+                    return `
+                        <tr>
+                            <td class="hour-col">${hour}</td>
+                            ${cells}
+                        </tr>
+                    `;
+                })
+                .join("");
+
+            wrap.innerHTML = `
+                <table class="subject-pref-grid">
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            ${headCells}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${bodyRows}
+                    </tbody>
+                </table>
+            `;
+        };
+
+        const collectTeacherTimePreferences = () => {
+            const nonDefault = {};
+            Object.entries(teacherPreferenceMap).forEach(([key, state]) => {
+                if (state && state !== "AVAILABLE") {
+                    nonDefault[key] = state;
+                }
+            });
+            return nonDefault;
+        };
+
+        const toIsoDateDisplay = (value) => {
+            if (!value) return "-";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return "-";
+            return date.toLocaleString("es-ES", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+            });
+        };
+
+        const buildSavedTimetableGroups = (schedules) => {
+            const groupsByName = new Map();
+            (schedules || []).forEach((schedule) => {
+                const observation = (schedule.observations || "").trim();
+                if (observation === AUTO_GENERATED_OBSERVATION) {
+                    return;
+                }
+                const name = (schedule.name || "").trim();
+                if (!name) {
+                    return;
+                }
+
+                if (!groupsByName.has(name)) {
+                    groupsByName.set(name, {
+                        name,
+                        sessions: [],
+                        updated_at: schedule.updated_at,
+                    });
+                }
+
+                const group = groupsByName.get(name);
+                group.sessions.push(schedule);
+
+                if (
+                    schedule.updated_at &&
+                    (!group.updated_at || new Date(schedule.updated_at) > new Date(group.updated_at))
+                ) {
+                    group.updated_at = schedule.updated_at;
+                }
+            });
+
+            return [...groupsByName.values()].sort(
+                (a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0)
+            );
+        };
+
+        const populateSavedTimetableFilters = (sessions) => {
+            const groupFilter = document.getElementById("savedTimetableGroupFilter");
+            const teacherFilter = document.getElementById("savedTimetableTeacherFilter");
+            const groupNames = [...new Set((sessions || []).map((s) => s.group_name).filter(Boolean))].sort();
+            const teacherNames = [...new Set((sessions || []).map((s) => s.teacher_name).filter(Boolean))].sort();
+
+            groupFilter.innerHTML =
+                '<option value="">Todos los grupos</option>' +
+                groupNames.map((name) => `<option value="${name}">${name}</option>`).join("");
+            teacherFilter.innerHTML =
+                '<option value="">Todos los profesores</option>' +
+                teacherNames.map((name) => `<option value="${name}">${name}</option>`).join("");
+
+            groupFilter.value = "";
+            teacherFilter.value = "";
+            groupFilter.disabled = false;
+            teacherFilter.disabled = false;
+        };
+
+        const STAGE_SLOT_TEMPLATE = {
+            preschool: [
+                ["09:00", "10:00"],
+                ["10:00", "10:30"],
+                ["11:00", "12:00"],
+                ["12:00", "13:00"],
+                ["13:00", "13:30"],
+            ],
+            primary: [
+                ["09:00", "10:00"],
+                ["10:00", "11:00"],
+                ["11:00", "11:30"],
+                ["12:00", "13:00"],
+                ["13:00", "14:00"],
+            ],
+            secondary: [
+                ["08:00", "09:00"],
+                ["09:00", "10:00"],
+                ["10:00", "11:00"],
+                ["11:30", "12:30"],
+                ["12:30", "13:30"],
+                ["13:30", "14:30"],
+            ],
+        };
+
+        const STAGE_OFFSET = {
+            preschool: 0,
+            primary: 5,
+            secondary: 10,
+        };
+
+        const DAY_LABELS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+
+        const buildWeeklySlotOptions = (stage) => {
+            const normalized = normalizeStage(stage) || "primary";
+            const ranges = STAGE_SLOT_TEMPLATE[normalized] || STAGE_SLOT_TEMPLATE.primary;
+            const perDay = 16;
+            const stageOffset = STAGE_OFFSET[normalized] || STAGE_OFFSET.primary;
+            const dayCodes = ["MON", "TUE", "WED", "THU", "FRI"];
+            const options = [];
+
+            for (let d = 0; d < dayCodes.length; d += 1) {
+                for (let h = 0; h < ranges.length; h += 1) {
+                    const [start, end] = ranges[h];
+                    options.push({
+                        value: d * perDay + stageOffset + h,
+                        label: `${DAY_LABELS[d]} ${start}-${end}`,
+                    });
+                }
+            }
+
+            return options;
+        };
+
+        const getSlotIndexFromSchedule = (schedule) => {
+            const start = new Date(schedule.start_time);
+            const weekday = start.getDay();
+            const dayToIndex = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4 };
+            const dayIdx = dayToIndex[weekday];
+            if (dayIdx === undefined) {
+                return null;
+            }
+
+            const stage = normalizeStage(schedule.group_stage) || "primary";
+            const ranges = STAGE_SLOT_TEMPLATE[stage] || STAGE_SLOT_TEMPLATE.primary;
+            const startHM = `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`;
+            const end = new Date(schedule.end_time);
+            const endHM = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
+            const withinStage = ranges.findIndex(([s, e]) => s === startHM && e === endHM);
+            if (withinStage < 0) {
+                return null;
+            }
+            return dayIdx * 16 + (STAGE_OFFSET[stage] || STAGE_OFFSET.primary) + withinStage;
+        };
+
+        const renderSavedManualChangeControls = () => {
+            const sessionSelect = document.getElementById("savedManualSessionSelect");
+            const slotSelect = document.getElementById("savedManualSlotSelect");
+            const applyBtn = document.getElementById("applySavedManualChangeBtn");
+
+            const group =
+                selectedSavedTimetableIndex !== null
+                    ? savedTimetableGroups[selectedSavedTimetableIndex]
+                    : null;
+
+            if (!group) {
+                sessionSelect.innerHTML = '<option value="">Selecciona un horario guardado</option>';
+                slotSelect.innerHTML = '<option value="">Selecciona destino</option>';
+                sessionSelect.disabled = true;
+                slotSelect.disabled = true;
+                applyBtn.disabled = true;
+                return;
+            }
+
+            const sessions = getSelectedSavedTimetableSessions();
+            const sessionsById = new Map(sessions.map((s) => [String(s.id), s]));
+
+            sessionSelect.innerHTML =
+                '<option value="">Selecciona clase</option>' +
+                sessions
+                    .map((s) => {
+                        const currentSlot = getSlotIndexFromSchedule(s);
+                        const currentSlotText = currentSlot === null ? "slot desconocido" : `slot ${currentSlot}`;
+                        return `<option value="${s.id}">${s.subject_name || "Sin asignatura"} | ${s.group_name || "Sin grupo"} | ${currentSlotText}</option>`;
+                    })
+                    .join("");
+
+            const selectedSession = sessions[0] || null;
+            const initialStage = selectedSession ? normalizeStage(selectedSession.group_stage) : "primary";
+            const initialSlotOptions = buildWeeklySlotOptions(initialStage);
+
+            slotSelect.innerHTML =
+                '<option value="">Selecciona destino</option>' +
+                initialSlotOptions
+                    .map((o) => `<option value="${o.value}">${o.label} (slot ${o.value})</option>`)
+                    .join("");
+
+            sessionSelect.disabled = sessions.length === 0;
+            slotSelect.disabled = sessions.length === 0;
+            applyBtn.disabled = true;
+
+            sessionSelect.onchange = () => {
+                const selected = sessionsById.get(sessionSelect.value);
+                const stage = selected ? normalizeStage(selected.group_stage) : initialStage;
+                const slotOptions = buildWeeklySlotOptions(stage);
+                slotSelect.innerHTML =
+                    '<option value="">Selecciona destino</option>' +
+                    slotOptions
+                        .map((o) => `<option value="${o.value}">${o.label} (slot ${o.value})</option>`)
+                        .join("");
+                const hasSession = !!sessionSelect.value;
+                const hasSlot = !!slotSelect.value;
+                applyBtn.disabled = !(hasSession && hasSlot);
+            };
+        };
+
+        const clearSavedTimetableFilters = () => {
+            const groupFilter = document.getElementById("savedTimetableGroupFilter");
+            const teacherFilter = document.getElementById("savedTimetableTeacherFilter");
+            groupFilter.innerHTML = '<option value="">Todos los grupos</option>';
+            teacherFilter.innerHTML = '<option value="">Todos los profesores</option>';
+            groupFilter.disabled = true;
+            teacherFilter.disabled = true;
+        };
+
+        const renderUsers = (items) => {
+            const tbody = document.getElementById("usersList");
+            if (!items.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay usuarios</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = items
+                .map(
+                    (u) => `
+                    <tr>
+                        <td>${u.id}</td>
+                        <td>${u.given_name || ""} ${u.family_name || ""}</td>
+                        <td>${u.email}</td>
+                        <td>${u.role_display || u.role}</td>
+                        <td>${u.is_enabled ? "Sí" : "No"}</td>
+                    </tr>
+                `
+                )
+                .join("");
+        };
+
+        const populateGeneratedTimetableUsers = (users) => {
+            const select = document.getElementById("generatedTimetableUsers");
+            if (!select) return;
+
+            const selectedValues = new Set(
+                Array.from(select.selectedOptions || []).map((opt) => opt.value)
+            );
+            select.innerHTML = (users || [])
+                .map(
+                    (user) =>
+                        `<option value="${user.id}">${user.given_name || ""} ${user.family_name || ""} (${user.role_display || user.role})</option>`
+                )
+                .join("");
+
+            Array.from(select.options).forEach((option) => {
+                if (selectedValues.has(option.value)) {
+                    option.selected = true;
+                }
+            });
+        };
+
+        const getSelectedSavedTimetableSessions = () => {
+            if (selectedSavedTimetableIndex === null) {
+                return [];
+            }
+            const group = savedTimetableGroups[selectedSavedTimetableIndex];
+            if (!group) {
+                return [];
+            }
+
+            const selectedGroup = document.getElementById("savedTimetableGroupFilter").value;
+            const selectedTeacher = document.getElementById("savedTimetableTeacherFilter").value;
+
+            return group.sessions.filter((session) => {
+                if (selectedGroup && session.group_name !== selectedGroup) {
+                    return false;
+                }
+                if (selectedTeacher && session.teacher_name !== selectedTeacher) {
+                    return false;
+                }
+                return true;
+            });
+        };
+
+        const renderSavedTimetablePreview = () => {
+            const output = document.getElementById("savedTimetableOutput");
+            const group =
+                selectedSavedTimetableIndex !== null
+                    ? savedTimetableGroups[selectedSavedTimetableIndex]
+                    : null;
+
+            if (!group) {
+                output.style.display = "none";
+                output.innerHTML = "";
+                clearSavedTimetableFilters();
+                renderSavedManualChangeControls();
+                return;
+            }
+
+            const sessions = getSelectedSavedTimetableSessions();
+            const selectedGroup = document.getElementById("savedTimetableGroupFilter").value;
+            const selectedTeacher = document.getElementById("savedTimetableTeacherFilter").value;
+            const viewMode = selectedGroup ? "course" : selectedTeacher ? "teacher" : "mixed";
+            displaySchedules(
+                sessions,
+                output,
+                `Horario guardado: ${group.name}`,
+                { mode: viewMode }
+            );
+            renderSavedManualChangeControls();
+        };
+
+        const renderSavedSchedules = (schedules) => {
+            savedTimetableGroups = buildSavedTimetableGroups(schedules);
+            const tbody = document.getElementById("savedSchedulesList");
+            const selectedName = selectedSavedTimetableName;
+
+            if (!savedTimetableGroups.length) {
+                selectedSavedTimetableIndex = null;
+                selectedSavedTimetableName = null;
+                renderSavedTimetablePreview();
+                tbody.innerHTML =
+                    '<tr><td colspan="4" class="empty-state">No hay horarios guardados todavía</td></tr>';
+                return;
+            }
+
+            if (selectedName) {
+                const nextIndex = savedTimetableGroups.findIndex((group) => group.name === selectedName);
+                selectedSavedTimetableIndex = nextIndex >= 0 ? nextIndex : null;
+            }
+
+            tbody.innerHTML = savedTimetableGroups
+                .map(
+                    (group, index) => `
+                    <tr>
+                        <td>${group.name}</td>
+                        <td>${group.sessions.length}</td>
+                        <td>${toIsoDateDisplay(group.updated_at)}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn-secondary" onclick="viewSavedTimetable(${index})">Ver</button>
+                                <button class="btn-danger" onclick="deleteSavedTimetable(${index})">Eliminar</button>
+                            </div>
+                        </td>
+                    </tr>
+                `
+                )
+                .join("");
+
+            if (selectedSavedTimetableIndex === null) {
+                selectedSavedTimetableIndex = 0;
+            }
+
+            selectedSavedTimetableName =
+                savedTimetableGroups[selectedSavedTimetableIndex]?.name || null;
+
+            const selectedGroup = savedTimetableGroups[selectedSavedTimetableIndex];
+            if (selectedGroup) {
+                populateSavedTimetableFilters(selectedGroup.sessions);
+            }
+            renderSavedTimetablePreview();
+        };
+
+        window.viewSavedTimetable = (index) => {
+            const group = savedTimetableGroups[index];
+            if (!group) {
+                showAlert("error", "Horario guardado no encontrado.");
+                return;
+            }
+
+            selectedSavedTimetableIndex = index;
+            selectedSavedTimetableName = group.name;
+            populateSavedTimetableFilters(group.sessions);
+            renderSavedTimetablePreview();
+        };
+
+        window.deleteSavedTimetable = async (index) => {
+            const group = savedTimetableGroups[index];
+            if (!group) {
+                showAlert("error", "Horario guardado no encontrado.");
+                return;
+            }
+
+            if (
+                !confirm(
+                    `¿Eliminar el horario guardado "${group.name}" con ${group.sessions.length} sesiones?`
+                )
+            ) {
+                return;
+            }
+
+            const results = await Promise.all(
+                group.sessions.map((session) => apiCall(`/schedules/${session.id}/`, "DELETE"))
+            );
+            const failed = results.filter((r) => !r.ok).length;
+            if (failed) {
+                showAlert("error", `No se pudieron eliminar ${failed} sesiones del horario.`);
+            } else {
+                showAlert("success", "✓ Horario eliminado correctamente");
+                if (selectedSavedTimetableIndex === index) {
+                    selectedSavedTimetableIndex = null;
+                    selectedSavedTimetableName = null;
+                }
+            }
+            loadAllData();
+        };
+
+        const getUniqueClassroomTypes = (classrooms) => {
+            return [...new Set(
+                (classrooms || [])
+                    .map((c) => (c.classroom_type || "").trim())
+                    .filter(Boolean)
+            )].sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+        };
+
+        const populateClassroomTypeSelectors = (classrooms) => {
+            const types = getUniqueClassroomTypes(classrooms);
+
+            const classroomTypeSelect = document.getElementById("classroomTypeSelect");
+            if (classroomTypeSelect) {
+                const selected = classroomTypeSelect.value;
+                classroomTypeSelect.innerHTML =
+                    '<option value="">Sin tipo</option>' +
+                    types.map((type) => `<option value="${type}">${type}</option>`).join("") +
+                    '<option value="__NEW__">+ Nuevo tipo...</option>';
+
+                if (selected === "__NEW__" || types.includes(selected) || selected === "") {
+                    classroomTypeSelect.value = selected;
+                } else {
+                    classroomTypeSelect.value = "";
+                }
+            }
+
+            const subjectRequiredTypeSelect = document.getElementById("subjectRequiredClassroomType");
+            if (subjectRequiredTypeSelect) {
+                const selected = subjectRequiredTypeSelect.value;
+                subjectRequiredTypeSelect.innerHTML =
+                    '<option value="">Sin requisito</option>' +
+                    types.map((type) => `<option value="${type}">${type}</option>`).join("");
+
+                if (types.includes(selected) || selected === "") {
+                    subjectRequiredTypeSelect.value = selected;
+                } else {
+                    subjectRequiredTypeSelect.value = "";
+                }
             }
         };
 
@@ -798,20 +1701,43 @@
 
         // Load All Data
         const loadAllData = async () => {
-            const [teachers, classrooms, groups, subjects] = await Promise.all([
+            const [teachers, classrooms, groups, subjects, schedules, savedSchedules, users] = await Promise.all([
                 apiCall("/teachers/"),
                 apiCall("/classrooms/"),
                 apiCall("/groups/"),
                 apiCall("/subjects/"),
+                apiCall("/schedules/"),
+                apiCall("/schedules/saved/"),
+                apiCall("/users/"),
             ]);
 
-            console.log("Load data results:", { teachers, classrooms, groups, subjects });
+            console.log("Load data results:", {
+                teachers,
+                classrooms,
+                groups,
+                subjects,
+                schedules,
+                savedSchedules,
+                users,
+            });
 
             // Handle paginated responses (data.results) or direct arrays
             const teacherData = teachers.data?.results || (Array.isArray(teachers.data) ? teachers.data : []);
             const classroomData = classrooms.data?.results || (Array.isArray(classrooms.data) ? classrooms.data : []);
             const groupData = groups.data?.results || (Array.isArray(groups.data) ? groups.data : []);
             const subjectData = subjects.data?.results || (Array.isArray(subjects.data) ? subjects.data : []);
+            const scheduleData = schedules.data?.results || (Array.isArray(schedules.data) ? schedules.data : []);
+            const savedScheduleData =
+                savedSchedules.data?.results ||
+                (Array.isArray(savedSchedules.data) ? savedSchedules.data : []);
+            const userData = users.data?.results || (Array.isArray(users.data) ? users.data : []);
+
+            currentTeachers = teacherData;
+            currentClassrooms = classroomData;
+            currentGroups = groupData;
+            currentSubjects = subjectData;
+            currentSchedules = scheduleData;
+            currentUsers = userData;
 
             document.getElementById("statTeachers").textContent = teachers.data?.count || teacherData.length;
             document.getElementById("statClassrooms").textContent = classrooms.data?.count || classroomData.length;
@@ -822,7 +1748,60 @@
             renderClassrooms(classroomData);
             renderGroups(groupData);
             renderSubjects(subjectData, teacherData, groupData);
+            renderSavedSchedules(savedScheduleData);
+            renderUsers(userData);
+            populateGeneratedTimetableUsers(userData);
+            populateClassroomTypeSelectors(classroomData);
             populateScheduleCourseFilter(groupData);
+        };
+
+        document.getElementById("managedUserCanLogin").onchange = (event) => {
+            const wrap = document.getElementById("managedUserPasswordWrap");
+            wrap.style.display = event.target.checked ? "block" : "none";
+            if (!event.target.checked) {
+                document.getElementById("managedUserPassword").value = "";
+            }
+        };
+
+        document.getElementById("createManagedUserBtn").onclick = async () => {
+            const canLogin = document.getElementById("managedUserCanLogin").checked;
+            const payload = {
+                given_name: document.getElementById("managedUserName").value.trim(),
+                family_name: document.getElementById("managedUserFamilyName").value.trim(),
+                email: document.getElementById("managedUserEmail").value.trim(),
+                role: document.getElementById("managedUserRole").value,
+                can_login: canLogin,
+                is_enabled: true,
+            };
+
+            if (!payload.given_name || !payload.email) {
+                showAlert("error", "Nombre y email son obligatorios.");
+                return;
+            }
+
+            if (canLogin) {
+                payload.password = document.getElementById("managedUserPassword").value;
+                if (!payload.password) {
+                    showAlert("error", "Si puede iniciar sesión, indica una contraseña.");
+                    return;
+                }
+            }
+
+            const result = await apiCall("/users/managed_create/", "POST", payload);
+            if (!result.ok) {
+                showAlert("error", result.data.detail || JSON.stringify(result.data) || "Error al crear usuario");
+                return;
+            }
+
+            showAlert("success", "✓ Usuario creado correctamente");
+            document.getElementById("managedUserName").value = "";
+            document.getElementById("managedUserFamilyName").value = "";
+            document.getElementById("managedUserEmail").value = "";
+            document.getElementById("managedUserRole").value = "director";
+            document.getElementById("managedUserCanLogin").checked = false;
+            document.getElementById("managedUserPassword").value = "";
+            document.getElementById("managedUserPasswordWrap").style.display = "none";
+            loadAllData();
         };
 
         const populateScheduleCourseFilter = (groups) => {
@@ -881,20 +1860,117 @@
 
         const renderFilteredSchedules = () => {
             const filtered = getFilteredSchedules(latestGeneratedSchedules);
-            displaySchedules(filtered);
+            const selectedCourse = document.getElementById("scheduleCourseFilter").value;
+            displaySchedules(filtered, null, "Detalle de sesiones", {
+                mode: selectedCourse ? "course" : "mixed",
+            });
         };
 
         document.getElementById("scheduleCourseFilter").onchange = () => {
             renderFilteredSchedules();
         };
 
+        document.getElementById("savedTimetableGroupFilter").onchange = () => {
+            renderSavedTimetablePreview();
+        };
+
+        document.getElementById("savedTimetableTeacherFilter").onchange = () => {
+            renderSavedTimetablePreview();
+        };
+
+        document.getElementById("savedManualSlotSelect").onchange = () => {
+            const hasSession = !!document.getElementById("savedManualSessionSelect").value;
+            const hasSlot = !!document.getElementById("savedManualSlotSelect").value;
+            document.getElementById("applySavedManualChangeBtn").disabled = !(hasSession && hasSlot);
+        };
+
+        document.getElementById("applySavedManualChangeBtn").onclick = async () => {
+            const scheduleIdRaw = document.getElementById("savedManualSessionSelect").value;
+            const newSlotRaw = document.getElementById("savedManualSlotSelect").value;
+
+            if (!scheduleIdRaw || !newSlotRaw) {
+                showAlert("error", "Selecciona clase y slot de destino.");
+                return;
+            }
+
+            const scheduleId = parseInt(scheduleIdRaw, 10);
+            const newSlotIndex = parseInt(newSlotRaw, 10);
+
+            if (Number.isNaN(scheduleId) || Number.isNaN(newSlotIndex)) {
+                showAlert("error", "Datos inválidos para aplicar el cambio manual.");
+                return;
+            }
+
+            const applyBtn = document.getElementById("applySavedManualChangeBtn");
+            applyBtn.disabled = true;
+
+            const result = await apiCall("/schedules/apply-manual-change/", "POST", {
+                schedule_id: scheduleId,
+                new_slot_index: newSlotIndex,
+            });
+
+            if (!result.ok) {
+                showAlert("error", result.data.detail || "No se pudo aplicar el cambio manual");
+                renderSavedManualChangeControls();
+                return;
+            }
+
+            showAlert("success", "✓ Cambio manual aplicado en horario guardado");
+            await loadAllData();
+            renderSavedManualChangeControls();
+        };
+
         document.getElementById("refreshBtn").onclick = loadAllData;
+
+        document.getElementById("subjectPreferencesGrid").addEventListener("click", (event) => {
+            const cell = event.target.closest(".pref-cell");
+            if (!cell) return;
+
+            const key = cell.dataset.prefKey;
+            const brush = document.getElementById("subjectPreferenceBrush").value;
+            if (!key || !SUBJECT_PREF_STATES[brush]) return;
+
+            subjectPreferenceMap[key] = brush;
+            renderSubjectPreferencesGrid();
+        });
+
+        document.getElementById("subjectPreferenceClearBtn").onclick = () => {
+            resetSubjectPreferences();
+            showAlert("info", "Preferencias de asignatura reiniciadas a Available");
+        };
+
+        document.getElementById("teacherPreferencesGrid").addEventListener("click", (event) => {
+            const cell = event.target.closest(".pref-cell");
+            if (!cell) return;
+
+            const key = cell.dataset.teacherPrefKey;
+            const brush = document.getElementById("teacherPreferenceBrush").value;
+            if (!key || !SUBJECT_PREF_STATES[brush]) return;
+
+            teacherPreferenceMap[key] = brush;
+            renderTeacherPreferencesGrid();
+        });
+
+        document.getElementById("teacherPreferenceClearBtn").onclick = () => {
+            resetTeacherPreferences();
+            showAlert("info", "Preferencias de profesor reiniciadas a Available");
+        };
+
+        document.getElementById("classroomTypeSelect").onchange = (event) => {
+            const newTypeInput = document.getElementById("classroomTypeNew");
+            if (!newTypeInput) return;
+            const isNewType = event.target.value === "__NEW__";
+            newTypeInput.style.display = isNewType ? "block" : "none";
+            if (!isNewType) {
+                newTypeInput.value = "";
+            }
+        };
 
         // Teachers CRUD
         const renderTeachers = (items) => {
             const tbody = document.getElementById("teachersList");
             if (!items.length) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay profesores registrados</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No hay profesores registrados</td></tr>';
                 return;
             }
             tbody.innerHTML = items.map(t => `
@@ -902,9 +1978,9 @@
                     <td>${t.id}</td>
                     <td>${t.name}</td>
                     <td>${t.max_weekly_hours}</td>
-                    <td>${t.working_hours}</td>
                     <td>
                         <div class="action-buttons">
+                            <button class="btn-secondary" onclick="editEntity('teachers', ${t.id})">Modificar</button>
                             <button class="btn-danger" onclick="deleteEntity('teachers', ${t.id})">Eliminar</button>
                         </div>
                     </td>
@@ -916,9 +1992,7 @@
             const payload = {
                 name: document.getElementById("teacherName").value,
                 max_weekly_hours: parseInt(document.getElementById("teacherMaxHours").value),
-                working_hours: parseInt(document.getElementById("teacherCurrentHours").value),
-                preferences: document.getElementById("teacherPreferences").value,
-                availability: document.getElementById("teacherAvailability").value,
+                time_preferences: collectTeacherTimePreferences(),
             };
             if (!payload.name) {
                 showAlert("error", "Ingresa nombre del profesor");
@@ -928,6 +2002,7 @@
             if (result.ok) {
                 showAlert("success", "✓ Profesor creado");
                 document.getElementById("teacherName").value = "";
+                resetTeacherPreferences();
                 loadAllData();
             } else {
                 showAlert("error", result.data.detail || "Error al crear");
@@ -938,15 +2013,17 @@
         const renderClassrooms = (items) => {
             const tbody = document.getElementById("classroomsList");
             if (!items.length) {
-                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No hay aulas registradas</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No hay aulas registradas</td></tr>';
                 return;
             }
             tbody.innerHTML = items.map(c => `
                 <tr>
                     <td>${c.id}</td>
                     <td>${c.name}</td>
+                    <td>${c.classroom_type || "-"}</td>
                     <td>
                         <div class="action-buttons">
+                            <button class="btn-secondary" onclick="editEntity('classrooms', ${c.id})">Modificar</button>
                             <button class="btn-danger" onclick="deleteEntity('classrooms', ${c.id})">Eliminar</button>
                         </div>
                     </td>
@@ -956,14 +2033,27 @@
 
         document.getElementById("createClassroomBtn").onclick = async () => {
             const name = document.getElementById("classroomName").value;
+            const classroomTypeSelect = document.getElementById("classroomTypeSelect").value;
+            const classroomTypeNew = document.getElementById("classroomTypeNew").value.trim();
+            const classroomType = classroomTypeSelect === "__NEW__" ? classroomTypeNew : classroomTypeSelect;
             if (!name) {
                 showAlert("error", "Ingresa nombre del aula");
                 return;
             }
-            const result = await apiCall("/classrooms/", "POST", { name });
+            if (classroomTypeSelect === "__NEW__" && !classroomType) {
+                showAlert("error", "Escribe el nuevo tipo de aula");
+                return;
+            }
+            const result = await apiCall("/classrooms/", "POST", {
+                name,
+                classroom_type: classroomType,
+            });
             if (result.ok) {
                 showAlert("success", "✓ Aula creada");
                 document.getElementById("classroomName").value = "";
+                document.getElementById("classroomTypeSelect").value = "";
+                document.getElementById("classroomTypeNew").value = "";
+                document.getElementById("classroomTypeNew").style.display = "none";
                 loadAllData();
             } else {
                 showAlert("error", result.data.detail || "Error al crear");
@@ -984,6 +2074,7 @@
                     <td>${g.stage}</td>
                     <td>
                         <div class="action-buttons">
+                            <button class="btn-secondary" onclick="editEntity('groups', ${g.id})">Modificar</button>
                             <button class="btn-danger" onclick="deleteEntity('groups', ${g.id})">Eliminar</button>
                         </div>
                     </td>
@@ -1014,7 +2105,7 @@
         const renderSubjects = (items, teachers, groups) => {
             const tbody = document.getElementById("subjectsList");
             if (!items.length) {
-                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay asignaturas registradas</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No hay asignaturas registradas</td></tr>';
                 return;
             }
             tbody.innerHTML = items.map(s => `
@@ -1024,8 +2115,10 @@
                     <td>${s.weekly_hours}</td>
                     <td>${s.teacher_name}</td>
                     <td>${s.group_name || "-"}</td>
+                    <td>${s.required_classroom_type || "-"}</td>
                     <td>
                         <div class="action-buttons">
+                            <button class="btn-secondary" onclick="editEntity('subjects', ${s.id})">Modificar</button>
                             <button class="btn-danger" onclick="deleteEntity('subjects', ${s.id})">Eliminar</button>
                         </div>
                     </td>
@@ -1046,8 +2139,9 @@
             const payload = {
                 name: document.getElementById("subjectName").value,
                 weekly_hours: parseInt(document.getElementById("subjectWeeklyHours").value),
-                duration: parseFloat(document.getElementById("subjectDuration").value),
                 preferred_time_slot: "",
+                required_classroom_type: document.getElementById("subjectRequiredClassroomType").value,
+                time_preferences: collectSubjectTimePreferences(),
                 stage: document.getElementById("subjectStage").value,
                 type: document.getElementById("subjectType").value,
                 teacher: parseInt(document.getElementById("subjectTeacher").value),
@@ -1061,6 +2155,8 @@
             if (result.ok) {
                 showAlert("success", "✓ Asignatura creada");
                 document.getElementById("subjectName").value = "";
+                document.getElementById("subjectRequiredClassroomType").value = "";
+                resetSubjectPreferences();
                 loadAllData();
             } else {
                 showAlert("error", result.data.detail || "Error al crear");
@@ -1075,16 +2171,116 @@
 
             if (result.ok) {
                 latestGeneratedSchedules = result.data.schedules || [];
+                document.getElementById("saveGeneratedTimetableBtn").disabled = !latestGeneratedSchedules.length;
                 showAlert("success", `✓ Se generaron ${result.data.generated_count} sesiones`);
                 renderFilteredSchedules();
                 loadAllData();
             } else {
+                document.getElementById("saveGeneratedTimetableBtn").disabled = true;
                 showAlert("error", result.data.detail || "Error al generar");
             }
         };
 
-        const displaySchedules = (schedules) => {
-            const output = document.getElementById("generatorOutput");
+        document.getElementById("saveGeneratedTimetableBtn").onclick = async () => {
+            if (!latestGeneratedSchedules.length) {
+                showAlert("error", "No hay un horario generado para guardar.");
+                return;
+            }
+
+            const input = document.getElementById("generatedTimetableName");
+            const timetableName = (input.value || "").trim();
+            if (!timetableName) {
+                showAlert("error", "Indica un nombre para guardar el horario.");
+                return;
+            }
+
+            const scheduleIds = latestGeneratedSchedules
+                .map((item) => item.id)
+                .filter((id) => Number.isInteger(id));
+
+            const selectedUserIds = Array.from(
+                document.getElementById("generatedTimetableUsers").selectedOptions || []
+            ).map((option) => parseInt(option.value, 10));
+
+            if (!scheduleIds.length) {
+                showAlert("error", "No se encontraron sesiones generadas para guardar.");
+                return;
+            }
+
+            const result = await apiCall("/schedules/save-generated/", "POST", {
+                timetable_name: timetableName,
+                schedule_ids: scheduleIds,
+                user_ids: selectedUserIds,
+            });
+
+            if (!result.ok) {
+                showAlert("error", result.data.detail || "Error al guardar el horario");
+                return;
+            }
+
+            showAlert("success", `✓ Horario guardado como "${timetableName}"`);
+            input.value = "";
+            latestGeneratedSchedules = [];
+            document.getElementById("saveGeneratedTimetableBtn").disabled = true;
+            loadAllData();
+        };
+
+        const STAGE_GRID_CONFIG = {
+            preschool: {
+                label: "Infantil",
+                rows: [
+                    { type: "class", start: "09:00", end: "10:00" },
+                    { type: "class", start: "10:00", end: "10:30" },
+                    { type: "break", start: "10:30", end: "11:00", label: "Recreo" },
+                    { type: "class", start: "11:00", end: "12:00" },
+                    { type: "class", start: "12:00", end: "13:00" },
+                    { type: "class", start: "13:00", end: "13:30" },
+                    { type: "break", start: "13:30", end: "14:00", label: "Recreo" },
+                ],
+            },
+            primary: {
+                label: "Primaria",
+                rows: [
+                    { type: "class", start: "09:00", end: "10:00" },
+                    { type: "class", start: "10:00", end: "11:00" },
+                    { type: "class", start: "11:00", end: "11:30" },
+                    { type: "break", start: "11:30", end: "12:00", label: "Recreo" },
+                    { type: "class", start: "12:00", end: "13:00" },
+                    { type: "class", start: "13:00", end: "14:00" },
+                ],
+            },
+            secondary: {
+                label: "ESO",
+                rows: [
+                    { type: "class", start: "08:00", end: "09:00" },
+                    { type: "class", start: "09:00", end: "10:00" },
+                    { type: "class", start: "10:00", end: "11:00" },
+                    { type: "break", start: "11:00", end: "11:30", label: "Recreo" },
+                    { type: "class", start: "11:30", end: "12:30" },
+                    { type: "class", start: "12:30", end: "13:30" },
+                    { type: "class", start: "13:30", end: "14:30" },
+                ],
+            },
+        };
+
+        const normalizeStage = (raw) => {
+            const value = (raw || "").toString().trim().toLowerCase();
+            if (!value) return null;
+            if (value.includes("preschool") || value.includes("infantil")) return "preschool";
+            if (value.includes("primary") || value.includes("primaria")) return "primary";
+            if (value.includes("secondary") || value.includes("eso")) return "secondary";
+            return value;
+        };
+
+        const detectSessionsStage = (sessions) => {
+            const stages = [...new Set((sessions || []).map((s) => normalizeStage(s.group_stage)).filter(Boolean))];
+            return stages.length === 1 ? stages[0] : null;
+        };
+
+        const toHM = (date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+
+        const displaySchedules = (schedules, outputElement = null, detailTitle = "Detalle de sesiones", options = {}) => {
+            const output = outputElement || document.getElementById("generatorOutput");
             if (!schedules.length) {
                 output.style.display = "none";
                 return;
@@ -1116,10 +2312,149 @@
                 .filter((s) => visibleDays.includes(s.dayName))
                 .sort((a, b) => a.start - b.start);
 
-            const hourKeys = [...new Set(sessions.map((s) => s.hourKey))].sort();
+            const detectedStage = detectSessionsStage(sessions);
+            const config = options.mode === "course" ? STAGE_GRID_CONFIG[detectedStage] : null;
+            const teacherConfig = options.mode === "teacher" ? STAGE_GRID_CONFIG[detectedStage] : null;
+
+            if (config) {
+                const cellByDayAndRange = {};
+                sessions.forEach((s) => {
+                    const key = `${s.dayName}|${toHM(s.start)}-${toHM(s.end)}`;
+                    if (!cellByDayAndRange[key]) {
+                        cellByDayAndRange[key] = [];
+                    }
+                    cellByDayAndRange[key].push(s);
+                });
+
+                const rowsHtml = config.rows
+                    .map((row) => {
+                        const range = `${row.start}-${row.end}`;
+                        const dayCells = visibleDays
+                            .map((day) => {
+                                if (row.type === "break") {
+                                    return `<td class="schedule-cell" style="background:#fff4d6; text-align:center; font-weight:600; color:#7a5a00;">${row.label}</td>`;
+                                }
+
+                                const key = `${day}|${range}`;
+                                const cellSessions = cellByDayAndRange[key] || [];
+                                if (!cellSessions.length) {
+                                    return '<td class="schedule-cell"></td>';
+                                }
+                                const cards = cellSessions
+                                    .map(
+                                        (s) => `
+                                        <div class="schedule-card">
+                                            <strong>${s.subject_name || "Sin asignatura"}</strong>
+                                            <div>${s.teacher_name || "Sin profesor"}</div>
+                                            <div>${s.group_name || "Sin grupo"} | ${s.classroom_name || "Sin aula"}</div>
+                                        </div>
+                                    `
+                                    )
+                                    .join("");
+                                return `<td class="schedule-cell">${cards}</td>`;
+                            })
+                            .join("");
+
+                        return `
+                            <tr>
+                                <td class="schedule-time-col">${row.start} - ${row.end}</td>
+                                ${dayCells}
+                            </tr>
+                        `;
+                    })
+                    .join("");
+
+                output.innerHTML = `
+                    <div class="schedule-grid-wrap">
+                        <table class="schedule-grid">
+                            <thead>
+                                <tr>
+                                    <th>Hora (${config.label})</th>
+                                    ${visibleDays.map((day) => `<th>${day}</th>`).join("")}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3 class="schedule-detail-title">${detailTitle}</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Asignatura</th>
+                                <th>Profesor</th>
+                                <th>Aula</th>
+                                <th>Grupo</th>
+                                <th>Día</th>
+                                <th>Inicio</th>
+                                <th>Fin</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${sessions
+                                .map(
+                                    (s) => `
+                                    <tr>
+                                        <td>${s.subject_name || "-"}</td>
+                                        <td>${s.teacher_name || "-"}</td>
+                                        <td>${s.classroom_name || "-"}</td>
+                                        <td>${s.group_name || "-"}</td>
+                                        <td>${s.dayName}</td>
+                                        <td>${s.start.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</td>
+                                        <td>${s.end.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</td>
+                                    </tr>
+                                `
+                                )
+                                .join("")}
+                        </tbody>
+                    </table>
+                `;
+                output.style.display = "block";
+                return;
+            }
+
+            let sessionsForGenericGrid = [...sessions];
+            if (teacherConfig) {
+                const breakRows = teacherConfig.rows.filter((row) => row.type === "break");
+                const synthetic = [];
+
+                for (const dayName of visibleDays) {
+                    const daySample = sessions.find((s) => s.dayName === dayName);
+                    if (!daySample) {
+                        continue;
+                    }
+                    const dayDate = daySample.start;
+                    for (const brk of breakRows) {
+                        const [startHour, startMinute] = brk.start.split(":").map(Number);
+                        const [endHour, endMinute] = brk.end.split(":").map(Number);
+                        const start = new Date(dayDate);
+                        start.setHours(startHour, startMinute, 0, 0);
+                        const end = new Date(dayDate);
+                        end.setHours(endHour, endMinute, 0, 0);
+                        synthetic.push({
+                            subject_name: "Trabajo de Centro",
+                            teacher_name: sessions[0]?.teacher_name || "Profesor",
+                            classroom_name: "Patio",
+                            group_name: "-",
+                            dayName,
+                            start,
+                            end,
+                            hourKey: brk.start,
+                        });
+                    }
+                }
+
+                sessionsForGenericGrid = [...sessionsForGenericGrid, ...synthetic].sort(
+                    (a, b) => a.start - b.start
+                );
+            }
+
+            const hourKeys = [...new Set(sessionsForGenericGrid.map((s) => s.hourKey))].sort();
 
             const groupedByDayHour = {};
-            for (const session of sessions) {
+            for (const session of sessionsForGenericGrid) {
                 const key = `${session.dayName}|${session.hourKey}`;
                 if (!groupedByDayHour[key]) {
                     groupedByDayHour[key] = [];
@@ -1176,7 +2511,7 @@
                     </table>
                 </div>
 
-                <h3 class="schedule-detail-title">Detalle de sesiones</h3>
+                <h3 class="schedule-detail-title">${detailTitle}</h3>
                 <table>
                     <thead>
                         <tr>
@@ -1213,8 +2548,13 @@
 
         // Delete Entity
         window.deleteEntity = async (type, id) => {
+            const endpoint = ENTITY_ENDPOINTS[type];
+            if (!endpoint) {
+                showAlert("error", `Tipo de entidad no soportado: ${type}`);
+                return;
+            }
             if (!confirm("¿Estás seguro de que deseas eliminar?")) return;
-            const result = await apiCall(`/${type}/${id}/`, "DELETE");
+            const result = await apiCall(`${endpoint}${id}/`, "DELETE");
             if (result.ok) {
                 showAlert("success", "✓ Eliminado correctamente");
                 loadAllData();
@@ -1223,7 +2563,131 @@
             }
         };
 
+        // Edit Entity
+        window.editEntity = async (type, id) => {
+            const endpoint = ENTITY_ENDPOINTS[type];
+            if (!endpoint) {
+                showAlert("error", `Tipo de entidad no soportado: ${type}`);
+                return;
+            }
+
+            let payload = null;
+
+            if (type === "teachers") {
+                const entity = currentTeachers.find((item) => item.id === id);
+                if (!entity) {
+                    showAlert("error", "Profesor no encontrado en caché.");
+                    return;
+                }
+                const name = prompt("Nombre del profesor:", entity.name || "");
+                if (name === null || !name.trim()) return;
+                const maxWeeklyHoursRaw = prompt(
+                    "Máximo de horas semanales:",
+                    String(entity.max_weekly_hours ?? 20)
+                );
+                if (maxWeeklyHoursRaw === null) return;
+
+                payload = {
+                    name: name.trim(),
+                    max_weekly_hours: parseInt(maxWeeklyHoursRaw, 10),
+                };
+            }
+
+            if (type === "classrooms") {
+                const entity = currentClassrooms.find((item) => item.id === id);
+                if (!entity) {
+                    showAlert("error", "Aula no encontrada en caché.");
+                    return;
+                }
+                const name = prompt("Nombre del aula:", entity.name || "");
+                if (name === null || !name.trim()) return;
+                const classroomType = prompt(
+                    "Tipo de aula (vacío permitido):",
+                    entity.classroom_type || ""
+                );
+                if (classroomType === null) return;
+
+                payload = {
+                    name: name.trim(),
+                    classroom_type: classroomType.trim(),
+                };
+            }
+
+            if (type === "groups") {
+                const entity = currentGroups.find((item) => item.id === id);
+                if (!entity) {
+                    showAlert("error", "Grupo no encontrado en caché.");
+                    return;
+                }
+                const name = prompt("Nombre del grupo:", entity.name || "");
+                if (name === null || !name.trim()) return;
+                const stage = prompt(
+                    "Etapa (preschool, primary, secondary):",
+                    entity.stage || "primary"
+                );
+                if (stage === null || !stage.trim()) return;
+
+                payload = {
+                    name: name.trim(),
+                    stage: stage.trim().toLowerCase(),
+                };
+            }
+
+            if (type === "subjects") {
+                const entity = currentSubjects.find((item) => item.id === id);
+                if (!entity) {
+                    showAlert("error", "Asignatura no encontrada en caché.");
+                    return;
+                }
+                const name = prompt("Nombre de la asignatura:", entity.name || "");
+                if (name === null || !name.trim()) return;
+                const weeklyHoursRaw = prompt(
+                    "Horas semanales:",
+                    String(entity.weekly_hours ?? 1)
+                );
+                if (weeklyHoursRaw === null) return;
+                const stage = prompt(
+                    "Etapa (PRESCHOOL, PRIMARY, SECONDARY):",
+                    entity.stage || "PRIMARY"
+                );
+                if (stage === null || !stage.trim()) return;
+                const subjectType = prompt(
+                    "Tipo (NORMAL, TC):",
+                    entity.type || "NORMAL"
+                );
+                if (subjectType === null || !subjectType.trim()) return;
+                const requiredClassroomType = prompt(
+                    "Tipo de aula requerida (vacío permitido):",
+                    entity.required_classroom_type || ""
+                );
+                if (requiredClassroomType === null) return;
+
+                payload = {
+                    name: name.trim(),
+                    weekly_hours: parseInt(weeklyHoursRaw, 10),
+                    stage: stage.trim().toUpperCase(),
+                    type: subjectType.trim().toUpperCase(),
+                    required_classroom_type: requiredClassroomType.trim(),
+                };
+            }
+
+            if (!payload) {
+                showAlert("error", "No se pudo construir el payload de edición.");
+                return;
+            }
+
+            const result = await apiCall(`${endpoint}${id}/`, "PATCH", payload);
+            if (result.ok) {
+                showAlert("success", "✓ Entidad modificada");
+                loadAllData();
+            } else {
+                showAlert("error", result.data.detail || JSON.stringify(result.data) || "Error al modificar");
+            }
+        };
+
         // Init
+        resetSubjectPreferences();
+        resetTeacherPreferences();
         updateAuthUI();
         });
     </script>

@@ -3,19 +3,12 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from classroom.models import Classroom
-from user.models import RoleChoices, User
+from common.test_utils import AuthenticatedAdminAPIMixin
 
 
-class ClassroomApiTests(APITestCase):
+class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="classroom-api@test.com",
-            password="StrongPassword123!",
-            given_name="Api",
-            family_name="Tester",
-            role=RoleChoices.ADMINISTRATOR,
-        )
-        self.client.force_authenticate(self.user)
+        self.authenticate_admin(email_prefix="classroom-api")
 
     def test_create_classroom(self):
         payload = {"name": "Aula 1A"}

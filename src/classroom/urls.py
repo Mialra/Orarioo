@@ -1,16 +1,9 @@
 from django.urls import path
 
 from classroom.views import ClassroomViewSet
+from common.drf import build_crud_views
 
-classroom_list = ClassroomViewSet.as_view({"get": "list", "post": "create"})
-classroom_detail = ClassroomViewSet.as_view(
-    {
-        "get": "retrieve",
-        "put": "update",
-        "patch": "partial_update",
-        "delete": "destroy",
-    }
-)
+classroom_list, classroom_detail = build_crud_views(ClassroomViewSet)
 
 urlpatterns = [
     path("classrooms/", classroom_list, name="classroom-list"),

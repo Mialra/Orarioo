@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from common.serializer_utils import AUDIT_FIELD_NAMES
 from schedule.models import Schedule
 
 
@@ -7,6 +8,7 @@ class ScheduleSerializer(serializers.ModelSerializer):
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     classroom_name = serializers.CharField(source="classroom.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
+    group_stage = serializers.CharField(source="group.stage", read_only=True)
     subject_name = serializers.CharField(source="subject.name", read_only=True)
 
     class Meta:
@@ -23,24 +25,20 @@ class ScheduleSerializer(serializers.ModelSerializer):
             "classroom_name",
             "group",
             "group_name",
+            "group_stage",
             "subject",
             "subject_name",
             "users",
-            "created_at",
-            "updated_at",
-            "created_by",
-            "updated_by",
+            *AUDIT_FIELD_NAMES,
         ]
         read_only_fields = [
             "id",
             "teacher_name",
             "classroom_name",
             "group_name",
+            "group_stage",
             "subject_name",
-            "created_at",
-            "updated_at",
-            "created_by",
-            "updated_by",
+            *AUDIT_FIELD_NAMES,
         ]
 
     def validate(self, attrs):

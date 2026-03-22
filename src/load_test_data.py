@@ -1,6 +1,12 @@
 """
 Script to load test data into all entities for easy testing.
 Run from the src directory with: python load_test_data.py
+
+Dataset target:
+- 1º, 2º, 3º de Infantil
+- 1º a 6º de Primaria
+- 1º a 4º de ESO
+- One group per year (no A/B split)
 """
 
 import os
@@ -22,11 +28,56 @@ from django.contrib.auth import get_user_model  # noqa: E402
 from classroom.models import Classroom  # noqa: E402
 from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
 from group.models import Group  # noqa: E402
+from schedule.algorithm.slots import build_weekly_slots  # noqa: E402
+from schedule.algorithm.slots import session_stage_code  # noqa: E402
+from schedule.constants import SAVED_TIMETABLE_PREFIX  # noqa: E402
 from schedule.models import Schedule  # noqa: E402
-from subject.models import EducationalStage, Subject, SubjectType  # noqa: E402
-from teacher.models import Teacher  # noqa: E402
+from subject.models import EducationalStage  # noqa: E402
+from subject.models import Subject  # noqa: E402
+from subject.models import SubjectTimePreferenceState  # noqa: E402
+from subject.models import SubjectType  # noqa: E402; noqa: E402
+from teacher.models import Teacher, TeacherTimePreferenceState  # noqa: E402
 
 User = get_user_model()
+
+DAY_CODES = ["MON", "TUE", "WED", "THU", "FRI"]
+SLOT_TIMES = ["08:30", "09:30", "10:30", "12:00", "13:00", "14:00"]
+
+
+def build_time_preferences(*, unavailable=None, prefer_yes=None, prefer_no=None):
+    unavailable = unavailable or []
+    prefer_yes = prefer_yes or []
+    prefer_no = prefer_no or []
+
+    preferences = {}
+    for key in unavailable:
+        preferences[key] = TeacherTimePreferenceState.UNAVAILABLE
+    for key in prefer_yes:
+        preferences[key] = TeacherTimePreferenceState.PREFER_YES
+    for key in prefer_no:
+        preferences[key] = TeacherTimePreferenceState.PREFER_NO
+    return preferences
+
+
+def build_subject_time_preferences(
+    *, unavailable=None, prefer_yes=None, prefer_no=None
+):
+    unavailable = unavailable or []
+    prefer_yes = prefer_yes or []
+    prefer_no = prefer_no or []
+
+    preferences = {}
+    for key in unavailable:
+        preferences[key] = SubjectTimePreferenceState.UNAVAILABLE
+    for key in prefer_yes:
+        preferences[key] = SubjectTimePreferenceState.PREFER_YES
+    for key in prefer_no:
+        preferences[key] = SubjectTimePreferenceState.PREFER_NO
+    return preferences
+
+
+def slot_keys(day_codes, times):
+    return [f"{day}_{time}" for day in day_codes for time in times]
 
 
 def clear_existing_data():
@@ -47,18 +98,20 @@ def create_users():
 
     users = []
 
-    # Create superuser/administrator
+    # Create superuser/administrator for timetable generation ownership.
     admin = User.objects.create_superuser(
-        email="admin@test.com", password="admin123", name="Admin", family_name="Test"
+        email="admin@test.com",
+        password="admin123",
+        name="Administrador",
+        family_name="Centro",
     )
     users.append(admin)
     print(f"  ✓ Created administrator: {admin.email}")
 
-    # Create directors
+    # Directors for audit/review flow.
     directors_data = [
-        ("director1@test.com", "María", "García López"),
-        ("director2@test.com", "Juan", "Martínez Ruiz"),
-        ("director3@test.com", "Ana", "Fernández Sánchez"),
+        ("direccion.academica@test.com", "María", "García López"),
+        ("jefatura.estudios@test.com", "Juan", "Martínez Ruiz"),
     ]
 
     for email, name, family_name in directors_data:
@@ -76,202 +129,744 @@ def create_users():
 
 
 def create_teachers():
-    """Create test teachers for ESO subjects"""
+    """Create realistic teacher catalog with availability constraints."""
     print("\n👨‍🏫 Creating teachers...")
 
+    early_slots = slot_keys(["MON", "TUE", "WED", "THU", "FRI"], ["08:30", "09:30"])
+    last_slot = slot_keys(DAY_CODES, ["14:00"])
+
     teachers_data = [
-        ("Prof. Carlos Rodríguez", 20, "Matemáticas"),
-        ("Prof. Laura Jiménez", 20, "Lengua Castellana"),
-        ("Prof. Miguel Sánchez", 18, "Inglés"),
-        ("Prof. Elena Torres", 18, "Biología y Geología"),
-        ("Prof. Isabel Moreno", 18, "Geografía e Historia"),
-        ("Prof. David López", 15, "Educación Física"),
-        ("Prof. Carmen Díaz", 15, "Música"),
-        ("Prof. Antonio Ruiz", 15, "Educación Plástica"),
+        (
+            "infantil_1",
+            "Ana Morales",
+            30,
+            build_time_preferences(prefer_yes=early_slots[:5]),
+        ),
+        (
+            "infantil_2",
+            "Marta Gil",
+            30,
+            build_time_preferences(prefer_yes=early_slots[:5]),
+        ),
+        (
+            "infantil_3",
+            "Lucia Rojas",
+            30,
+            build_time_preferences(prefer_yes=early_slots[:5]),
+        ),
+        (
+            "pri_1",
+            "Carlos Leon",
+            32,
+            build_time_preferences(prefer_yes=early_slots[:6]),
+        ),
+        (
+            "pri_2",
+            "Sonia Ferrer",
+            32,
+            build_time_preferences(prefer_yes=early_slots[:6]),
+        ),
+        (
+            "pri_3",
+            "Diego Arias",
+            32,
+            build_time_preferences(prefer_yes=early_slots[:6]),
+        ),
+        (
+            "pri_4",
+            "Raquel Nunez",
+            32,
+            build_time_preferences(prefer_yes=early_slots[:6]),
+        ),
+        (
+            "pri_5",
+            "Javier Ortiz",
+            32,
+            build_time_preferences(prefer_yes=early_slots[:6]),
+        ),
+        (
+            "pri_6",
+            "Elena Varela",
+            32,
+            build_time_preferences(prefer_yes=early_slots[:6]),
+        ),
+        (
+            "ingles_1",
+            "Paula Martin",
+            35,
+            build_time_preferences(unavailable=slot_keys(["MON", "WED"], ["08:30"])),
+        ),
+        (
+            "ingles_2",
+            "Adrian Pardo",
+            30,
+            build_time_preferences(unavailable=slot_keys(["TUE", "THU"], ["08:30"])),
+        ),
+        (
+            "ef_1",
+            "Ruben Campos",
+            30,
+            build_time_preferences(
+                # Keep realistic constraints but ensure feasibility for 26 weekly sessions.
+                unavailable=slot_keys(["MON", "WED"], ["08:30"]),
+                prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"]),
+            ),
+        ),
+        (
+            "musica",
+            "Irene Salas",
+            24,
+            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])),
+        ),
+        (
+            "plastica",
+            "Noelia Prieto",
+            24,
+            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])),
+        ),
+        (
+            "religion",
+            "Alberto Crespo",
+            22,
+            build_time_preferences(unavailable=slot_keys(["FRI"], ["14:00"])),
+        ),
+        (
+            "frances",
+            "Clara Mendez",
+            20,
+            build_time_preferences(unavailable=slot_keys(["MON"], ["08:30"])),
+        ),
+        (
+            "eso_mates",
+            "Sergio Vidal",
+            30,
+            build_time_preferences(prefer_yes=early_slots[:8]),
+        ),
+        (
+            "eso_lengua",
+            "Beatriz Lozano",
+            30,
+            build_time_preferences(prefer_yes=early_slots[:8]),
+        ),
+        (
+            "eso_social",
+            "Victor Sanz",
+            28,
+            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["09:30", "10:30"])),
+        ),
+        (
+            "eso_bio",
+            "Natalia Roman",
+            24,
+            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])),
+        ),
+        (
+            "eso_fq",
+            "Guillermo Rey",
+            24,
+            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])),
+        ),
+        (
+            "eso_tec",
+            "Hector Plaza",
+            20,
+            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])),
+        ),
+        (
+            "orientacion",
+            "Laura Medina",
+            20,
+            build_time_preferences(prefer_no=last_slot),
+        ),
     ]
 
-    teachers = []
-    for name, max_hours, preferences in teachers_data:
+    teachers = {}
+    for key, name, max_hours, time_preferences in teachers_data:
         teacher = Teacher.objects.create(
             name=name,
             max_weekly_hours=max_hours,
             working_hours=0,
-            preferences=preferences,
-            availability="Lunes a Viernes: 8:30-15:00",
-            unavailability="",
+            time_preferences=time_preferences,
             created_by="system",
         )
-        teachers.append(teacher)
+        teachers[key] = teacher
         print(f"  ✓ Created teacher: {teacher.name}")
 
     return teachers
 
 
-def create_subjects(teachers, groups):
-    """Create test subjects for 1º ESO and 2º ESO"""
-    print("\n📚 Creating subjects...")
+def create_groups():
+    """Create groups from 1º Infantil to 4º ESO (single line per year)."""
+    print("\n👥 Creating groups...")
 
-    # Realistic subjects for Spanish ESO (Educación Secundaria Obligatoria)
-    # Each ESO year has 6 subjects with 5 hours/week = 30 hours/week (6 hours/day × 5 days)
-    # Format: (name, weekly_hours, duration, stage, type, teacher_index, group_index)
-    subjects_data = [
-        # 1º ESO subjects (6 subjects × 5 hours = 30 hours total)
-        (
-            "Matemáticas 1º ESO",
-            5,
-            1.0,
-            EducationalStage.SECONDARY,
-            SubjectType.NORMAL,
-            0,
-            0,
-        ),
-        (
-            "Lengua Castellana 1º ESO",
-            5,
-            1.0,
-            EducationalStage.SECONDARY,
-            SubjectType.NORMAL,
-            1,
-            0,
-        ),
-        ("Inglés 1º ESO", 5, 1.0, EducationalStage.SECONDARY, SubjectType.NORMAL, 2, 0),
-        (
-            "Biología y Geología 1º ESO",
-            5,
-            1.0,
-            EducationalStage.SECONDARY,
-            SubjectType.NORMAL,
-            3,
-            0,
-        ),
-        (
-            "Geografía e Historia 1º ESO",
-            5,
-            1.0,
-            EducationalStage.SECONDARY,
-            SubjectType.NORMAL,
-            4,
-            0,
-        ),
-        (
-            "Educación Física 1º ESO",
-            5,
-            1.0,
-            EducationalStage.SECONDARY,
-            SubjectType.NORMAL,
-            5,
-            0,
-        ),
-        # 2º ESO subjects (6 subjects × 5 hours = 30 hours total)
-        (
-            "Matemáticas 2º ESO",
-            5,
-            1.0,
-            EducationalStage.SECONDARY,
-            SubjectType.NORMAL,
-            0,
-            1,
-        ),
-        (
-            "Lengua Castellana 2º ESO",
-            5,
-            1.0,
-            EducationalStage.SECONDARY,
-            SubjectType.NORMAL,
-            1,
-            1,
-        ),
-        ("Inglés 2º ESO", 5, 1.0, EducationalStage.SECONDARY, SubjectType.NORMAL, 2, 1),
-        (
-            "Física y Química 2º ESO",
-            5,
-            1.0,
-            EducationalStage.SECONDARY,
-            SubjectType.NORMAL,
-            3,
-            1,
-        ),
-        (
-            "Geografía e Historia 2º ESO",
-            5,
-            1.0,
-            EducationalStage.SECONDARY,
-            SubjectType.NORMAL,
-            4,
-            1,
-        ),
-        ("Música 2º ESO", 5, 1.0, EducationalStage.SECONDARY, SubjectType.NORMAL, 6, 1),
+    groups_data = [
+        ("1º Infantil", GroupEducationalStage.PRESCHOOL),
+        ("2º Infantil", GroupEducationalStage.PRESCHOOL),
+        ("3º Infantil", GroupEducationalStage.PRESCHOOL),
+        ("1º Primaria", GroupEducationalStage.PRIMARY),
+        ("2º Primaria", GroupEducationalStage.PRIMARY),
+        ("3º Primaria", GroupEducationalStage.PRIMARY),
+        ("4º Primaria", GroupEducationalStage.PRIMARY),
+        ("5º Primaria", GroupEducationalStage.PRIMARY),
+        ("6º Primaria", GroupEducationalStage.PRIMARY),
+        ("1º ESO", GroupEducationalStage.SECONDARY),
+        ("2º ESO", GroupEducationalStage.SECONDARY),
+        ("3º ESO", GroupEducationalStage.SECONDARY),
+        ("4º ESO", GroupEducationalStage.SECONDARY),
     ]
 
-    subjects = []
-    for (
-        name,
-        weekly_hours,
-        duration,
-        stage,
-        sub_type,
-        teacher_idx,
-        group_idx,
-    ) in subjects_data:
-        subject = Subject.objects.create(
-            name=name,
-            weekly_hours=weekly_hours,
-            duration=duration,
-            preferred_time_slot="8:30-11:30" if "Matemáticas" in name else "",
-            stage=stage,
-            type=sub_type,
-            teacher=teachers[teacher_idx],
-            group=groups[group_idx],
-            created_by="system",
-        )
-        subjects.append(subject)
-        print(f"  ✓ Created subject: {subject.name} ({weekly_hours}h/semana)")
+    groups = {}
+    for name, stage in groups_data:
+        group = Group.objects.create(name=name, stage=stage, created_by="system")
+        groups[name] = group
+        print(f"  ✓ Created group: {group.name}")
 
-    total_hours = sum(s.weekly_hours for s in subjects)
-    print(
-        f"\n  📊 Total weekly hours: {total_hours} (6 hours/day × 5 days = 30 slots per group)"
-    )
-    return subjects
+    return groups
 
 
 def create_classrooms():
-    """Create test classrooms for ESO"""
+    """Create classrooms with realistic room types."""
     print("\n🏫 Creating classrooms...")
 
     classrooms_data = [
-        "Aula 1º ESO A",
-        "Aula 2º ESO A",
-        "Laboratorio",
-        "Gimnasio",
-        "Aula de Música",
-        "Aula de Informática",
+        ("Aula 1º Infantil", "EARLY"),
+        ("Aula 2º Infantil", "EARLY"),
+        ("Aula 3º Infantil", "EARLY"),
+        ("Aula 1º Primaria", "STANDARD"),
+        ("Aula 2º Primaria", "STANDARD"),
+        ("Aula 3º Primaria", "STANDARD"),
+        ("Aula 4º Primaria", "STANDARD"),
+        ("Aula 5º Primaria", "STANDARD"),
+        ("Aula 6º Primaria", "STANDARD"),
+        ("Aula 1º ESO", "STANDARD"),
+        ("Aula 2º ESO", "STANDARD"),
+        ("Aula 3º ESO", "STANDARD"),
+        ("Aula 4º ESO", "STANDARD"),
+        ("Laboratorio", "LAB"),
+        ("Gimnasio", "GYM"),
+        ("Aula de Música", "MUSIC"),
+        ("Aula de Plástica", "ART"),
+        ("Aula de Tecnología", "TECH"),
     ]
 
     classrooms = []
-    for name in classrooms_data:
-        classroom = Classroom.objects.create(name=name, created_by="system")
+    for name, classroom_type in classrooms_data:
+        classroom = Classroom.objects.create(
+            name=name,
+            classroom_type=classroom_type,
+            created_by="system",
+        )
         classrooms.append(classroom)
-        print(f"  ✓ Created classroom: {classroom.name}")
+        print(f"  ✓ Created classroom: {classroom.name} [{classroom.classroom_type}]")
 
     return classrooms
 
 
-def create_groups():
-    """Create test groups for 1º and 2º ESO"""
-    print("\n👥 Creating groups...")
+def create_subjects(teachers, groups):
+    """Create realistic curriculum-focused subjects, emphasizing Primary complexity."""
+    print("\n📚 Creating subjects...")
 
-    groups_data = [
-        ("1º ESO A", GroupEducationalStage.SECONDARY),
-        ("2º ESO A", GroupEducationalStage.SECONDARY),
+    morning_keys = slot_keys(DAY_CODES, ["08:30", "09:30", "10:30"])
+    midday_keys = slot_keys(DAY_CODES, ["12:00", "13:00"])
+    late_keys = slot_keys(DAY_CODES, ["14:00"])
+
+    subjects_data = []
+
+    # Infantil (25h/semana por grupo)
+    for grade in ["1º Infantil", "2º Infantil", "3º Infantil"]:
+        tutor_key = f"infantil_{grade[0]}"
+        subjects_data.extend(
+            [
+                {
+                    "name": f"Comunicación y Lenguaje {grade}",
+                    "weekly_hours": 8,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRESCHOOL,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=morning_keys[:10]
+                    ),
+                },
+                {
+                    "name": f"Conocimiento del Entorno {grade}",
+                    "weekly_hours": 7,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRESCHOOL,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=midday_keys
+                    ),
+                },
+                {
+                    "name": f"Crecimiento en Armonía {grade}",
+                    "weekly_hours": 8,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRESCHOOL,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                },
+                {
+                    "name": f"Psicomotricidad {grade}",
+                    "weekly_hours": 2,
+                    "duration": 1.5,
+                    "stage": EducationalStage.PRESCHOOL,
+                    "teacher_key": "ef_1",
+                    "group_name": grade,
+                    "required_classroom_type": "GYM",
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=midday_keys, prefer_no=late_keys
+                    ),
+                },
+            ]
+        )
+
+    # Primaria 1º-4º (25h/semana) - emphasizes mixed durations.
+    for idx, grade in enumerate(
+        ["1º Primaria", "2º Primaria", "3º Primaria", "4º Primaria"], start=1
+    ):
+        tutor_key = f"pri_{idx}"
+        subjects_data.extend(
+            [
+                {
+                    "name": f"Lengua Castellana {grade}",
+                    "weekly_hours": 6,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=morning_keys
+                    ),
+                },
+                {
+                    "name": f"Matemáticas {grade}",
+                    "weekly_hours": 5,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=slot_keys(DAY_CODES, ["08:30", "09:30"]),
+                        prefer_no=late_keys,
+                    ),
+                },
+                {
+                    "name": f"Conocimiento del Medio {grade}",
+                    "weekly_hours": 4,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                },
+                {
+                    "name": f"Inglés {grade}",
+                    "weekly_hours": 3,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": "ingles_1",
+                    "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=midday_keys
+                    ),
+                },
+                {
+                    "name": f"Educación Física {grade}",
+                    "weekly_hours": 2,
+                    "duration": 1.5,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": "ef_1",
+                    "group_name": grade,
+                    "required_classroom_type": "GYM",
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=midday_keys,
+                        prefer_no=slot_keys(DAY_CODES, ["08:30"]),
+                    ),
+                },
+                {
+                    "name": f"Música {grade}",
+                    "weekly_hours": 1,
+                    "duration": 0.75,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": "musica",
+                    "group_name": grade,
+                    "required_classroom_type": "MUSIC",
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=slot_keys(DAY_CODES, ["12:00"])
+                    ),
+                },
+                {
+                    "name": f"Educación Artística {grade}",
+                    "weekly_hours": 2,
+                    "duration": 1.5,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": "plastica",
+                    "group_name": grade,
+                    "required_classroom_type": "ART",
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])
+                    ),
+                },
+                {
+                    "name": f"Religión/Valores {grade}",
+                    "weekly_hours": 1,
+                    "duration": 0.75,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": "religion",
+                    "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_no=slot_keys(DAY_CODES, ["14:00"])
+                    ),
+                },
+                {
+                    "name": f"Tutoría {grade}",
+                    "weekly_hours": 1,
+                    "duration": 0.75,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                    "type": SubjectType.TC,
+                },
+            ]
+        )
+
+    # Primaria 5º-6º with French and more split sessions.
+    for idx, grade in enumerate(["5º Primaria", "6º Primaria"], start=5):
+        tutor_key = f"pri_{idx}"
+        subjects_data.extend(
+            [
+                {
+                    "name": f"Lengua Castellana {grade}",
+                    "weekly_hours": 5,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=morning_keys
+                    ),
+                },
+                {
+                    "name": f"Matemáticas {grade}",
+                    "weekly_hours": 5,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=slot_keys(DAY_CODES, ["08:30", "09:30"])
+                    ),
+                },
+                {
+                    "name": f"Conocimiento del Medio {grade}",
+                    "weekly_hours": 4,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                },
+                {
+                    "name": f"Inglés {grade}",
+                    "weekly_hours": 3,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": "ingles_1",
+                    "group_name": grade,
+                },
+                {
+                    "name": f"Francés {grade}",
+                    "weekly_hours": 2,
+                    "duration": 0.75,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": "frances",
+                    "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=midday_keys
+                    ),
+                },
+                {
+                    "name": f"Educación Física {grade}",
+                    "weekly_hours": 2,
+                    "duration": 1.5,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": "ef_1",
+                    "group_name": grade,
+                    "required_classroom_type": "GYM",
+                },
+                {
+                    "name": f"Música {grade}",
+                    "weekly_hours": 1,
+                    "duration": 0.75,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": "musica",
+                    "group_name": grade,
+                    "required_classroom_type": "MUSIC",
+                },
+                {
+                    "name": f"Religión/Valores {grade}",
+                    "weekly_hours": 1,
+                    "duration": 0.75,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": "religion",
+                    "group_name": grade,
+                },
+                {
+                    "name": f"Educación Artística {grade}",
+                    "weekly_hours": 1,
+                    "duration": 1.5,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": "plastica",
+                    "group_name": grade,
+                    "required_classroom_type": "ART",
+                },
+                {
+                    "name": f"Tutoría {grade}",
+                    "weekly_hours": 1,
+                    "duration": 0.75,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                    "type": SubjectType.TC,
+                },
+            ]
+        )
+
+    # ESO 1º-4º (30h/semana)
+    eso_block = [
+        ("1º ESO", "Biología y Geología", "eso_bio"),
+        ("2º ESO", "Física y Química", "eso_fq"),
+        ("3º ESO", "Física y Química", "eso_fq"),
+        ("4º ESO", "Biología y Geología", "eso_bio"),
     ]
+    for grade, science_name, science_teacher in eso_block:
+        subjects_data.extend(
+            [
+                {
+                    "name": f"Lengua Castellana {grade}",
+                    "weekly_hours": 5,
+                    "duration": 1.0,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": "eso_lengua",
+                    "group_name": grade,
+                },
+                {
+                    "name": f"Matemáticas {grade}",
+                    "weekly_hours": 4,
+                    "duration": 1.0,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": "eso_mates",
+                    "group_name": grade,
+                },
+                {
+                    "name": f"Inglés {grade}",
+                    "weekly_hours": 4,
+                    "duration": 1.0,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": "ingles_2",
+                    "group_name": grade,
+                },
+                {
+                    "name": f"Geografía e Historia {grade}",
+                    "weekly_hours": 3,
+                    "duration": 1.0,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": "eso_social",
+                    "group_name": grade,
+                },
+                {
+                    "name": f"{science_name} {grade}",
+                    "weekly_hours": 3,
+                    "duration": 1.0,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": science_teacher,
+                    "group_name": grade,
+                    "required_classroom_type": "LAB",
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])
+                    ),
+                },
+                {
+                    "name": f"Tecnología {grade}",
+                    "weekly_hours": 2,
+                    "duration": 1.0,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": "eso_tec",
+                    "group_name": grade,
+                    "required_classroom_type": "TECH",
+                },
+                {
+                    "name": f"Educación Física {grade}",
+                    "weekly_hours": 2,
+                    "duration": 1.5,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": "ef_1",
+                    "group_name": grade,
+                    "required_classroom_type": "GYM",
+                },
+                {
+                    "name": f"Música/Plástica {grade}",
+                    "weekly_hours": 2,
+                    "duration": 1.0,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": (
+                        "musica" if grade in ["1º ESO", "2º ESO"] else "plastica"
+                    ),
+                    "group_name": grade,
+                    "required_classroom_type": (
+                        "MUSIC" if grade in ["1º ESO", "2º ESO"] else "ART"
+                    ),
+                },
+                {
+                    "name": f"Tutoría {grade}",
+                    "weekly_hours": 1,
+                    "duration": 0.75,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": "orientacion",
+                    "group_name": grade,
+                    "type": SubjectType.TC,
+                },
+                {
+                    "name": f"Religión/Valores {grade}",
+                    "weekly_hours": 1,
+                    "duration": 0.75,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": "religion",
+                    "group_name": grade,
+                },
+                {
+                    "name": f"Proyecto Interdisciplinar {grade}",
+                    "weekly_hours": 3,
+                    "duration": 1.0,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": "orientacion",
+                    "group_name": grade,
+                    "type": SubjectType.TC,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=midday_keys,
+                        prefer_no=slot_keys(DAY_CODES, ["08:30"]),
+                    ),
+                },
+            ]
+        )
 
-    groups = []
-    for name, stage in groups_data:
-        group = Group.objects.create(name=name, stage=stage, created_by="system")
-        groups.append(group)
-        print(f"  ✓ Created group: {group.name}")
+    subjects = []
+    for row in subjects_data:
+        subject = Subject.objects.create(
+            name=row["name"],
+            weekly_hours=row["weekly_hours"],
+            duration=row.get("duration", 1.0),
+            preferred_time_slot=row.get("preferred_time_slot", ""),
+            required_classroom_type=row.get("required_classroom_type", ""),
+            time_preferences=row.get("time_preferences", {}),
+            stage=row["stage"],
+            type=row.get("type", SubjectType.NORMAL),
+            teacher=teachers[row["teacher_key"]],
+            group=groups[row["group_name"]],
+            created_by="system",
+        )
+        subjects.append(subject)
+        print(
+            f"  ✓ Created subject: {subject.name} "
+            f"({subject.weekly_hours}h/semana, dur={subject.duration}h)"
+        )
 
-    return groups
+    total_hours = sum(subject.weekly_hours for subject in subjects)
+    print(f"\n  📊 Total weekly hours across all groups: {total_hours}")
+    return subjects
+
+
+def create_admin_saved_timetable(*, users):
+    """Create one saved timetable owned by admin user for manual testing."""
+    print("\n🗓️ Creating saved timetable for admin...")
+
+    admin_user = next((user for user in users if user.email == "admin@test.com"), None)
+    if admin_user is None:
+        raise RuntimeError("Admin user not found while creating saved timetable.")
+
+    saved_name = "Horario demo admin"
+    saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {saved_name}"
+
+    # Build a deterministic small timetable to keep load_test_data fast.
+    subjects = list(
+        Subject.objects.select_related("teacher", "group").order_by("id")[:12]
+    )
+    if not subjects:
+        raise RuntimeError("No subjects found while creating saved admin timetable.")
+
+    classrooms = list(Classroom.objects.order_by("id"))
+    if not classrooms:
+        raise RuntimeError("No classrooms found while creating saved admin timetable.")
+
+    stage_slots = build_weekly_slots()
+    stage_slot_cursor = {
+        "PRESCHOOL": 0,
+        "PRIMARY": 0,
+        "SECONDARY": 0,
+    }
+    stage_slot_indices = {
+        "PRESCHOOL": [
+            idx
+            for idx, slot in enumerate(stage_slots)
+            if slot.get("stage") == "PRESCHOOL"
+        ],
+        "PRIMARY": [
+            idx
+            for idx, slot in enumerate(stage_slots)
+            if slot.get("stage") == "PRIMARY"
+        ],
+        "SECONDARY": [
+            idx
+            for idx, slot in enumerate(stage_slots)
+            if slot.get("stage") == "SECONDARY"
+        ],
+    }
+
+    created = []
+    for subject in subjects:
+        stage_code = session_stage_code(
+            session={"group": subject.group, "subject": subject}
+        )
+        slot_pool = stage_slot_indices.get(stage_code) or stage_slot_indices["PRIMARY"]
+        cursor = stage_slot_cursor.get(stage_code, 0)
+        if cursor >= len(slot_pool):
+            cursor = 0
+        slot_idx = slot_pool[cursor]
+        stage_slot_cursor[stage_code] = cursor + 1
+
+        slot = stage_slots[slot_idx]
+        start_time = slot["start"]
+        end_time = slot["end"]
+
+        required_type = (subject.required_classroom_type or "").strip().casefold()
+        classroom = next(
+            (
+                room
+                for room in classrooms
+                if (room.classroom_type or "").strip().casefold() == required_type
+            ),
+            None,
+        )
+        if classroom is None:
+            classroom = classrooms[0]
+
+        schedule = Schedule.objects.create(
+            name=saved_name,
+            start_time=start_time,
+            end_time=end_time,
+            observations=saved_observation,
+            teacher=subject.teacher,
+            classroom=classroom,
+            group=subject.group,
+            subject=subject,
+            created_by=admin_user.email,
+            updated_by="system",
+        )
+        schedule.users.add(admin_user)
+        created.append(schedule)
+
+    print(f"  ✓ Created saved timetable for admin with {len(created)} sessions")
+    return created
 
 
 def main():
@@ -286,8 +881,9 @@ def main():
         users = create_users()
         teachers = create_teachers()
         groups = create_groups()
-        subjects = create_subjects(teachers, groups)
         classrooms = create_classrooms()
+        subjects = create_subjects(teachers, groups)
+        saved_admin_timetable = create_admin_saved_timetable(users=users)
         # schedules = create_schedules(teachers, subjects, classrooms, groups, users)
 
         print("\n" + "=" * 60)
@@ -298,10 +894,11 @@ def main():
         print(f"  • {len(subjects)} subjects created")
         print(f"  • {len(classrooms)} classrooms created")
         print(f"  • {len(groups)} groups created")
+        print(f"  • {len(saved_admin_timetable)} saved schedules for admin")
         # print(f"  • {len(schedules)} schedules created")
         print("\n🔑 Login credentials:")
         print("  Admin: admin@test.com / admin123")
-        print("  Director: director1@test.com / director123")
+        print("  Dirección: direccion.academica@test.com / director123")
         print("=" * 60)
 
     except Exception as e:

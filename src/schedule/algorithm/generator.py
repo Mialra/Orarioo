@@ -1,30 +1,28 @@
-from datetime import datetime, time, timedelta
+import random
 
 from django.db import transaction
-from django.utils import timezone
-
-try:
-    from ortools.sat.python import cp_model
-except ModuleNotFoundError:  # pragma: no cover - depends on local Python version
-    cp_model = None
 
 from classroom.models import Classroom
 from group.models import EducationalStage, Group
+from schedule.algorithm.assignment import solve_session_assignment
+from schedule.algorithm.constraints import validate_group_and_teacher_capacity
+from schedule.algorithm.errors import ScheduleGenerationError
+from schedule.algorithm.slots import (
+    build_weekly_slots,
+    session_stage_code,
+    slot_instance_key,
+)
+from schedule.constants import AUTO_GENERATED_OBSERVATION
 from schedule.models import Schedule
 from subject.models import Subject
 from teacher.models import Teacher
 
 
-class ScheduleGenerationError(Exception):
-    """Raised when a schedule cannot be generated with current data."""
-
-
 class BasicScheduleGenerator:
-    """Basic CP-SAT generator with non-overlap rules for teacher and group."""
 
     @classmethod
     @transaction.atomic
-    def generate(cls, *, actor_email: str, user):
+    def generate(cls, *, actor_email: str, user, random_seed: int | None = None):
         cls._clear_previous_generated_schedules(actor_email=actor_email, user=user)
 
         teacher = Teacher.objects.order_by("id").first()
@@ -38,33 +36,40 @@ class BasicScheduleGenerator:
         subjects = list(
             Subject.objects.select_related("teacher", "group").order_by("id")
         )
-        classroom_by_group_id = cls._build_group_classroom_map(
-            subjects=subjects,
-            fallback_classroom=fallback_classroom,
-        )
+        classrooms = cls._build_classroom_pool(fallback_classroom=fallback_classroom)
         sessions = cls._build_sessions(subjects=subjects, fallback_teacher=teacher)
-        slots = cls._build_slots()
+        slots = build_weekly_slots()
 
-        cls._validate_capacity(sessions=sessions, slots=slots)
+        rng = random.Random(random_seed)
+        cls._randomize_generation_inputs(
+            sessions=sessions,
+            slots=slots,
+            classrooms=classrooms,
+            rng=rng,
+        )
 
-        slot_by_session = cls._solve_session_assignment(sessions=sessions, slots=slots)
+        validate_group_and_teacher_capacity(sessions=sessions, slots=slots)
+
+        slot_by_session, classroom_by_session = solve_session_assignment(
+            sessions=sessions,
+            slots=slots,
+            classrooms=classrooms,
+            random_seed=random_seed,
+        )
 
         created = []
         for session_index, slot_index in enumerate(slot_by_session):
-            start_time = slots[slot_index]
-            end_time = start_time + timedelta(hours=1)
+            start_time = slots[slot_index]["start"]
+            end_time = slots[slot_index]["end"]
             session = sessions[session_index]
 
             schedule = Schedule.objects.create(
                 name=f"Auto {session['name']} {start_time:%Y-%m-%d %H:%M}",
                 start_time=start_time,
                 end_time=end_time,
-                observations="Auto-generated with CP-SAT basic constraints.",
+                observations=AUTO_GENERATED_OBSERVATION,
                 teacher=session["teacher"],
-                classroom=classroom_by_group_id.get(
-                    getattr(session.get("group"), "id", None),
-                    fallback_classroom,
-                ),
+                classroom=classroom_by_session[session_index],
                 group=session.get("group") or group,
                 subject=session["subject"],
                 created_by=actor_email,
@@ -81,80 +86,8 @@ class BasicScheduleGenerator:
         Schedule.objects.filter(
             users=user,
             created_by=actor_email,
-            observations="Auto-generated with CP-SAT basic constraints.",
+            observations=AUTO_GENERATED_OBSERVATION,
         ).delete()
-
-    @staticmethod
-    def _build_slots():
-        """
-        Build time slots for ESO schedule: 8:30-15:00 with 6 hours/day.
-        Schedule: 3 hours (8:30-11:30), break (11:30-12:00), 3 hours (12:00-15:00)
-
-        Each slot can accommodate multiple groups simultaneously (different classrooms),
-        so we generate enough slots for all sessions across all groups.
-        """
-        now = timezone.localtime()
-        # Build a clean weekly timetable in the next Monday-Friday window.
-        days_until_next_monday = (7 - now.weekday()) % 7
-        if days_until_next_monday == 0:
-            days_until_next_monday = 7
-        start_day = now.date() + timedelta(days=days_until_next_monday)
-        slots = []
-        day_cursor = start_day
-
-        # Define hourly slots: before break and after break
-        morning_start_times = [
-            time(hour=8, minute=30),  # 8:30-9:30
-            time(hour=9, minute=30),  # 9:30-10:30
-            time(hour=10, minute=30),  # 10:30-11:30
-        ]
-        afternoon_start_times = [
-            time(hour=12, minute=0),  # 12:00-13:00
-            time(hour=13, minute=0),  # 13:00-14:00
-            time(hour=14, minute=0),  # 14:00-15:00
-        ]
-
-        # Exactly one school week: 5 days x 6 sessions = 30 slots.
-        for _ in range(5):
-            # Morning slots (before break 11:30-12:00)
-            for start_time_obj in morning_start_times:
-                slots.append(
-                    timezone.make_aware(
-                        datetime.combine(day_cursor, start_time_obj),
-                        timezone.get_current_timezone(),
-                    )
-                )
-
-            # Afternoon slots (after break)
-            for start_time_obj in afternoon_start_times:
-                slots.append(
-                    timezone.make_aware(
-                        datetime.combine(day_cursor, start_time_obj),
-                        timezone.get_current_timezone(),
-                    )
-                )
-
-            day_cursor += timedelta(days=1)
-
-        return slots
-
-    @staticmethod
-    def _validate_capacity(*, sessions, slots):
-        """Validate weekly capacity considering that groups can run in parallel."""
-        slot_count = len(slots)
-        sessions_by_group = {}
-
-        for session in sessions:
-            group = session.get("group")
-            group_key = getattr(group, "id", None)
-            sessions_by_group[group_key] = sessions_by_group.get(group_key, 0) + 1
-
-        if any(
-            group_sessions > slot_count for group_sessions in sessions_by_group.values()
-        ):
-            raise ScheduleGenerationError(
-                "Not enough available slots to place all sessions for at least one group."
-            )
 
     @staticmethod
     def _build_sessions(*, subjects, fallback_teacher):
@@ -184,148 +117,119 @@ class BasicScheduleGenerator:
         return sessions
 
     @staticmethod
-    def _solve_session_assignment(*, sessions, slots):
-        if cp_model is None:
-            return BasicScheduleGenerator._greedy_session_assignment(
-                sessions=sessions,
-                slots=slots,
-            )
-
-        model = cp_model.CpModel()
-        session_count = len(sessions)
-        slot_count = len(slots)
-
-        x = BasicScheduleGenerator._build_decision_variables(
-            model=model,
-            session_count=session_count,
-            slot_count=slot_count,
-        )
-        BasicScheduleGenerator._add_exactly_one_slot_constraints(
-            model=model,
-            x=x,
-            session_count=session_count,
-            slot_count=slot_count,
-        )
-        BasicScheduleGenerator._add_resource_non_overlap_constraints(
-            model=model,
-            x=x,
-            sessions=sessions,
-            slot_count=slot_count,
-            resource_key="teacher_id",
-        )
-        BasicScheduleGenerator._add_resource_non_overlap_constraints(
-            model=model,
-            x=x,
-            sessions=sessions,
-            slot_count=slot_count,
-            resource_key="group_id",
-        )
-
-        solver = cp_model.CpSolver()
-        solver.parameters.max_time_in_seconds = 5.0
-        status = solver.Solve(model)
-        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            raise ScheduleGenerationError(
-                "Could not generate a feasible schedule with current basic constraints."
-            )
-
-        return BasicScheduleGenerator._extract_slot_assignment(
-            solver=solver,
-            x=x,
-            session_count=session_count,
-            slot_count=slot_count,
+    def _get_or_create_classroom(actor_email: str):
+        classroom = Classroom.objects.order_by("id").first()
+        if classroom is not None:
+            return classroom
+        return Classroom.objects.create(
+            name="Auto Classroom",
+            created_by=actor_email,
+            updated_by=actor_email,
         )
 
     @staticmethod
-    def _build_decision_variables(*, model, session_count, slot_count):
-        x = {}
-        for s_idx in range(session_count):
-            for p_idx in range(slot_count):
-                x[(s_idx, p_idx)] = model.NewBoolVar(f"x_s{s_idx}_p{p_idx}")
-        return x
+    def _get_or_create_group(actor_email: str):
+        group = Group.objects.order_by("id").first()
+        if group is not None:
+            return group
+        return Group.objects.create(
+            name="Auto Group",
+            stage=EducationalStage.PRIMARY,
+            created_by=actor_email,
+            updated_by=actor_email,
+        )
 
     @staticmethod
-    def _add_exactly_one_slot_constraints(*, model, x, session_count, slot_count):
-        for s_idx in range(session_count):
-            model.Add(sum(x[(s_idx, p_idx)] for p_idx in range(slot_count)) == 1)
+    def _build_classroom_pool(*, fallback_classroom):
+        classrooms = list(Classroom.objects.order_by("id"))
+        if not classrooms:
+            return [fallback_classroom]
+        return classrooms
 
     @staticmethod
-    def _session_resource_id(*, session, resource_key):
-        if resource_key == "group_id":
-            group = session.get("group")
-            return getattr(group, "id", None)
-        return session.get(resource_key)
+    def _randomize_generation_inputs(*, sessions, slots, classrooms, rng):
+        rng.shuffle(sessions)
+        rng.shuffle(classrooms)
 
-    @staticmethod
-    def _add_resource_non_overlap_constraints(
-        *, model, x, sessions, slot_count, resource_key
+
+class ScheduleReplanner:
+    """Replan an existing schedule with manual session-to-slot changes."""
+
+    @classmethod
+    @transaction.atomic
+    def replan_with_manual_change(
+        cls,
+        *,
+        user,
+        schedule_to_move_id: int,
+        new_slot_index: int,
+        actor_email: str,
     ):
-        resource_to_sessions = {}
-        for idx, session in enumerate(sessions):
-            resource_id = BasicScheduleGenerator._session_resource_id(
-                session=session,
-                resource_key=resource_key,
+        """Replan schedule with a fixed session assignment.
+
+        Args:
+            user: Django user object
+            schedule_to_move_id: ID of the Schedule to move to new_slot_index
+            new_slot_index: Target slot index in the weekly slots array
+            actor_email: Email of the user initiating the change
+
+        Returns:
+            List of newly created Schedules
+        """
+        schedule_to_move = Schedule.objects.select_related(
+            "teacher", "classroom", "group", "subject"
+        ).get(id=schedule_to_move_id, users=user)
+
+        timetable_schedules = list(
+            cls._fetch_timetable_schedules(user=user, anchor_schedule=schedule_to_move)
+        )
+        if not timetable_schedules:
+            raise ScheduleGenerationError("No schedules found for manual replanning.")
+
+        fallback_classroom = cls._get_or_create_classroom(actor_email)
+        classrooms = cls._build_classroom_pool(fallback_classroom=fallback_classroom)
+        slots = build_weekly_slots()
+        slot_index_by_key = {
+            slot_instance_key(slot=slot): idx for idx, slot in enumerate(slots)
+        }
+
+        if new_slot_index < 0 or new_slot_index >= len(slots):
+            raise ScheduleGenerationError(
+                f"Invalid slot index {new_slot_index}. Must be 0-{len(slots) - 1}"
             )
-            if resource_id is None:
-                continue
-            resource_to_sessions.setdefault(resource_id, []).append(idx)
 
-        for resource_sessions in resource_to_sessions.values():
-            for p_idx in range(slot_count):
-                model.Add(sum(x[(s_idx, p_idx)] for s_idx in resource_sessions) <= 1)
+        sessions, previous_assignment_by_session, moved_session_idx = (
+            cls._build_replanning_inputs(
+                schedules=timetable_schedules,
+                moved_schedule_id=schedule_to_move.id,
+                slot_index_by_key=slot_index_by_key,
+            )
+        )
 
-    @staticmethod
-    def _extract_slot_assignment(*, solver, x, session_count, slot_count):
-        slot_by_session = []
-        for s_idx in range(session_count):
-            selected = None
-            for p_idx in range(slot_count):
-                if solver.Value(x[(s_idx, p_idx)]) == 1:
-                    selected = p_idx
-                    break
-            if selected is None:
-                raise ScheduleGenerationError(
-                    "Solver returned an incomplete assignment."
-                )
-            slot_by_session.append(selected)
+        if moved_session_idx is None:
+            raise ScheduleGenerationError(
+                f"Could not find schedule {schedule_to_move_id} inside selected timetable."
+            )
 
-        return slot_by_session
+        fixed_assignments = {moved_session_idx: new_slot_index}
 
-    @staticmethod
-    def _greedy_session_assignment(*, sessions, slots):
-        teacher_busy_slots = {}
-        group_busy_slots = {}
-        slot_by_session = []
+        slot_by_session, classroom_by_session = solve_session_assignment(
+            sessions=sessions,
+            slots=slots,
+            classrooms=classrooms,
+            random_seed=None,
+            fixed_assignments=fixed_assignments,
+            previous_assignment_by_session=previous_assignment_by_session,
+        )
 
-        for s_idx, session in enumerate(sessions):
-            teacher_id = session["teacher_id"]
-            teacher_busy_slots.setdefault(teacher_id, set())
-
-            group = session.get("group")
-            group_id = group.id if group else None
-            if group_id:
-                group_busy_slots.setdefault(group_id, set())
-
-            selected_slot = None
-            for p_idx in range(len(slots)):
-                if p_idx in teacher_busy_slots[teacher_id]:
-                    continue
-                if group_id and p_idx in group_busy_slots[group_id]:
-                    continue
-                selected_slot = p_idx
-                break
-
-            if selected_slot is None:
-                raise ScheduleGenerationError(
-                    "Could not generate a feasible schedule with current basic constraints."
-                )
-
-            slot_by_session.append(selected_slot)
-            teacher_busy_slots[teacher_id].add(selected_slot)
-            if group_id:
-                group_busy_slots[group_id].add(selected_slot)
-
-        return slot_by_session
+        return cls._apply_assignment_updates(
+            schedules=timetable_schedules,
+            sessions=sessions,
+            slot_by_session=slot_by_session,
+            classroom_by_session=classroom_by_session,
+            slots=slots,
+            actor_email=actor_email,
+        )
 
     @staticmethod
     def _get_or_create_classroom(actor_email: str):
@@ -351,21 +255,99 @@ class BasicScheduleGenerator:
         )
 
     @staticmethod
-    def _build_group_classroom_map(*, subjects, fallback_classroom):
-        """Map each subject group to its most suitable classroom by name."""
-        mapping = {}
-        groups = {
-            subject.group for subject in subjects if getattr(subject, "group", None)
-        }
+    def _build_classroom_pool(*, fallback_classroom):
+        classrooms = list(Classroom.objects.order_by("id"))
+        if not classrooms:
+            return [fallback_classroom]
+        return classrooms
 
-        for group in groups:
-            classroom = (
-                Classroom.objects.filter(name__icontains=group.name)
-                .order_by("id")
-                .first()
+    @staticmethod
+    def _fetch_timetable_schedules(*, user, anchor_schedule):
+        return (
+            Schedule.objects.filter(
+                users=user,
+                observations=anchor_schedule.observations,
             )
-            if classroom is None:
-                classroom = fallback_classroom
-            mapping[group.id] = classroom
+            .select_related("teacher", "classroom", "group", "subject")
+            .order_by("start_time", "id")
+        )
 
-        return mapping
+    @staticmethod
+    def _build_replanning_inputs(*, schedules, moved_schedule_id, slot_index_by_key):
+        sessions = []
+        previous_assignment_by_session = {}
+        moved_session_idx = None
+
+        for idx, schedule in enumerate(schedules):
+            sessions.append(
+                {
+                    "teacher": schedule.teacher,
+                    "teacher_id": schedule.teacher_id,
+                    "group": schedule.group,
+                    "subject": schedule.subject,
+                    "name": getattr(schedule.subject, "name", schedule.name),
+                }
+            )
+
+            slot_key = slot_instance_key(
+                slot={
+                    "start": schedule.start_time,
+                    "end": schedule.end_time,
+                    "stage": session_stage_code(
+                        session={
+                            "group": schedule.group,
+                            "subject": schedule.subject,
+                        }
+                    ),
+                }
+            )
+            if slot_key not in slot_index_by_key:
+                raise ScheduleGenerationError(
+                    "Could not map existing schedule slot to current weekly slot model."
+                )
+
+            previous_assignment_by_session[idx] = {
+                "slot_index": slot_index_by_key[slot_key],
+                "classroom_id": schedule.classroom_id,
+            }
+
+            if schedule.id == moved_schedule_id:
+                moved_session_idx = idx
+
+        return sessions, previous_assignment_by_session, moved_session_idx
+
+    @classmethod
+    def _apply_assignment_updates(
+        cls,
+        *,
+        schedules,
+        sessions,
+        slot_by_session,
+        classroom_by_session,
+        slots,
+        actor_email,
+    ):
+        updated = []
+
+        for idx, schedule in enumerate(schedules):
+            start_time = slots[slot_by_session[idx]]["start"]
+            end_time = slots[slot_by_session[idx]]["end"]
+            session = sessions[idx]
+            observation = (schedule.observations or "").strip()
+
+            if observation == AUTO_GENERATED_OBSERVATION:
+                schedule.name = f"Auto {session['name']} {start_time:%Y-%m-%d %H:%M}"
+
+            schedule.start_time = start_time
+            schedule.end_time = end_time
+            schedule.teacher = session["teacher"]
+            schedule.group = session.get("group") or cls._get_or_create_group(
+                actor_email
+            )
+            schedule.subject = session["subject"]
+            schedule.classroom = classroom_by_session[idx]
+            schedule.updated_by = actor_email
+            schedule.save()
+            updated.append(schedule)
+
+        return updated

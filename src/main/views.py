@@ -7,3 +7,7 @@ def frontend_playground(request):
 
 def schedule_generator(request):
     return render(request, "main/schedule_generator.html")
+
+
+def manual_change(request):
+    return render(request, "main/manual_change.html")

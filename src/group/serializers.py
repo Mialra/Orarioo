@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from common.serializer_utils import AUDIT_FIELD_NAMES
 from group.models import Group
 
 
@@ -13,18 +14,12 @@ class GroupSerializer(serializers.ModelSerializer):
             "name",
             "stage",
             "stage_display",
-            "created_at",
-            "updated_at",
-            "created_by",
-            "updated_by",
+            *AUDIT_FIELD_NAMES,
         ]
         read_only_fields = [
             "id",
             "stage_display",
-            "created_at",
-            "updated_at",
-            "created_by",
-            "updated_by",
+            *AUDIT_FIELD_NAMES,
         ]
 
     def get_stage_display(self, obj):
