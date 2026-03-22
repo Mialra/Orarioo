@@ -1,10 +1,14 @@
 from rest_framework import serializers
 
 from common.serializer_utils import AUDIT_FIELD_NAMES
+from common.validation import (
+    normalize_optional_text,
+)
+from namedEntity.serializers import NamedEntityNameValidationMixin
 from schedule.models import Schedule
 
 
-class ScheduleSerializer(serializers.ModelSerializer):
+class ScheduleSerializer(NamedEntityNameValidationMixin, serializers.ModelSerializer):
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     classroom_name = serializers.CharField(source="classroom.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
@@ -77,5 +81,10 @@ class ScheduleSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"users": "At least one user must be assigned."}
             )
+
+        attrs["observations"] = normalize_optional_text(
+            attrs.get("observations", self.instance.observations if self.instance else ""),
+            field_name="observations",
+        )
 
         return attrs

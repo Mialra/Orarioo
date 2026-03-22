@@ -5,10 +5,13 @@ from common.validation import (
     collect_invalid_time_preference_entries,
     normalize_time_preferences,
 )
+from namedEntity.serializers import NamedEntityNameValidationMixin
 from teacher.models import Teacher, TeacherTimePreferenceState
 
 
-class TeacherSerializer(serializers.ModelSerializer):
+class TeacherSerializer(NamedEntityNameValidationMixin, serializers.ModelSerializer):
+    enforce_case_insensitive_unique_name = True
+
     class Meta:
         model = Teacher
         fields = with_audit_fields(

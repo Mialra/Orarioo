@@ -3,12 +3,16 @@ from rest_framework import serializers
 from common.serializer_utils import AUDIT_FIELD_NAMES
 from common.validation import (
     collect_invalid_time_preference_entries,
+    normalize_optional_text,
     normalize_time_preferences,
 )
+from namedEntity.serializers import NamedEntityNameValidationMixin
 from subject.models import Subject, SubjectTimePreferenceState
 
 
-class SubjectSerializer(serializers.ModelSerializer):
+class SubjectSerializer(NamedEntityNameValidationMixin, serializers.ModelSerializer):
+    enforce_case_insensitive_unique_name = True
+
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
 
@@ -42,6 +46,20 @@ class SubjectSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Weekly hours must be greater than zero.")
         return value
+
+    def validate_preferred_time_slot(self, value):
+        return normalize_optional_text(
+            value,
+            field_name="preferred_time_slot",
+            max_length=150,
+        )
+
+    def validate_required_classroom_type(self, value):
+        return normalize_optional_text(
+            value,
+            field_name="required_classroom_type",
+            max_length=150,
+        )
 
     def validate_time_preferences(self, value):
         value = normalize_time_preferences(value)
