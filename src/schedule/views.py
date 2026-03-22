@@ -1,5 +1,5 @@
-import random
 import logging
+import random
 
 from rest_framework import status
 from rest_framework.response import Response
@@ -246,7 +246,7 @@ class ScheduleViewSet(AuditableModelViewSet):
                 new_slot_index=new_slot_index,
                 actor_email=actor,
             )
-        except ScheduleGenerationError as exc:
+        except ScheduleGenerationError:
             logger.exception(
                 "ScheduleGenerationError while applying manual change: "
                 "schedule_id=%s, new_slot_index=%s, actor=%s",
@@ -255,9 +255,7 @@ class ScheduleViewSet(AuditableModelViewSet):
                 actor,
             )
             return Response(
-                {
-                    "detail": "Failed to replan schedule with manual change."
-                },
+                {"detail": "Failed to replan schedule with manual change."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
