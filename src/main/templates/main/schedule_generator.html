@@ -1365,6 +1365,10 @@
 
         const DAY_LABELS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 
+        // Use UTC getters so timetable slots are rendered with stable school hours regardless of user's timezone
+        const toUtcHM = (date) =>
+            `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
+
         const buildWeeklySlotOptions = (stage) => {
             const normalized = normalizeStage(stage) || "primary";
             const ranges = STAGE_SLOT_TEMPLATE[normalized] || STAGE_SLOT_TEMPLATE.primary;
@@ -1388,7 +1392,7 @@
 
         const getSlotIndexFromSchedule = (schedule) => {
             const start = new Date(schedule.start_time);
-            const weekday = start.getDay();
+            const weekday = start.getUTCDay();
             const dayToIndex = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4 };
             const dayIdx = dayToIndex[weekday];
             if (dayIdx === undefined) {
@@ -1397,9 +1401,9 @@
 
             const stage = normalizeStage(schedule.group_stage) || "primary";
             const ranges = STAGE_SLOT_TEMPLATE[stage] || STAGE_SLOT_TEMPLATE.primary;
-            const startHM = `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`;
+            const startHM = toUtcHM(start);
             const end = new Date(schedule.end_time);
-            const endHM = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
+            const endHM = toUtcHM(end);
             const withinStage = ranges.findIndex(([s, e]) => s === startHM && e === endHM);
             if (withinStage < 0) {
                 return null;
@@ -1964,27 +1968,9 @@
 
             const selectedNorm = normalize(selectedCourse);
 
-            // Accept equivalent labels such as "2o eso" and allow subject-based fallback
-            const isFirstEso = selectedNorm.startsWith("1") && selectedNorm.includes("eso");
-            const isSecondEso = selectedNorm.startsWith("2") && selectedNorm.includes("eso");
-
             return schedules.filter((s) => {
                 const groupNorm = normalize(s.group_name);
-                const subjectNorm = normalize(s.subject_name);
-
-                if (groupNorm === selectedNorm) {
-                    return true;
-                }
-
-                if (isFirstEso && subjectNorm.includes("1") && subjectNorm.includes("eso")) {
-                    return true;
-                }
-
-                if (isSecondEso && subjectNorm.includes("2") && subjectNorm.includes("eso")) {
-                    return true;
-                }
-
-                return false;
+                return groupNorm === selectedNorm;
             });
         };
 
@@ -2407,7 +2393,7 @@
             return stages.length === 1 ? stages[0] : null;
         };
 
-        const toHM = (date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+        const toHM = (date) => toUtcHM(date);
 
         const displaySchedules = (schedules, outputElement = null, detailTitle = "Detalle de sesiones", options = {}) => {
             const output = outputElement || document.getElementById("generatorOutput");
@@ -2435,8 +2421,8 @@
                         ...s,
                         start,
                         end,
-                        dayName: weekdayMap[start.getDay()],
-                        hourKey: `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`,
+                        dayName: weekdayMap[start.getUTCDay()],
+                        hourKey: toUtcHM(start),
                     };
                 })
                 .filter((s) => visibleDays.includes(s.dayName))
@@ -2447,16 +2433,42 @@
             const teacherConfig = options.mode === "teacher" ? STAGE_GRID_CONFIG[detectedStage] : null;
 
             if (config) {
+                const allowedRanges = new Set(
+                    config.rows
+                        .filter((row) => row.type === "class")
+                        .map((row) => `${row.start}-${row.end}`)
+                );
                 const cellByDayAndRange = {};
+                const outOfTemplateSessions = [];
                 sessions.forEach((s) => {
-                    const key = `${s.dayName}|${toHM(s.start)}-${toHM(s.end)}`;
+                    const range = `${toHM(s.start)}-${toHM(s.end)}`;
+                    const key = `${s.dayName}|${range}`;
                     if (!cellByDayAndRange[key]) {
                         cellByDayAndRange[key] = [];
                     }
                     cellByDayAndRange[key].push(s);
+                    if (!allowedRanges.has(range)) {
+                        outOfTemplateSessions.push(s);
+                    }
                 });
 
-                const rowsHtml = config.rows
+                const extraRanges = [...new Set(outOfTemplateSessions.map((s) => `${toHM(s.start)}-${toHM(s.end)}`))]
+                    .sort((left, right) => left.localeCompare(right, "es"));
+
+                const rowsToRender = [
+                    ...config.rows,
+                    ...extraRanges.map((range) => {
+                        const [start, end] = range.split("-");
+                        return {
+                            type: "class",
+                            start,
+                            end,
+                            extra: true,
+                        };
+                    }),
+                ];
+
+                const rowsHtml = rowsToRender
                     .map((row) => {
                         const range = `${row.start}-${row.end}`;
                         const dayCells = visibleDays
@@ -2487,7 +2499,7 @@
 
                         return `
                             <tr>
-                                <td class="schedule-time-col">${row.start} - ${row.end}</td>
+                                <td class="schedule-time-col">${row.start} - ${row.end}${row.extra ? " *" : ""}</td>
                                 ${dayCells}
                             </tr>
                         `;
@@ -2508,6 +2520,10 @@
                             </tbody>
                         </table>
                     </div>
+                    ${extraRanges.length
+                        ? `<p style="margin:10px 0 0; font-size:12px; color:#855f00;">* Se detectaron franjas fuera de la plantilla ${config.label} y se muestran con asterisco para no perder sesiones.</p>`
+                        : ""
+                    }
 
                     <h3 class="schedule-detail-title">${detailTitle}</h3>
                     <table>
@@ -2532,8 +2548,8 @@
                                         <td>${s.classroom_name || "-"}</td>
                                         <td>${s.group_name || "-"}</td>
                                         <td>${s.dayName}</td>
-                                        <td>${s.start.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</td>
-                                        <td>${s.end.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</td>
+                                        <td>${toUtcHM(s.start)}</td>
+                                        <td>${toUtcHM(s.end)}</td>
                                     </tr>
                                 `
                                 )
@@ -2560,9 +2576,9 @@
                         const [startHour, startMinute] = brk.start.split(":").map(Number);
                         const [endHour, endMinute] = brk.end.split(":").map(Number);
                         const start = new Date(dayDate);
-                        start.setHours(startHour, startMinute, 0, 0);
+                        start.setUTCHours(startHour, startMinute, 0, 0);
                         const end = new Date(dayDate);
-                        end.setHours(endHour, endMinute, 0, 0);
+                        end.setUTCHours(endHour, endMinute, 0, 0);
                         synthetic.push({
                             subject_name: "Trabajo de Centro",
                             teacher_name: sessions[0]?.teacher_name || "Profesor",
@@ -2608,7 +2624,7 @@
                                         <strong>${s.subject_name || "Sin asignatura"}</strong>
                                         <div>${s.teacher_name || "Sin profesor"}</div>
                                         <div>${s.group_name || "Sin grupo"} | ${s.classroom_name || "Sin aula"}</div>
-                                        <div>${s.start.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} - ${s.end.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</div>
+                                        <div>${toUtcHM(s.start)} - ${toUtcHM(s.end)}</div>
                                     </div>
                                 `
                                 )
@@ -2664,8 +2680,8 @@
                                     <td>${s.classroom_name || "-"}</td>
                                     <td>${s.group_name || "-"}</td>
                                     <td>${s.dayName}</td>
-                                    <td>${s.start.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</td>
-                                    <td>${s.end.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</td>
+                                    <td>${toUtcHM(s.start)}</td>
+                                    <td>${toUtcHM(s.end)}</td>
                                 </tr>
                             `
                             )
