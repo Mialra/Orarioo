@@ -187,7 +187,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "Biology",
             "weekly_hours": 3,
             "preferred_time_slot": "  Morning  ",
-            "required_classroom_type": "  LAB  ",
             "stage": EducationalStage.SECONDARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
@@ -198,7 +197,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["preferred_time_slot"], "Morning")
-        self.assertEqual(response.data["required_classroom_type"], "LAB")
 
     def test_reject_case_insensitive_duplicate_name(self):
         Subject.objects.create(

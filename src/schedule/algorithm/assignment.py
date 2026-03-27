@@ -467,6 +467,7 @@ def _extract_slot_and_classroom_assignment(
 def _build_compatible_classroom_index(*, sessions, classrooms):
     compatible_classrooms_by_session = {}
     for session_index, session in enumerate(sessions):
+        allowed_classroom_ids = session.get("allowed_classroom_ids")
         compatible_classrooms = [
             classroom
             for classroom in classrooms
@@ -475,6 +476,24 @@ def _build_compatible_classroom_index(*, sessions, classrooms):
                 classroom=classroom,
             )
         ]
+        # If user configured allowed classrooms and any of them are shared,
+        # keep only shared options to prefer specialized shared rooms.
+        if allowed_classroom_ids:
+            shared_allowed = [
+                classroom
+                for classroom in compatible_classrooms
+                if getattr(classroom, "is_shared", False)
+            ]
+            if shared_allowed:
+                compatible_classrooms = shared_allowed
+
+        if not allowed_classroom_ids:
+            default_classroom = _find_group_default_classroom(
+                session=session,
+                classrooms=classrooms,
+            )
+            if default_classroom is not None:
+                compatible_classrooms = [default_classroom]
         if not compatible_classrooms:
             raise ScheduleGenerationError(
                 _classroom_compatibility_error(session=session)
@@ -517,25 +536,30 @@ def _build_schedule_stability_terms(*, x, y, previous_assignment_by_session):
 
 
 def _is_classroom_compatible(*, session, classroom):
-    subject = session.get("subject")
-    required_type = (
-        (getattr(subject, "required_classroom_type", "") or "").strip().casefold()
-    )
-    if not required_type:
+    allowed_ids = session.get("allowed_classroom_ids")
+    if not allowed_ids:
         return True
-    classroom_type = (getattr(classroom, "classroom_type", "") or "").strip().casefold()
-    return classroom_type == required_type
+    return getattr(classroom, "id", None) in allowed_ids
+
+
+def _find_group_default_classroom(*, session, classrooms):
+    group = session.get("group")
+    group_name = getattr(group, "name", "").strip()
+    if not group_name:
+        return None
+
+    expected_name = f"Aula {group_name}".casefold()
+    for classroom in classrooms:
+        classroom_name = getattr(classroom, "name", "").strip().casefold()
+        if classroom_name == expected_name:
+            return classroom
+    return None
 
 
 def _classroom_compatibility_error(*, session):
     subject = session.get("subject")
-    required_type = getattr(subject, "required_classroom_type", "") if subject else ""
-    if required_type:
-        return (
-            "Could not assign a compatible classroom for subject '{name}' "
-            "with required classroom type '{required_type}'."
-        ).format(
-            name=getattr(subject, "name", "Unknown subject"),
-            required_type=required_type,
-        )
-    return "Could not assign a classroom to at least one generated session."
+    subject_name = getattr(subject, "name", "Unknown subject")
+    return (
+        "Could not assign a classroom to at least one generated session. "
+        "No available classroom matches subject '{subject_name}'."
+    ).format(subject_name=subject_name)

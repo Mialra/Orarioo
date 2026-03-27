@@ -15,6 +15,7 @@ class SubjectSerializer(NamedEntityNameValidationMixin, serializers.ModelSeriali
 
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
+    allowed_classroom_names = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Subject
@@ -24,7 +25,6 @@ class SubjectSerializer(NamedEntityNameValidationMixin, serializers.ModelSeriali
             "weekly_hours",
             "duration",
             "preferred_time_slot",
-            "required_classroom_type",
             "time_preferences",
             "stage",
             "type",
@@ -32,6 +32,8 @@ class SubjectSerializer(NamedEntityNameValidationMixin, serializers.ModelSeriali
             "teacher_name",
             "group",
             "group_name",
+            "allowed_classrooms",
+            "allowed_classroom_names",
             *AUDIT_FIELD_NAMES,
         ]
         read_only_fields = [
@@ -40,6 +42,7 @@ class SubjectSerializer(NamedEntityNameValidationMixin, serializers.ModelSeriali
             *AUDIT_FIELD_NAMES,
             "teacher_name",
             "group_name",
+            "allowed_classroom_names",
         ]
 
     def validate_weekly_hours(self, value):
@@ -51,13 +54,6 @@ class SubjectSerializer(NamedEntityNameValidationMixin, serializers.ModelSeriali
         return normalize_optional_text(
             value,
             field_name="preferred_time_slot",
-            max_length=150,
-        )
-
-    def validate_required_classroom_type(self, value):
-        return normalize_optional_text(
-            value,
-            field_name="required_classroom_type",
             max_length=150,
         )
 
@@ -83,3 +79,6 @@ class SubjectSerializer(NamedEntityNameValidationMixin, serializers.ModelSeriali
             )
 
         return value
+
+    def get_allowed_classroom_names(self, obj):
+        return list(obj.allowed_classrooms.values_list("name", flat=True))

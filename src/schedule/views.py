@@ -21,15 +21,79 @@ class ScheduleViewSet(AuditableModelViewSet):
     GENERATION_FAILED_DETAIL = (
         "Unable to generate schedule with the current input constraints."
     )
+    DEFAULT_GENERATION_OPTIONS = {
+        "recess_supervisors_preschool": 0,
+        "recess_supervisors_primary": 0,
+    }
 
     queryset = Schedule.objects.all().select_related(
         "teacher", "classroom", "group", "subject"
     )
     serializer_class = ScheduleSerializer
 
+    @staticmethod
+    def _parse_generation_int(payload, field_name, *, min_value, max_value):
+        raw_value = payload.get(field_name)
+        if raw_value in (None, ""):
+            return None, None
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            return None, Response(
+                {"detail": f"{field_name} must be an integer value."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if value < min_value or value > max_value:
+            return None, Response(
+                {
+                    "detail": (
+                        f"{field_name} must be between {min_value} and {max_value}."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return value, None
+
+    @classmethod
+    def _parse_base_generation_int_options(cls, payload, options):
+        int_fields = {
+            "recess_supervisors_preschool": (0, 20),
+            "recess_supervisors_primary": (0, 20),
+        }
+
+        for field_name, bounds in int_fields.items():
+            parsed, error_response = cls._parse_generation_int(
+                payload,
+                field_name,
+                min_value=bounds[0],
+                max_value=bounds[1],
+            )
+            if error_response is not None:
+                return error_response
+            if parsed is not None:
+                options[field_name] = parsed
+        return None
+
+    @classmethod
+    def _parse_generation_options(cls, payload):
+        options = dict(cls.DEFAULT_GENERATION_OPTIONS)
+        base_options_error = cls._parse_base_generation_int_options(
+            payload,
+            options,
+        )
+        if base_options_error is not None:
+            return None, base_options_error
+
+        return options, None
+
     def generate(self, request):
         actor = getattr(request.user, "email", "")
         raw_seed = request.data.get("seed")
+        generation_options, options_error = self._parse_generation_options(request.data)
+        if options_error is not None:
+            return options_error
+
         if raw_seed in (None, ""):
             generation_seed = random.SystemRandom().randrange(1, 2**31 - 1)
         else:
@@ -46,6 +110,7 @@ class ScheduleViewSet(AuditableModelViewSet):
                 actor_email=actor,
                 user=request.user,
                 random_seed=generation_seed,
+                generation_options=generation_options,
             )
         except ScheduleGenerationError as exc:
             logger.warning(
@@ -65,6 +130,7 @@ class ScheduleViewSet(AuditableModelViewSet):
             {
                 "detail": "Schedule generated successfully.",
                 "seed": generation_seed,
+                "generation_options": generation_options,
                 "schedules": serialized.data,
                 "generated_count": len(serialized.data),
             },

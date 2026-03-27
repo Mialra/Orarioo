@@ -22,7 +22,14 @@ class BasicScheduleGenerator:
 
     @classmethod
     @transaction.atomic
-    def generate(cls, *, actor_email: str, user, random_seed: int | None = None):
+    def generate(
+        cls,
+        *,
+        actor_email: str,
+        user,
+        random_seed: int | None = None,
+        generation_options=None,
+    ):
         cls._clear_previous_generated_schedules(actor_email=actor_email, user=user)
 
         teacher = Teacher.objects.order_by("id").first()
@@ -34,7 +41,9 @@ class BasicScheduleGenerator:
         fallback_classroom = cls._get_or_create_classroom(actor_email)
         group = cls._get_or_create_group(actor_email)
         subjects = list(
-            Subject.objects.select_related("teacher", "group").order_by("id")
+            Subject.objects.select_related("teacher", "group")
+            .prefetch_related("allowed_classrooms")
+            .order_by("id")
         )
         classrooms = cls._build_classroom_pool(fallback_classroom=fallback_classroom)
         sessions = cls._build_sessions(subjects=subjects, fallback_teacher=teacher)
@@ -48,7 +57,11 @@ class BasicScheduleGenerator:
             rng=rng,
         )
 
-        validate_group_and_teacher_capacity(sessions=sessions, slots=slots)
+        validate_group_and_teacher_capacity(
+            sessions=sessions,
+            slots=slots,
+            generation_options=generation_options,
+        )
 
         slot_by_session, classroom_by_session = solve_session_assignment(
             sessions=sessions,
@@ -111,6 +124,9 @@ class BasicScheduleGenerator:
                         "teacher_id": subject.teacher_id,
                         "group": subject.group,
                         "subject": subject,
+                        "allowed_classroom_ids": set(
+                            subject.allowed_classrooms.values_list("id", flat=True)
+                        ),
                         "name": subject.name,
                     }
                 )
