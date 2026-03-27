@@ -67,7 +67,9 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         }
 
     def generate_schedule(self, payload=None):
-        return self.client.post(reverse("schedule-generate"), payload or {}, format="json")
+        return self.client.post(
+            reverse("schedule-generate"), payload or {}, format="json"
+        )
 
     def assert_generate_bad_request_with_detail(self, response, detail_snippet):
         del detail_snippet

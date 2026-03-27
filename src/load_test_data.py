@@ -357,12 +357,14 @@ def create_classrooms():
             created_by="system",
         )
         classrooms.append(classroom)
-        print(f"  ✓ Created classroom: {classroom.name} [{'shared' if classroom.is_shared else 'exclusive'}]")
+        print(
+            f"  ✓ Created classroom: {classroom.name} [{'shared' if classroom.is_shared else 'exclusive'}]"
+        )
 
     return classrooms
 
 
-def create_subjects(teachers, groups):
+def create_subjects(teachers, groups):  # noqa: C901
     """Create realistic curriculum-focused subjects, emphasizing Primary complexity."""
     print("\n📚 Creating subjects...")
 

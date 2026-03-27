@@ -6,14 +6,19 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('classroom', '0005_remove_classroom_classroom_shared_home_group_consistency_and_more'),
-        ('subject', '0007_remove_subject_required_classroom_type'),
+        (
+            "classroom",
+            "0005_remove_classroom_classroom_shared_home_group_consistency_and_more",
+        ),
+        ("subject", "0007_remove_subject_required_classroom_type"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='subject',
-            name='allowed_classrooms',
-            field=models.ManyToManyField(blank=True, related_name='allowed_subjects', to='classroom.classroom'),
+            model_name="subject",
+            name="allowed_classrooms",
+            field=models.ManyToManyField(
+                blank=True, related_name="allowed_subjects", to="classroom.classroom"
+            ),
         ),
     ]

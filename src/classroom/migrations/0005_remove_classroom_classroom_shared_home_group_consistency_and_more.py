@@ -6,16 +6,19 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('classroom', '0004_remove_classroom_classroom_type_classroom_home_group_and_more'),
+        (
+            "classroom",
+            "0004_remove_classroom_classroom_type_classroom_home_group_and_more",
+        ),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='classroom',
-            name='classroom_shared_home_group_consistency',
+            model_name="classroom",
+            name="classroom_shared_home_group_consistency",
         ),
         migrations.RemoveField(
-            model_name='classroom',
-            name='home_group',
+            model_name="classroom",
+            name="home_group",
         ),
     ]

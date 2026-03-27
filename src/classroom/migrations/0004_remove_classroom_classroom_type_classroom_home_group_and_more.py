@@ -7,27 +7,40 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('classroom', '0003_classroom_classroom_name_ci_unique'),
-        ('group', '0002_group_group_name_ci_unique'),
+        ("classroom", "0003_classroom_classroom_name_ci_unique"),
+        ("group", "0002_group_group_name_ci_unique"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='classroom',
-            name='classroom_type',
+            model_name="classroom",
+            name="classroom_type",
         ),
         migrations.AddField(
-            model_name='classroom',
-            name='home_group',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='home_classrooms', to='group.group'),
+            model_name="classroom",
+            name="home_group",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="home_classrooms",
+                to="group.group",
+            ),
         ),
         migrations.AddField(
-            model_name='classroom',
-            name='is_shared',
+            model_name="classroom",
+            name="is_shared",
             field=models.BooleanField(default=True),
         ),
         migrations.AddConstraint(
-            model_name='classroom',
-            constraint=models.CheckConstraint(condition=models.Q(models.Q(('is_shared', True), ('home_group__isnull', True)), models.Q(('is_shared', False), ('home_group__isnull', False)), _connector='OR'), name='classroom_shared_home_group_consistency'),
+            model_name="classroom",
+            constraint=models.CheckConstraint(
+                condition=models.Q(
+                    models.Q(("is_shared", True), ("home_group__isnull", True)),
+                    models.Q(("is_shared", False), ("home_group__isnull", False)),
+                    _connector="OR",
+                ),
+                name="classroom_shared_home_group_consistency",
+            ),
         ),
     ]

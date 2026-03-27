@@ -52,7 +52,9 @@ def validate_group_and_teacher_capacity(*, sessions, slots, generation_options=N
     _validate_teacher_weekly_capacity(sessions_by_teacher=sessions_by_teacher)
 
 
-def _apply_recess_supervision_capacity(*, sessions, sessions_by_teacher, generation_options):
+def _apply_recess_supervision_capacity(
+    *, sessions, sessions_by_teacher, generation_options
+):
     teachers_by_stage = {
         EducationalStage.PRESCHOOL: set(),
         EducationalStage.PRIMARY: set(),
@@ -67,7 +69,9 @@ def _apply_recess_supervision_capacity(*, sessions, sessions_by_teacher, generat
             teachers_by_stage[group.stage].add(teacher.id)
 
     for stage, teacher_ids in teachers_by_stage.items():
-        required_supervisors = int(generation_options.get(STAGE_OPTION_FIELD[stage], 0) or 0)
+        required_supervisors = int(
+            generation_options.get(STAGE_OPTION_FIELD[stage], 0) or 0
+        )
         if required_supervisors <= 0:
             continue
         if not teacher_ids:
