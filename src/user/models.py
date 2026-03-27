@@ -7,7 +7,7 @@ from namedEntity.models import NamedEntity
 
 class RoleChoices(models.TextChoices):
     ADMINISTRATOR = "administrator", _("Administrator")
-    DIRECTOR = "director", _("Director")
+    DIRECCION = "direccion", _("Direccion")
 
 
 class CustomUserManager(BaseUserManager):
@@ -61,7 +61,7 @@ class User(NamedEntity, AbstractUser):
     role = models.CharField(
         max_length=20,
         choices=RoleChoices.choices,
-        default=RoleChoices.DIRECTOR,
+        default=RoleChoices.DIRECCION,
         help_text=_("User role in the system"),
     )
     is_enabled = models.BooleanField(
@@ -108,6 +108,6 @@ class User(NamedEntity, AbstractUser):
         """Checks if the user is an administrator"""
         return self.role == RoleChoices.ADMINISTRATOR
 
-    def is_director(self):
-        """Checks if the user is a director"""
-        return self.role == RoleChoices.DIRECTOR
+    def is_direccion(self):
+        """Checks if the user is direccion"""
+        return self.role == RoleChoices.DIRECCION

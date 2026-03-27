@@ -39,6 +39,16 @@ class UserModelTests(TestCase):
         self.assertTrue(user.check_password(self.user_data["password"]))
         self.assertTrue(user.is_enabled)
 
+    def test_password_is_stored_hashed_not_plaintext(self):
+        """Password must be stored hashed and never equal to the raw input."""
+        raw_password = self.user_data["password"]
+        user = User.objects.create_user(**self.user_data)
+
+        self.assertNotEqual(user.password, raw_password)
+        self.assertTrue(user.password)
+        self.assertIn("$", user.password)
+        self.assertTrue(user.check_password(raw_password))
+
     def test_user_inherits_named_entity(self):
         self.assertTrue(issubclass(User, NamedEntity))
 
@@ -69,16 +79,19 @@ class UserModelTests(TestCase):
             password="Pass123!",
             role=RoleChoices.ADMINISTRATOR,
         )
-        director_user = User.objects.create_user(
-            email="director@test.com",
-            given_name="Director",
+        direccion_user = User.objects.create_user(
+            email="direccion@test.com",
+            given_name="Direccion",
             password="Pass123!",
-            role=RoleChoices.DIRECTOR,
+            role=RoleChoices.DIRECCION,
         )
 
         self.assertTrue(admin_user.is_administrator())
-        self.assertFalse(director_user.is_administrator())
-        self.assertTrue(director_user.is_director())
+        self.assertFalse(direccion_user.is_administrator())
+        self.assertTrue(direccion_user.is_direccion())
+
+    def test_only_expected_roles_exist(self):
+        self.assertEqual(set(RoleChoices.values), {"administrator", "direccion"})
 
 
 class AuthenticationApiTests(APITestCase):
@@ -95,7 +108,7 @@ class AuthenticationApiTests(APITestCase):
             "email": "test@example.com",
             "password": "TestPassword123!",
             "password_confirm": "TestPassword123!",
-            "role": "director",
+            "role": "direccion",
         }
 
     def test_signup_success(self):
@@ -106,6 +119,9 @@ class AuthenticationApiTests(APITestCase):
         self.assertIn("access", response.data)
         self.assertIn("refresh", response.data)
         self.assertEqual(response.data["user"]["email"], self.user_data["email"])
+        self.assertNotIn("password", response.data)
+        self.assertNotIn("password_confirm", response.data)
+        self.assertNotIn("password", response.data["user"])
 
     def test_signup_duplicate_email(self):
         self.client.post(self.signup_url, self.user_data, format="json")
@@ -120,6 +136,53 @@ class AuthenticationApiTests(APITestCase):
         response = self.client.post(self.signup_url, invalid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_signup_assigns_administrator_role_when_requested(self):
+        admin_payload = self.user_data.copy()
+        admin_payload["email"] = "admin-signup@test.com"
+        admin_payload["role"] = "administrator"
+
+        response = self.client.post(self.signup_url, admin_payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created_user = User.objects.get(email=admin_payload["email"])
+        self.assertEqual(created_user.role, RoleChoices.ADMINISTRATOR)
+
+    def test_signup_assigns_direccion_role_when_requested(self):
+        direccion_payload = self.user_data.copy()
+        direccion_payload["email"] = "direccion-signup@test.com"
+        direccion_payload["role"] = "direccion"
+
+        response = self.client.post(self.signup_url, direccion_payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created_user = User.objects.get(email=direccion_payload["email"])
+        self.assertEqual(created_user.role, RoleChoices.DIRECCION)
+
+    def test_signup_defaults_to_direccion_when_role_missing(self):
+        payload = self.user_data.copy()
+        payload["email"] = "default-role@test.com"
+        payload.pop("role", None)
+
+        response = self.client.post(self.signup_url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created_user = User.objects.get(email=payload["email"])
+        self.assertEqual(created_user.role, RoleChoices.DIRECCION)
+
+    def test_signup_rejects_invalid_role_value(self):
+        invalid_role_payload = self.user_data.copy()
+        invalid_role_payload["email"] = "invalid-role@test.com"
+        invalid_role_payload["role"] = "administrador"
+
+        response = self.client.post(
+            self.signup_url,
+            invalid_role_payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("role", response.data)
 
     def test_login_success(self):
         User.objects.create_user(
@@ -138,6 +201,8 @@ class AuthenticationApiTests(APITestCase):
         self.assertIn("access", response.data)
         self.assertIn("refresh", response.data)
         self.assertIn("user", response.data)
+        self.assertNotIn("password", response.data)
+        self.assertNotIn("password", response.data["user"])
 
     def test_login_invalid_credentials(self):
         User.objects.create_user(
@@ -184,20 +249,20 @@ class UserApiTests(APITestCase):
             role=RoleChoices.ADMINISTRATOR,
         )
 
-        self.director = User.objects.create_user(
-            email="director@test.com",
+        self.direccion = User.objects.create_user(
+            email="direccion@test.com",
             password="Dir123!",
-            given_name="Director",
-            role=RoleChoices.DIRECTOR,
+            given_name="Direccion",
+            role=RoleChoices.DIRECCION,
         )
 
     def test_get_own_profile(self):
-        self.client.force_authenticate(user=self.director)
+        self.client.force_authenticate(user=self.direccion)
 
         response = self.client.get(reverse("user-me"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["email"], self.director.email)
+        self.assertEqual(response.data["email"], self.direccion.email)
 
     def test_list_users_as_admin(self):
         self.client.force_authenticate(user=self.admin)
@@ -207,8 +272,8 @@ class UserApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 2)
 
-    def test_list_users_as_director_forbidden(self):
-        self.client.force_authenticate(user=self.director)
+    def test_list_users_as_direccion_forbidden(self):
+        self.client.force_authenticate(user=self.direccion)
 
         response = self.client.get(reverse("user-list"))
 
@@ -219,9 +284,9 @@ class UserApiTests(APITestCase):
 
         payload = {
             "given_name": "Nuevo",
-            "family_name": "Director",
-            "email": "nuevo-director@test.com",
-            "role": "director",
+            "family_name": "Direccion",
+            "email": "nuevo-direccion@test.com",
+            "role": "direccion",
             "can_login": False,
         }
         response = self.client.post(
@@ -229,7 +294,7 @@ class UserApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        created_user = User.objects.get(email="nuevo-director@test.com")
+        created_user = User.objects.get(email="nuevo-direccion@test.com")
         self.assertFalse(created_user.has_usable_password())
 
     def test_managed_create_user_with_login_requires_password(self):
@@ -250,7 +315,7 @@ class UserApiTests(APITestCase):
         self.assertIn("password", response.data)
 
     def test_change_password(self):
-        self.client.force_authenticate(user=self.director)
+        self.client.force_authenticate(user=self.direccion)
 
         payload = {
             "current_password": "Dir123!",
@@ -264,11 +329,11 @@ class UserApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        self.director.refresh_from_db()
-        self.assertTrue(self.director.check_password("NewPassword123!"))
+        self.direccion.refresh_from_db()
+        self.assertTrue(self.direccion.check_password("NewPassword123!"))
 
     def test_change_password_with_wrong_current_password(self):
-        self.client.force_authenticate(user=self.director)
+        self.client.force_authenticate(user=self.direccion)
 
         payload = {
             "current_password": "WrongPassword!",
@@ -296,27 +361,27 @@ class PermissionsTests(APITestCase):
             role=RoleChoices.ADMINISTRATOR,
         )
 
-        self.director_1 = User.objects.create_user(
-            email="director1@test.com",
+        self.direccion_1 = User.objects.create_user(
+            email="direccion1@test.com",
             password="Dir123!",
-            given_name="Director",
+            given_name="Direccion",
             family_name="One",
-            role=RoleChoices.DIRECTOR,
+            role=RoleChoices.DIRECCION,
         )
 
-        self.director_2 = User.objects.create_user(
-            email="director2@test.com",
+        self.direccion_2 = User.objects.create_user(
+            email="direccion2@test.com",
             password="Dir123!",
-            given_name="Director",
+            given_name="Direccion",
             family_name="Two",
-            role=RoleChoices.DIRECTOR,
+            role=RoleChoices.DIRECCION,
         )
 
-    def test_director_cannot_view_other_profiles(self):
-        self.client.force_authenticate(user=self.director_1)
+    def test_direccion_cannot_view_other_profiles(self):
+        self.client.force_authenticate(user=self.direccion_1)
 
         response = self.client.get(
-            reverse("user-detail", kwargs={"pk": self.director_2.pk})
+            reverse("user-detail", kwargs={"pk": self.direccion_2.pk})
         )
 
         self.assertIn(
@@ -327,16 +392,16 @@ class PermissionsTests(APITestCase):
         self.client.force_authenticate(user=self.admin)
 
         response = self.client.get(
-            reverse("user-detail", kwargs={"pk": self.director_1.pk})
+            reverse("user-detail", kwargs={"pk": self.direccion_1.pk})
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_director_cannot_update_other_users(self):
-        self.client.force_authenticate(user=self.director_1)
+    def test_direccion_cannot_update_other_users(self):
+        self.client.force_authenticate(user=self.direccion_1)
 
         response = self.client.patch(
-            reverse("user-detail", kwargs={"pk": self.director_2.pk}),
+            reverse("user-detail", kwargs={"pk": self.direccion_2.pk}),
             {"given_name": "Modified"},
             format="json",
         )
@@ -347,12 +412,12 @@ class PermissionsTests(APITestCase):
         self.client.force_authenticate(user=self.admin)
 
         response = self.client.patch(
-            reverse("user-detail", kwargs={"pk": self.director_1.pk}),
+            reverse("user-detail", kwargs={"pk": self.direccion_1.pk}),
             {"given_name": "Updated"},
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        self.director_1.refresh_from_db()
-        self.assertEqual(self.director_1.given_name, "Updated")
+        self.direccion_1.refresh_from_db()
+        self.assertEqual(self.direccion_1.given_name, "Updated")

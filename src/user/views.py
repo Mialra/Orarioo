@@ -24,7 +24,7 @@ class IsAdministrator(permissions.BasePermission):
         return bool(
             request.user
             and request.user.is_authenticated
-            and request.user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECTOR]
+            and request.user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECCION]
         )
 
 
@@ -104,10 +104,10 @@ class UserViewSet(viewsets.ModelViewSet):
             # Allow creating users (signup)
             return [permissions.AllowAny()]
         if self.action == "managed_create":
-            # Authenticated staff (administrator/director) can create managed users
+            # Authenticated staff (administrator/direccion) can create managed users
             return [IsAdministrator()]
         if self.action in ["list", "destroy", "update", "partial_update"]:
-            # Administrator and director have the same management scope.
+            # Administrator and direccion have the same management scope.
             return [IsAdministrator()]
         if self.action == "retrieve":
             # User can see their own profile, administrator can see any
@@ -122,8 +122,8 @@ class UserViewSet(viewsets.ModelViewSet):
         """Filters users based on permissions"""
         user = self.request.user
 
-        if user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECTOR]:
-            # Administrators and directors see all users.
+        if user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECCION]:
+            # Administrators and direccion see all users.
             return User.objects.all().order_by("-created_at")
 
         # Other users only see their own profile.

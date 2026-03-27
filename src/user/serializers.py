@@ -62,8 +62,8 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
     )
     role = serializers.ChoiceField(
         choices=RoleChoices.choices,
-        default=RoleChoices.DIRECTOR,
-        help_text="User role (administrator, director)",
+        default=RoleChoices.DIRECCION,
+        help_text="User role (administrator, direccion)",
     )
 
     class Meta:
@@ -102,8 +102,8 @@ class UserManagementCreateSerializer(
     given_name = serializers.CharField(source="name")
     role = serializers.ChoiceField(
         choices=RoleChoices.choices,
-        default=RoleChoices.DIRECTOR,
-        help_text="User role (administrator, director)",
+        default=RoleChoices.DIRECCION,
+        help_text="User role (administrator, direccion)",
     )
     can_login = serializers.BooleanField(default=False)
     password = serializers.CharField(
