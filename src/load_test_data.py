@@ -108,22 +108,22 @@ def create_users():
     users.append(admin)
     print(f"  ✓ Created administrator: {admin.email}")
 
-    # Directors for audit/review flow.
-    directors_data = [
+    # Direccion users for audit/review flow.
+    direccion_data = [
         ("direccion.academica@test.com", "María", "García López"),
         ("jefatura.estudios@test.com", "Juan", "Martínez Ruiz"),
     ]
 
-    for email, name, family_name in directors_data:
-        director = User.objects.create_user(
+    for email, name, family_name in direccion_data:
+        direccion_user = User.objects.create_user(
             email=email,
-            password="director123",
+            password="direccion123",
             name=name,
             family_name=family_name,
-            role="director",
+            role="direccion",
         )
-        users.append(director)
-        print(f"  ✓ Created director: {director.email}")
+        users.append(direccion_user)
+        print(f"  ✓ Created direccion user: {direccion_user.email}")
 
     return users
 
@@ -902,7 +902,7 @@ def main():
         # print(f"  • {len(schedules)} schedules created")
         print("\n🔑 Login credentials:")
         print("  Admin: admin@test.com / admin123")
-        print("  Dirección: direccion.academica@test.com / director123")
+        print("  Dirección: direccion.academica@test.com / direccion123")
         print("=" * 60)
 
     except Exception as e:
