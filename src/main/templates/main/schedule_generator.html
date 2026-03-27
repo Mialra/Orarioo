@@ -648,6 +648,26 @@
                         <li>✓ Distribución automática en franjas disponibles</li>
                     </ul>
                 </div>
+                <div class="form-section" style="margin-top: 12px;">
+                    <h3 style="margin-bottom: 12px;">Parámetros del algoritmo</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Profes de recreo en Infantil</label>
+                            <input type="number" id="genRecessPreschool" value="0" min="0" max="20" />
+                        </div>
+                        <div class="form-group">
+                            <label>Profes de recreo en Primaria</label>
+                            <input type="number" id="genRecessPrimary" value="0" min="0" max="20" />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <small style="color:#666; display:block; margin-top:4px;">
+                                Las duraciones de clase vuelven al modo estándar por etapa para priorizar rendimiento.
+                            </small>
+                        </div>
+                    </div>
+                </div>
                 <button class="btn-primary" id="generateBtn" style="width: 100%; padding: 15px; font-size: 1.1em;">
                     🚀 Generar Horario Automático
                 </button>
@@ -672,6 +692,10 @@
                     <label for="scheduleCourseFilter">Filtrar por curso:</label>
                     <select id="scheduleCourseFilter" class="schedule-filter-select">
                         <option value="">Todos los cursos</option>
+                    </select>
+                    <label for="scheduleTeacherFilter">Filtrar por profesor:</label>
+                    <select id="scheduleTeacherFilter" class="schedule-filter-select">
+                        <option value="">Todos los profesores</option>
                     </select>
                 </div>
                 <div id="generatorOutput" class="table-container" style="display: none; margin-top: 30px;"></div>
@@ -850,17 +874,10 @@
                             <input type="text" id="classroomName" placeholder="Ej: Aula 1A" />
                         </div>
                         <div class="form-group">
-                            <label>Tipo de Aula</label>
-                            <select id="classroomTypeSelect">
-                                <option value="">Sin tipo</option>
-                                <option value="__NEW__">+ Nuevo tipo...</option>
-                            </select>
-                            <input
-                                type="text"
-                                id="classroomTypeNew"
-                                placeholder="Escribe nuevo tipo (Ej: LAB)"
-                                style="margin-top: 8px; display: none;"
-                            />
+                            <label>
+                                <input type="checkbox" id="classroomIsShared" checked />
+                                Aula compartida
+                            </label>
                         </div>
                     </div>
                     <button class="btn-primary" id="createClassroomBtn">Crear Aula</button>
@@ -871,7 +888,7 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Nombre</th>
-                                <th>Tipo</th>
+                                <th>Compartida</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -960,9 +977,12 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Tipo de Aula Requerida</label>
-                            <select id="subjectRequiredClassroomType">
-                                <option value="">Sin requisito</option>
+                            <label>Aula</label>
+                            <input type="text" value="Automática por aula base/compartida" disabled />
+                        </div>
+                        <div class="form-group">
+                            <label>Aulas permitidas (opcional)</label>
+                            <select id="subjectAllowedClassrooms" multiple style="min-height: 110px;">
                             </select>
                         </div>
                     </div>
@@ -997,7 +1017,7 @@
                                 <th>Horas Semanales</th>
                                 <th>Profesor</th>
                                 <th>Curso</th>
-                                <th>Aula Requerida</th>
+                                <th>Aulas Permitidas</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -1012,6 +1032,7 @@
         document.addEventListener("DOMContentLoaded", () => {
             const API_BASE = "/api";
             let authToken = localStorage.getItem("access_token") || "";
+            let refreshToken = localStorage.getItem("refresh_token") || "";
             let latestGeneratedSchedules = [];
             const SUBJECT_PREF_DAY_CODES = ["MON", "TUE", "WED", "THU", "FRI"];
             const SUBJECT_PREF_DAY_LABELS = [
@@ -1089,25 +1110,91 @@
         };
 
         const apiCall = async (endpoint, method = "GET", body = null) => {
-            const options = {
-                method,
-                headers: { "Content-Type": "application/json" },
-            };
-            if (authToken) {
-                options.headers["Authorization"] = `Bearer ${authToken}`;
-            }
-            if (body) options.body = JSON.stringify(body);
-            try {
-                console.log(`API Call: ${method} ${API_BASE}${endpoint}`, options);
-                const response = await fetch(`${API_BASE}${endpoint}`, options);
-                const data = await response.json();
-                console.log(`API Response for ${endpoint}:`, { status: response.status, ok: response.ok, data });
-                if (!response.ok && response.status === 401) {
-                    authToken = "";
-                    localStorage.removeItem("access_token");
-                    updateAuthUI();
-                    throw new Error("Sesión expirada");
+            const persistTokens = ({ access, refresh }) => {
+                if (typeof access === "string" && access.trim()) {
+                    authToken = access;
+                    localStorage.setItem("access_token", authToken);
                 }
+                if (typeof refresh === "string" && refresh.trim()) {
+                    refreshToken = refresh;
+                    localStorage.setItem("refresh_token", refreshToken);
+                }
+            };
+
+            const clearTokens = () => {
+                authToken = "";
+                refreshToken = "";
+                localStorage.removeItem("access_token");
+                localStorage.removeItem("refresh_token");
+            };
+
+            const tryRefreshToken = async () => {
+                if (!refreshToken) {
+                    return false;
+                }
+
+                try {
+                    const refreshResponse = await fetch(`${API_BASE}/token/refresh/`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ refresh: refreshToken }),
+                    });
+
+                    const refreshData = await refreshResponse.json();
+                    if (!refreshResponse.ok || !refreshData?.access) {
+                        clearTokens();
+                        return false;
+                    }
+
+                    persistTokens({
+                        access: refreshData.access,
+                        refresh: refreshData.refresh,
+                    });
+                    return true;
+                } catch (error) {
+                    console.error("Token refresh error:", error);
+                    clearTokens();
+                    return false;
+                }
+            };
+
+            const executeRequest = async () => {
+                const options = {
+                    method,
+                    headers: { "Content-Type": "application/json" },
+                };
+                if (authToken) {
+                    options.headers["Authorization"] = `Bearer ${authToken}`;
+                }
+                if (body) options.body = JSON.stringify(body);
+                const response = await fetch(`${API_BASE}${endpoint}`, options);
+                let data = {};
+                try {
+                    data = await response.json();
+                } catch {
+                    data = {};
+                }
+                return { response, data };
+            };
+
+            try {
+                let { response, data } = await executeRequest();
+                console.log(`API Response for ${endpoint}:`, { status: response.status, ok: response.ok, data });
+
+                const canRefresh = endpoint !== "/login/" && endpoint !== "/token/refresh/";
+                if (!response.ok && response.status === 401 && canRefresh && authToken) {
+                    const refreshed = await tryRefreshToken();
+                    if (refreshed) {
+                        ({ response, data } = await executeRequest());
+                    }
+                }
+
+                if (!response.ok && response.status === 401) {
+                    clearTokens();
+                    updateAuthUI();
+                    throw new Error("Sesión expirada, inicia sesión de nuevo");
+                }
+
                 return { ok: response.ok, status: response.status, data };
             } catch (error) {
                 console.error(`API Error for ${endpoint}:`, error);
@@ -1670,45 +1757,21 @@
             loadAllData();
         };
 
-        const getUniqueClassroomTypes = (classrooms) => {
-            return [...new Set(
+        const populateSubjectAllowedClassroomsSelector = (classrooms) => {
+            const select = document.getElementById("subjectAllowedClassrooms");
+            if (!select) return;
+
+            const selected = new Set(
+                Array.from(select.selectedOptions || []).map((option) => option.value)
+            );
+            select.innerHTML =
                 (classrooms || [])
-                    .map((c) => (c.classroom_type || "").trim())
-                    .filter(Boolean)
-            )].sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
-        };
+                    .map((classroom) => `<option value="${classroom.id}">${classroom.name}</option>`)
+                    .join("");
 
-        const populateClassroomTypeSelectors = (classrooms) => {
-            const types = getUniqueClassroomTypes(classrooms);
-
-            const classroomTypeSelect = document.getElementById("classroomTypeSelect");
-            if (classroomTypeSelect) {
-                const selected = classroomTypeSelect.value;
-                classroomTypeSelect.innerHTML =
-                    '<option value="">Sin tipo</option>' +
-                    types.map((type) => `<option value="${type}">${type}</option>`).join("") +
-                    '<option value="__NEW__">+ Nuevo tipo...</option>';
-
-                if (selected === "__NEW__" || types.includes(selected) || selected === "") {
-                    classroomTypeSelect.value = selected;
-                } else {
-                    classroomTypeSelect.value = "";
-                }
-            }
-
-            const subjectRequiredTypeSelect = document.getElementById("subjectRequiredClassroomType");
-            if (subjectRequiredTypeSelect) {
-                const selected = subjectRequiredTypeSelect.value;
-                subjectRequiredTypeSelect.innerHTML =
-                    '<option value="">Sin requisito</option>' +
-                    types.map((type) => `<option value="${type}">${type}</option>`).join("");
-
-                if (types.includes(selected) || selected === "") {
-                    subjectRequiredTypeSelect.value = selected;
-                } else {
-                    subjectRequiredTypeSelect.value = "";
-                }
-            }
+            Array.from(select.options).forEach((option) => {
+                option.selected = selected.has(option.value);
+            });
         };
 
         // Auth
@@ -1752,8 +1815,14 @@
             }
             const result = await apiCall("/login/", "POST", { email, password });
             if (result.ok) {
-                authToken = result.data.access;
-                localStorage.setItem("access_token", authToken);
+                authToken = result.data.access || "";
+                refreshToken = result.data.refresh || "";
+                if (authToken) {
+                    localStorage.setItem("access_token", authToken);
+                }
+                if (refreshToken) {
+                    localStorage.setItem("refresh_token", refreshToken);
+                }
                 document.getElementById("authModal").style.display = "none";
                 showAlert("success", "✓ Sesión iniciada");
                 updateAuthUI();
@@ -1800,7 +1869,11 @@
             }
 
             authToken = result.data.access;
+            refreshToken = result.data.refresh || "";
             localStorage.setItem("access_token", authToken);
+            if (refreshToken) {
+                localStorage.setItem("refresh_token", refreshToken);
+            }
             document.getElementById("signupModal").style.display = "none";
             document.getElementById("signupGivenName").value = "";
             document.getElementById("signupFamilyName").value = "";
@@ -1818,7 +1891,9 @@
 
         document.getElementById("logoutBtn").onclick = () => {
             authToken = "";
+            refreshToken = "";
             localStorage.removeItem("access_token");
+            localStorage.removeItem("refresh_token");
             updateAuthUI();
             showAlert("info", "Sesión cerrada");
         };
@@ -1885,7 +1960,7 @@
             renderSavedSchedules(savedScheduleData);
             renderUsers(userData);
             populateGeneratedTimetableUsers(userData);
-            populateClassroomTypeSelectors(classroomData);
+            populateSubjectAllowedClassroomsSelector(classroomData);
             populateScheduleCourseFilter(groupData);
         };
 
@@ -1952,10 +2027,28 @@
             }
         };
 
+        const populateGeneratedScheduleTeacherFilter = (schedules) => {
+            const filter = document.getElementById("scheduleTeacherFilter");
+            const currentValue = filter.value;
+            const uniqueNames = [...new Set((schedules || []).map((s) => s.teacher_name).filter(Boolean))].sort();
+
+            filter.innerHTML =
+                '<option value="">Todos los profesores</option>' +
+                uniqueNames.map((name) => `<option value="${name}">${name}</option>`).join("");
+
+            if (currentValue && uniqueNames.includes(currentValue)) {
+                filter.value = currentValue;
+            }
+        };
+
         const getFilteredSchedules = (schedules) => {
             const selectedCourse = document.getElementById("scheduleCourseFilter").value;
+            const selectedTeacher = document.getElementById("scheduleTeacherFilter").value;
             if (!selectedCourse) {
-                return schedules;
+                if (!selectedTeacher) {
+                    return schedules;
+                }
+                return schedules.filter((s) => s.teacher_name === selectedTeacher);
             }
 
             const normalize = (value) =>
@@ -1970,19 +2063,30 @@
 
             return schedules.filter((s) => {
                 const groupNorm = normalize(s.group_name);
-                return groupNorm === selectedNorm;
+                if (groupNorm !== selectedNorm) {
+                    return false;
+                }
+                if (selectedTeacher && s.teacher_name !== selectedTeacher) {
+                    return false;
+                }
+                return true;
             });
         };
 
         const renderFilteredSchedules = () => {
             const filtered = getFilteredSchedules(latestGeneratedSchedules);
             const selectedCourse = document.getElementById("scheduleCourseFilter").value;
+            const selectedTeacher = document.getElementById("scheduleTeacherFilter").value;
             displaySchedules(filtered, null, "Detalle de sesiones", {
-                mode: selectedCourse ? "course" : "mixed",
+                mode: selectedCourse ? "course" : selectedTeacher ? "teacher" : "mixed",
             });
         };
 
         document.getElementById("scheduleCourseFilter").onchange = () => {
+            renderFilteredSchedules();
+        };
+
+        document.getElementById("scheduleTeacherFilter").onchange = () => {
             renderFilteredSchedules();
         };
 
@@ -2072,16 +2176,6 @@
             showAlert("info", "Preferencias de profesor reiniciadas a Available");
         };
 
-        document.getElementById("classroomTypeSelect").onchange = (event) => {
-            const newTypeInput = document.getElementById("classroomTypeNew");
-            if (!newTypeInput) return;
-            const isNewType = event.target.value === "__NEW__";
-            newTypeInput.style.display = isNewType ? "block" : "none";
-            if (!isNewType) {
-                newTypeInput.value = "";
-            }
-        };
-
         // Teachers CRUD
         const renderTeachers = (items) => {
             const tbody = document.getElementById("teachersList");
@@ -2136,7 +2230,7 @@
                 <tr>
                     <td>${c.id}</td>
                     <td>${c.name}</td>
-                    <td>${c.classroom_type || "-"}</td>
+                    <td>${c.is_shared ? "Sí" : "No"}</td>
                     <td>
                         <div class="action-buttons">
                             <button class="btn-secondary" onclick="editEntity('classrooms', ${c.id})">Modificar</button>
@@ -2149,27 +2243,19 @@
 
         document.getElementById("createClassroomBtn").onclick = async () => {
             const name = document.getElementById("classroomName").value;
-            const classroomTypeSelect = document.getElementById("classroomTypeSelect").value;
-            const classroomTypeNew = document.getElementById("classroomTypeNew").value.trim();
-            const classroomType = classroomTypeSelect === "__NEW__" ? classroomTypeNew : classroomTypeSelect;
+            const isShared = document.getElementById("classroomIsShared").checked;
             if (!name) {
                 showAlert("error", "Ingresa nombre del aula");
                 return;
             }
-            if (classroomTypeSelect === "__NEW__" && !classroomType) {
-                showAlert("error", "Escribe el nuevo tipo de aula");
-                return;
-            }
             const result = await apiCall("/classrooms/", "POST", {
                 name,
-                classroom_type: classroomType,
+                is_shared: isShared,
             });
             if (result.ok) {
                 showAlert("success", "✓ Aula creada");
                 document.getElementById("classroomName").value = "";
-                document.getElementById("classroomTypeSelect").value = "";
-                document.getElementById("classroomTypeNew").value = "";
-                document.getElementById("classroomTypeNew").style.display = "none";
+                document.getElementById("classroomIsShared").checked = true;
                 loadAllData();
             } else {
                 showAlert("error", result.data.detail || "Error al crear");
@@ -2231,7 +2317,7 @@
                     <td>${s.weekly_hours}</td>
                     <td>${s.teacher_name}</td>
                     <td>${s.group_name || "-"}</td>
-                    <td>${s.required_classroom_type || "-"}</td>
+                    <td>${(s.allowed_classroom_names || []).join(", ") || "-"}</td>
                     <td>
                         <div class="action-buttons">
                             <button class="btn-secondary" onclick="editEntity('subjects', ${s.id})">Modificar</button>
@@ -2256,12 +2342,14 @@
                 name: document.getElementById("subjectName").value,
                 weekly_hours: parseInt(document.getElementById("subjectWeeklyHours").value),
                 preferred_time_slot: "",
-                required_classroom_type: document.getElementById("subjectRequiredClassroomType").value,
                 time_preferences: collectSubjectTimePreferences(),
                 stage: document.getElementById("subjectStage").value,
                 type: document.getElementById("subjectType").value,
                 teacher: parseInt(document.getElementById("subjectTeacher").value),
                 group: parseInt(document.getElementById("subjectGroup").value),
+                allowed_classrooms: Array.from(
+                    document.getElementById("subjectAllowedClassrooms").selectedOptions || []
+                ).map((option) => parseInt(option.value, 10)),
             };
             if (!payload.name || !payload.teacher || !payload.group) {
                 showAlert("error", "Ingresa nombre, profesor y curso");
@@ -2271,7 +2359,9 @@
             if (result.ok) {
                 showAlert("success", "✓ Asignatura creada");
                 document.getElementById("subjectName").value = "";
-                document.getElementById("subjectRequiredClassroomType").value = "";
+                Array.from(document.getElementById("subjectAllowedClassrooms").options || []).forEach((option) => {
+                    option.selected = false;
+                });
                 resetSubjectPreferences();
                 loadAllData();
             } else {
@@ -2281,17 +2371,29 @@
 
         // Generator
         document.getElementById("generateBtn").onclick = async () => {
+            const readIntOr = (elementId, fallbackValue) => {
+                const raw = parseInt(document.getElementById(elementId).value, 10);
+                return Number.isNaN(raw) ? fallbackValue : raw;
+            };
+
+            const payload = {
+                recess_supervisors_preschool: readIntOr("genRecessPreschool", 0),
+                recess_supervisors_primary: readIntOr("genRecessPrimary", 0),
+            };
+
             document.getElementById("generateBtn").disabled = true;
-            const result = await apiCall("/schedules/generate/", "POST", {});
+            const result = await apiCall("/schedules/generate/", "POST", payload);
             document.getElementById("generateBtn").disabled = false;
 
             if (result.ok) {
                 latestGeneratedSchedules = result.data.schedules || [];
                 document.getElementById("saveGeneratedTimetableBtn").disabled = !latestGeneratedSchedules.length;
+                populateGeneratedScheduleTeacherFilter(latestGeneratedSchedules);
                 showAlert("success", `✓ Se generaron ${result.data.generated_count} sesiones`);
                 renderFilteredSchedules();
                 loadAllData();
             } else {
+                populateGeneratedScheduleTeacherFilter([]);
                 document.getElementById("saveGeneratedTimetableBtn").disabled = true;
                 showAlert("error", result.data.detail || "Error al generar");
             }
@@ -2337,6 +2439,7 @@
             showAlert("success", `✓ Horario guardado como "${timetableName}"`);
             input.value = "";
             latestGeneratedSchedules = [];
+            populateGeneratedScheduleTeacherFilter([]);
             document.getElementById("saveGeneratedTimetableBtn").disabled = true;
             loadAllData();
         };
@@ -2747,15 +2850,17 @@
                 }
                 const name = prompt("Nombre del aula:", entity.name || "");
                 if (name === null || !name.trim()) return;
-                const classroomType = prompt(
-                    "Tipo de aula (vacío permitido):",
-                    entity.classroom_type || ""
+                const isSharedRaw = prompt(
+                    "¿Aula compartida? (yes/no):",
+                    entity.is_shared ? "yes" : "no"
                 );
-                if (classroomType === null) return;
+                if (isSharedRaw === null) return;
+                const normalizedShared = isSharedRaw.trim().toLowerCase();
+                const isShared = normalizedShared === "yes" || normalizedShared === "y";
 
                 payload = {
                     name: name.trim(),
-                    classroom_type: classroomType.trim(),
+                    is_shared: isShared,
                 };
             }
 
@@ -2802,18 +2907,24 @@
                     entity.type || "NORMAL"
                 );
                 if (subjectType === null || !subjectType.trim()) return;
-                const requiredClassroomType = prompt(
-                    "Tipo de aula requerida (vacío permitido):",
-                    entity.required_classroom_type || ""
+                const allowedClassroomsRaw = prompt(
+                    "IDs de aulas permitidas (separados por coma, vacío = cualquiera):",
+                    (entity.allowed_classrooms || []).join(",")
                 );
-                if (requiredClassroomType === null) return;
+                if (allowedClassroomsRaw === null) return;
+                const allowedClassrooms = allowedClassroomsRaw
+                    .split(",")
+                    .map((value) => value.trim())
+                    .filter(Boolean)
+                    .map((value) => parseInt(value, 10))
+                    .filter((value) => !Number.isNaN(value));
 
                 payload = {
                     name: name.trim(),
                     weekly_hours: parseInt(weeklyHoursRaw, 10),
                     stage: stage.trim().toUpperCase(),
                     type: subjectType.trim().toUpperCase(),
-                    required_classroom_type: requiredClassroomType.trim(),
+                    allowed_classrooms: allowedClassrooms,
                 };
             }
 

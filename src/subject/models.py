@@ -36,7 +36,6 @@ class Subject(AuditableEntity):
     weekly_hours = models.PositiveIntegerField()
     duration = models.FloatField(default=1.0)
     preferred_time_slot = models.CharField(max_length=150, blank=True)
-    required_classroom_type = models.CharField(max_length=150, blank=True, default="")
     time_preferences = models.JSONField(default=dict, blank=True)
     stage = models.CharField(
         max_length=20,
@@ -57,6 +56,11 @@ class Subject(AuditableEntity):
         "group.Group",
         on_delete=models.CASCADE,
         related_name="subjects",
+    )
+    allowed_classrooms = models.ManyToManyField(
+        "classroom.Classroom",
+        blank=True,
+        related_name="allowed_subjects",
     )
 
     class Meta:

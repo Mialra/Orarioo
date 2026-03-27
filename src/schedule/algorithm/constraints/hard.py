@@ -14,6 +14,14 @@ PRESCHOOL_AND_PRIMARY_STAGES = {
     EducationalStage.PRESCHOOL,
     EducationalStage.PRIMARY,
 }
+RECESS_MINUTES_PER_DAY_BY_STAGE = {
+    EducationalStage.PRESCHOOL: 60,
+    EducationalStage.PRIMARY: 30,
+}
+STAGE_OPTION_FIELD = {
+    EducationalStage.PRESCHOOL: "recess_supervisors_preschool",
+    EducationalStage.PRIMARY: "recess_supervisors_primary",
+}
 
 
 def group_weekly_limit(group):
@@ -28,8 +36,13 @@ def group_daily_limit(group):
     return 6
 
 
-def validate_group_and_teacher_capacity(*, sessions, slots):
+def validate_group_and_teacher_capacity(*, sessions, slots, generation_options=None):
     sessions_by_group, sessions_by_teacher = _build_capacity_state(sessions=sessions)
+    _apply_recess_supervision_capacity(
+        sessions=sessions,
+        sessions_by_teacher=sessions_by_teacher,
+        generation_options=generation_options or {},
+    )
 
     _validate_group_slot_capacity(
         sessions_by_group=sessions_by_group,
@@ -37,6 +50,42 @@ def validate_group_and_teacher_capacity(*, sessions, slots):
     )
     _validate_group_weekly_capacity(sessions_by_group=sessions_by_group)
     _validate_teacher_weekly_capacity(sessions_by_teacher=sessions_by_teacher)
+
+
+def _apply_recess_supervision_capacity(*, sessions, sessions_by_teacher, generation_options):
+    teachers_by_stage = {
+        EducationalStage.PRESCHOOL: set(),
+        EducationalStage.PRIMARY: set(),
+    }
+
+    for session in sessions:
+        teacher = session.get("teacher")
+        group = session.get("group")
+        if teacher is None or group is None:
+            continue
+        if group.stage in teachers_by_stage:
+            teachers_by_stage[group.stage].add(teacher.id)
+
+    for stage, teacher_ids in teachers_by_stage.items():
+        required_supervisors = int(generation_options.get(STAGE_OPTION_FIELD[stage], 0) or 0)
+        if required_supervisors <= 0:
+            continue
+        if not teacher_ids:
+            raise ScheduleGenerationError(
+                (
+                    "Cannot assign recess supervision for stage '{stage}'. "
+                    "No teachers available in that stage."
+                ).format(stage=stage)
+            )
+
+        daily_minutes = RECESS_MINUTES_PER_DAY_BY_STAGE[stage]
+        weekly_extra_hours = (daily_minutes / 60.0) * 5 * required_supervisors
+        per_teacher_extra_hours = weekly_extra_hours / len(teacher_ids)
+
+        for teacher_id in teacher_ids:
+            teacher_state = sessions_by_teacher.get(teacher_id)
+            if teacher_state is not None:
+                teacher_state["assigned_hours"] += per_teacher_extra_hours
 
 
 def _build_capacity_state(*, sessions):
@@ -120,10 +169,17 @@ def _validate_teacher_weekly_capacity(*, sessions_by_teacher):
                     "assigned {assigned} > max {max_hours}."
                 ).format(
                     name=teacher_state["name"],
-                    assigned=teacher_state["assigned_hours"],
+                    assigned=_format_hours(teacher_state["assigned_hours"]),
                     max_hours=teacher_state["max_weekly_hours"],
                 )
             )
+
+
+def _format_hours(value):
+    rounded = round(float(value), 2)
+    if rounded.is_integer():
+        return str(int(rounded))
+    return f"{rounded:.2f}".rstrip("0").rstrip(".")
 
 
 def add_exactly_one_slot_constraints(*, model, x, session_count, slot_count):

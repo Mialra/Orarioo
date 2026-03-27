@@ -66,8 +66,8 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "users": [self.user.id],
         }
 
-    def generate_schedule(self):
-        return self.client.post(reverse("schedule-generate"), {}, format="json")
+    def generate_schedule(self, payload=None):
+        return self.client.post(reverse("schedule-generate"), payload or {}, format="json")
 
     def assert_generate_bad_request_with_detail(self, response, detail_snippet):
         del detail_snippet
@@ -603,7 +603,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.subject.save(update_fields=["weekly_hours"])
 
         response = self.generate_schedule()
-
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         daily_counts = {}
@@ -615,6 +614,21 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(group_schedules.count(), 25)
         self.assertEqual(len(daily_counts), 5)
         self.assertTrue(all(count <= 5 for count in daily_counts.values()))
+
+    def test_generate_rejects_when_recess_supervision_overloads_teacher(self):
+        self.teacher.max_weekly_hours = 5
+        self.teacher.save(update_fields=["max_weekly_hours"])
+
+        response = self.generate_schedule(
+            {
+                "recess_supervisors_primary": 1,
+            }
+        )
+
+        self.assert_generate_bad_request_with_detail(
+            response,
+            "exceeds max weekly hours",
+        )
 
     @skipIf(
         schedule_assignment.cp_model is None,
@@ -663,13 +677,11 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(len(tc_schedules), 4)
         self.assertEqual(len(unique_tc_starts), 4)
 
-    def test_generate_assigns_only_compatible_classrooms(self):
-        self.classroom.classroom_type = "STANDARD"
-        self.classroom.save(update_fields=["classroom_type"])
-        lab = Classroom.objects.create(name="Laboratorio 1", classroom_type="LAB")
-
-        self.subject.required_classroom_type = "lab"
-        self.subject.save(update_fields=["required_classroom_type"])
+    def test_generate_assigns_only_subject_allowed_classrooms(self):
+        self.classroom.is_shared = True
+        self.classroom.save(update_fields=["is_shared"])
+        assigned = Classroom.objects.create(name="Aula Asignada", is_shared=True)
+        self.subject.allowed_classrooms.set([assigned])
 
         response = self.generate_schedule()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -679,27 +691,44 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
                 "classroom_id", flat=True
             )
         )
-        self.assertEqual(generated_classroom_ids, {lab.id})
+        self.assertEqual(generated_classroom_ids, {assigned.id})
 
-    def test_generate_rejects_subject_without_compatible_classroom(self):
-        self.classroom.classroom_type = "STANDARD"
-        self.classroom.save(update_fields=["classroom_type"])
-        self.subject.required_classroom_type = "LAB"
-        self.subject.save(update_fields=["required_classroom_type"])
+    def test_generate_prefers_shared_when_allowed_contains_mixed_rooms(self):
+        self.classroom.name = "Aula 1A"
+        self.classroom.is_shared = False
+        self.classroom.save(update_fields=["name", "is_shared"])
+        music_room = Classroom.objects.create(name="Aula de Música", is_shared=True)
+        self.subject.allowed_classrooms.set([self.classroom, music_room])
+
+        response = self.generate_schedule()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        generated_classroom_ids = set(
+            Schedule.objects.filter(subject=self.subject).values_list(
+                "classroom_id", flat=True
+            )
+        )
+        self.assertEqual(generated_classroom_ids, {music_room.id})
+
+    def test_generate_uses_any_classroom_when_subject_has_no_restrictions(self):
+        self.classroom.is_shared = True
+        self.classroom.save(update_fields=["is_shared"])
 
         response = self.generate_schedule()
 
-        self.assert_generate_bad_request_with_detail(
-            response,
-            "compatible classroom",
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        generated_classroom_ids = set(
+            Schedule.objects.filter(subject=self.subject).values_list(
+                "classroom_id", flat=True
+            )
         )
+        self.assertIn(self.classroom.id, generated_classroom_ids)
 
-    def test_generate_spreads_sessions_when_one_compatible_classroom_is_shared(self):
-        self.classroom.classroom_type = "LAB"
-        self.classroom.save(update_fields=["classroom_type"])
+    def test_generate_spreads_sessions_when_one_allowed_classroom_is_shared(self):
+        self.classroom.is_shared = True
+        self.classroom.save(update_fields=["is_shared"])
         self.subject.weekly_hours = 1
-        self.subject.required_classroom_type = "LAB"
-        self.subject.save(update_fields=["weekly_hours", "required_classroom_type"])
+        self.subject.save(update_fields=["weekly_hours"])
 
         teacher_2 = Teacher.objects.create(
             name="Elena Ruiz",
@@ -708,16 +737,17 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         group_2 = Group.objects.create(name="2A", stage=EducationalStage.PRIMARY)
         other_subject = Subject.objects.create(
-            name="Science Lab",
+            name="Science",
             weekly_hours=1,
             duration=1.0,
             preferred_time_slot="Morning",
-            required_classroom_type="lab",
             stage=SubjectEducationalStage.PRIMARY,
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=group_2,
         )
+        self.subject.allowed_classrooms.set([self.classroom])
+        other_subject.allowed_classrooms.set([self.classroom])
 
         response = self.generate_schedule()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -732,7 +762,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(
             len({item.start_time for item in generated}),
             2,
-            "Two sessions that share a single compatible classroom must not overlap.",
+            "Two sessions that share a single classroom must not overlap.",
         )
 
     def test_generate_rejects_subject_with_all_slots_marked_unavailable(self):
