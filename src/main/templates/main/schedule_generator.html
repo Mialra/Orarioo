@@ -377,6 +377,148 @@
             display: none !important;
         }
 
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1050;
+            padding: 16px;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal-card {
+            background: #fff;
+            width: 100%;
+            max-width: 520px;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 18px 36px rgba(0, 0, 0, 0.18);
+        }
+
+        .modal-title {
+            margin-bottom: 6px;
+            color: #222;
+            font-size: 1.35em;
+        }
+
+        .modal-subtitle {
+            color: #666;
+            margin-bottom: 18px;
+            font-size: 0.92em;
+        }
+
+        .export-entity-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .export-entity-card {
+            border: 1px solid #d9dfef;
+            border-radius: 10px;
+            background: #f8f9ff;
+            padding: 12px;
+            cursor: pointer;
+            text-align: left;
+            position: relative;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+
+        .export-entity-card strong {
+            display: block;
+            color: #2f3a66;
+            margin-bottom: 2px;
+        }
+
+        .export-entity-card small {
+            color: #596285;
+            font-size: 0.84em;
+        }
+
+        .export-entity-card:hover {
+            border-color: #8ea1e6;
+        }
+
+        .export-entity-card.active {
+            border-color: #5f74d8;
+            background: #eef2ff;
+            box-shadow: inset 0 0 0 1px #5f74d8;
+        }
+
+        .export-card-tick {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 1px solid #b7c2e6;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.78em;
+            color: transparent;
+            background: #fff;
+        }
+
+        .export-entity-card.active .export-card-tick {
+            color: #fff;
+            background: #5f74d8;
+            border-color: #5f74d8;
+        }
+
+        .export-entity-selects {
+            margin-top: 6px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .export-entity-selects label {
+            font-size: 0.88em;
+            margin-bottom: 3px;
+        }
+
+        .checkbox-list {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 10px;
+            max-height: 180px;
+            overflow-y: auto;
+            background: #fff;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 0.95em;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 8px;
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+
+        .checkbox-item label {
+            margin: 0;
+            cursor: pointer;
+            flex: 1;
+            font-size: 0.9em;
+        }
+
         .form-section {
             background: #f8f9fa;
             padding: 20px;
@@ -601,6 +743,62 @@
             </div>
         </div>
 
+        <div id="exportModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+            <div class="modal-card">
+                <h2 class="modal-title" id="exportModalTitle">Exportar Horario</h2>
+                <p class="modal-subtitle" id="exportContextText">Marca las entidades que quieres incluir o selecciona objetos concretos.</p>
+
+                <div class="form-group">
+                    <label for="exportFormat">Formato</label>
+                    <select id="exportFormat">
+                        <option value="csv" selected>CSV</option>
+                        <option value="pdf">PDF</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Información a incluir</label>
+                    <div class="export-entity-grid">
+                        <button type="button" class="export-entity-card" data-export-entity="group">
+                            <span class="export-card-tick">✓</span>
+                            <strong>Cursos</strong>
+                            <small>Incluye todos los cursos creados por ti</small>
+                        </button>
+                        <button type="button" class="export-entity-card" data-export-entity="teacher">
+                            <span class="export-card-tick">✓</span>
+                            <strong>Profesores</strong>
+                            <small>Incluye todos los profesores creados por ti</small>
+                        </button>
+                        <button type="button" class="export-entity-card" data-export-entity="classroom">
+                            <span class="export-card-tick">✓</span>
+                            <strong>Aulas</strong>
+                            <small>Incluye todas las aulas creadas por ti</small>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="export-entity-selects">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="exportGroupSelect">Cursos concretos (opcional)</label>
+                        <div id="exportGroupSelect" class="checkbox-list"></div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="exportTeacherSelect">Profesores concretos (opcional)</label>
+                        <div id="exportTeacherSelect" class="checkbox-list"></div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="exportClassroomSelect">Aulas concretas (opcional)</label>
+                        <div id="exportClassroomSelect" class="checkbox-list"></div>
+                    </div>
+                </div>
+
+                <div class="button-group" style="margin-top: 12px;">
+                    <button class="btn-primary" id="confirmExportBtn" style="flex: 1;">Descargar</button>
+                    <button class="btn-secondary" id="cancelExportBtn" style="flex: 1;">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Content -->
         <div id="mainContent" style="display: none;">
             <!-- Stats -->
@@ -697,6 +895,7 @@
                     <select id="scheduleTeacherFilter" class="schedule-filter-select">
                         <option value="">Todos los profesores</option>
                     </select>
+                    <button class="btn-secondary" id="exportGeneratedBtn" type="button">Exportar...</button>
                 </div>
                 <div id="generatorOutput" class="table-container" style="display: none; margin-top: 30px;"></div>
             </div>
@@ -726,6 +925,7 @@
                     <select id="savedTimetableTeacherFilter" class="schedule-filter-select" disabled>
                         <option value="">Todos los profesores</option>
                     </select>
+                    <button class="btn-secondary" id="exportSavedBtn" type="button">Exportar...</button>
                 </div>
                 <div class="manual-change-box">
                     <h4>🔁 Cambio Manual en Horario Guardado</h4>
@@ -1065,9 +1265,16 @@
             let currentSubjects = [];
             let currentSchedules = [];
             let currentUsers = [];
+            let currentUserProfile = null;
             let savedTimetableGroups = [];
             let selectedSavedTimetableIndex = null;
             let selectedSavedTimetableName = null;
+            let currentExportSource = "generated";
+            const exportEntityState = {
+                group: false,
+                teacher: false,
+                classroom: false,
+            };
 
         // Utility Functions
         const showAlert = (type, message) => {
@@ -1200,6 +1407,229 @@
                 console.error(`API Error for ${endpoint}:`, error);
                 return { ok: false, status: 0, data: { detail: error.message } };
             }
+        };
+
+        const normalizeTextForCompare = (value) =>
+            (value || "")
+                .toString()
+                .trim()
+                .toLowerCase();
+
+        const getCurrentUserEmail = () =>
+            normalizeTextForCompare(currentUserProfile?.email || "");
+
+        const getEntitiesCreatedByCurrentUser = (entityType) => {
+            const currentEmail = getCurrentUserEmail();
+            const source =
+                entityType === "group"
+                    ? currentGroups
+                    : entityType === "teacher"
+                    ? currentTeachers
+                    : entityType === "classroom"
+                    ? currentClassrooms
+                    : [];
+
+            if (!currentEmail) {
+                return [...source];
+            }
+
+            const createdByUser = source.filter(
+                (item) => normalizeTextForCompare(item.created_by) === currentEmail
+            );
+
+            // Fallback: legacy rows may not have created_by populated.
+            if (createdByUser.length === 0) {
+                return [...source];
+            }
+
+            return createdByUser;
+        };
+
+        const getExportEntitySelectId = (entityType) => {
+            if (entityType === "group") return "exportGroupSelect";
+            if (entityType === "teacher") return "exportTeacherSelect";
+            if (entityType === "classroom") return "exportClassroomSelect";
+            return null;
+        };
+
+        const getEntityOptionLabel = (entityType, entity) => {
+            return entity.name || `#${entity.id}`;
+        };
+
+        const populateExportEntitySelect = (entityType) => {
+            const selectId = getExportEntitySelectId(entityType);
+            const container = selectId ? document.getElementById(selectId) : null;
+            if (!container) {
+                return;
+            }
+
+            const entities = getEntitiesCreatedByCurrentUser(entityType);
+            const previousValues = new Set(
+                Array.from(container.querySelectorAll("input[type='checkbox']:checked")).map(
+                    (cb) => cb.value
+                )
+            );
+            
+            container.innerHTML = entities
+                    .sort((left, right) => (left.name || "").localeCompare(right.name || "", "es"))
+                    .map(
+                        (entity) => {
+                            const isChecked = previousValues.has(String(entity.id)) ? "checked" : "";
+                            return `
+                                <div class="checkbox-item">
+                                    <input type="checkbox" id="check-${entityType}-${entity.id}" value="${entity.id}" ${isChecked} />
+                                    <label for="check-${entityType}-${entity.id}">${getEntityOptionLabel(entityType, entity)}</label>
+                                </div>
+                            `;
+                        }
+                    )
+                    .join("");
+        };
+
+        const populateAllExportEntitySelects = () => {
+            ["group", "teacher", "classroom"].forEach((entityType) => {
+                populateExportEntitySelect(entityType);
+            });
+        };
+
+        const renderExportEntityCards = () => {
+            document.querySelectorAll(".export-entity-card").forEach((button) => {
+                const entityType = button.dataset.exportEntity;
+                if (!entityType) {
+                    return;
+                }
+
+                const isActive = !!exportEntityState[entityType];
+                button.classList.toggle("active", isActive);
+                button.setAttribute("aria-pressed", isActive ? "true" : "false");
+            });
+        };
+
+        const getExportSelectionForEntity = (entityType) => {
+            const selectId = getExportEntitySelectId(entityType);
+            const container = selectId ? document.getElementById(selectId) : null;
+            if (!container) {
+                return [];
+            }
+            const selected = Array.from(container.querySelectorAll("input[type='checkbox']:checked"))
+                .map((checkbox) => parseInt(checkbox.value, 10))
+                .filter((value) => !Number.isNaN(value) && value > 0);
+            return [...new Set(selected)];
+        };
+
+        const hasAnyExportSelection = () => {
+            const anyAll = Object.values(exportEntityState).some(Boolean);
+            if (anyAll) {
+                return true;
+            }
+
+            return ["group", "teacher", "classroom"].some(
+                (entityType) => getExportSelectionForEntity(entityType).length > 0
+            );
+        };
+
+        const openExportModal = (source) => {
+            currentExportSource = source;
+            const context =
+                source === "saved"
+                    ? "Exportar sesiones de horarios guardados"
+                    : "Exportar sesiones de horario generado";
+            document.getElementById("exportContextText").textContent = context;
+            document.getElementById("exportFormat").value = "csv";
+            exportEntityState.group = false;
+            exportEntityState.teacher = false;
+            exportEntityState.classroom = false;
+            populateAllExportEntitySelects();
+            [
+                document.getElementById("exportGroupSelect"),
+                document.getElementById("exportTeacherSelect"),
+                document.getElementById("exportClassroomSelect"),
+            ].forEach((container) => {
+                if (container) {
+                    Array.from(container.querySelectorAll("input[type='checkbox']")).forEach((checkbox) => {
+                        checkbox.checked = false;
+                    });
+                }
+            });
+            renderExportEntityCards();
+            document.getElementById("exportModal").classList.add("show");
+        };
+
+        const closeExportModal = () => {
+            document.getElementById("exportModal").classList.remove("show");
+        };
+
+        const downloadFileFromApi = async (endpoint) => {
+            const doRequest = async () => {
+                const headers = {};
+                if (authToken) {
+                    headers.Authorization = `Bearer ${authToken}`;
+                }
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    method: "GET",
+                    headers,
+                });
+                return response;
+            };
+
+            const refreshAccessToken = async () => {
+                if (!refreshToken) {
+                    return false;
+                }
+                try {
+                    const response = await fetch(`${API_BASE}/token/refresh/`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ refresh: refreshToken }),
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data?.access) {
+                        return false;
+                    }
+                    authToken = data.access;
+                    localStorage.setItem("access_token", authToken);
+                    if (data.refresh) {
+                        refreshToken = data.refresh;
+                        localStorage.setItem("refresh_token", refreshToken);
+                    }
+                    return true;
+                } catch (error) {
+                    console.error("Refresh token error while downloading file", error);
+                    return false;
+                }
+            };
+
+            let response = await doRequest();
+            if (response.status === 401 && authToken) {
+                const refreshed = await refreshAccessToken();
+                if (refreshed) {
+                    response = await doRequest();
+                }
+            }
+
+            if (!response.ok) {
+                let errorData = {};
+                try {
+                    errorData = await response.json();
+                } catch {
+                    errorData = { detail: "No se pudo descargar el archivo" };
+                }
+                throw new Error(extractApiErrorMessage(errorData, "No se pudo descargar el archivo"));
+            }
+
+            const contentDisposition = response.headers.get("Content-Disposition") || "";
+            const fileNameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+            const fileName = fileNameMatch ? fileNameMatch[1] : "schedules_export";
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
         };
 
         const defaultSubjectPreferenceMap = () => {
@@ -1889,6 +2319,81 @@
             document.getElementById("signupModal").style.display = "none";
         };
 
+        document.getElementById("exportGeneratedBtn").onclick = () => {
+            openExportModal("generated");
+        };
+
+        document.getElementById("exportSavedBtn").onclick = () => {
+            openExportModal("saved");
+        };
+
+        document.getElementById("cancelExportBtn").onclick = () => {
+            closeExportModal();
+        };
+
+        document.getElementById("exportModal").onclick = (event) => {
+            if (event.target.id === "exportModal") {
+                closeExportModal();
+            }
+        };
+
+        document.querySelectorAll(".export-entity-card").forEach((button) => {
+            button.onclick = () => {
+                const entityType = button.dataset.exportEntity;
+                if (!entityType) {
+                    return;
+                }
+
+                exportEntityState[entityType] = !exportEntityState[entityType];
+                renderExportEntityCards();
+            };
+        });
+
+        document.getElementById("confirmExportBtn").onclick = async () => {
+            const format = document.getElementById("exportFormat").value;
+            const selectedGroupIds = getExportSelectionForEntity("group");
+            const selectedTeacherIds = getExportSelectionForEntity("teacher");
+            const selectedClassroomIds = getExportSelectionForEntity("classroom");
+
+            if (!hasAnyExportSelection()) {
+                showAlert(
+                    "error",
+                    "Marca al menos una entidad o selecciona un objeto concreto para exportar."
+                );
+                return;
+            }
+
+            const params = new URLSearchParams();
+            params.set("export_format", format);
+            params.set("source", currentExportSource);
+            params.set("selection_mode", "cards");
+            params.set("group_all", exportEntityState.group ? "1" : "0");
+            params.set("teacher_all", exportEntityState.teacher ? "1" : "0");
+            params.set("classroom_all", exportEntityState.classroom ? "1" : "0");
+
+            if (currentExportSource === "saved" && selectedSavedTimetableName) {
+                params.set("saved_timetable_name", selectedSavedTimetableName);
+            }
+
+            if (selectedGroupIds.length) {
+                params.set("group_ids", selectedGroupIds.join(","));
+            }
+            if (selectedTeacherIds.length) {
+                params.set("teacher_ids", selectedTeacherIds.join(","));
+            }
+            if (selectedClassroomIds.length) {
+                params.set("classroom_ids", selectedClassroomIds.join(","));
+            }
+
+            try {
+                await downloadFileFromApi(`/schedules/export/?${params.toString()}`);
+                closeExportModal();
+                showAlert("success", "✓ Exportación completada");
+            } catch (error) {
+                showAlert("error", error.message || "No se pudo exportar");
+            }
+        };
+
         document.getElementById("logoutBtn").onclick = () => {
             authToken = "";
             refreshToken = "";
@@ -1910,7 +2415,7 @@
 
         // Load All Data
         const loadAllData = async () => {
-            const [teachers, classrooms, groups, subjects, schedules, savedSchedules, users] = await Promise.all([
+            const [teachers, classrooms, groups, subjects, schedules, savedSchedules, users, me] = await Promise.all([
                 apiCall("/teachers/"),
                 apiCall("/classrooms/"),
                 apiCall("/groups/"),
@@ -1918,6 +2423,7 @@
                 apiCall("/schedules/"),
                 apiCall("/schedules/saved/"),
                 apiCall("/users/"),
+                apiCall("/users/me/"),
             ]);
 
             console.log("Load data results:", {
@@ -1928,6 +2434,7 @@
                 schedules,
                 savedSchedules,
                 users,
+                me,
             });
 
             // Handle paginated responses (data.results) or direct arrays
@@ -1940,6 +2447,7 @@
                 savedSchedules.data?.results ||
                 (Array.isArray(savedSchedules.data) ? savedSchedules.data : []);
             const userData = users.data?.results || (Array.isArray(users.data) ? users.data : []);
+            currentUserProfile = me.ok ? me.data : null;
 
             currentTeachers = teacherData;
             currentClassrooms = classroomData;
@@ -1962,6 +2470,7 @@
             populateGeneratedTimetableUsers(userData);
             populateSubjectAllowedClassroomsSelector(classroomData);
             populateScheduleCourseFilter(groupData);
+            populateAllExportEntitySelects();
         };
 
         document.getElementById("managedUserCanLogin").onchange = (event) => {

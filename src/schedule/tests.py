@@ -1,4 +1,5 @@
 from datetime import timedelta
+from io import BytesIO
 from unittest import skipIf
 
 from django.urls import reverse
@@ -17,10 +18,18 @@ from schedule.algorithm.slots import (
 )
 from schedule.constants import AUTO_GENERATED_OBSERVATION
 from schedule.models import Schedule
+from schedule.views import REPORTLAB_AVAILABLE
 from subject.models import EducationalStage as SubjectEducationalStage
 from subject.models import Subject, SubjectTimePreferenceState, SubjectType
 from teacher.models import Teacher, TeacherTimePreferenceState
 from user.models import RoleChoices
+
+try:
+    from openpyxl import load_workbook
+
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 
 
 class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
@@ -135,6 +144,209 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
         self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
         self.assertEqual(detail_response.data["name"], "Science")
+
+    def test_export_csv_includes_global_schedules(self):
+        self.create_schedule(
+            name="Horario Usuario 1",
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+        self.create_schedule(
+            name="Horario Usuario 2",
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.other_user.email,
+            updated_by=self.other_user.email,
+            users=[self.other_user],
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {"export_format": "csv", "source": "generated", "scope": "all"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        csv_text = response.content.decode("utf-8-sig")
+        self.assertIn("Asignatura,Profesor,Curso,Aula", csv_text)
+        self.assertIn("Mathematics", csv_text)
+        self.assertIn("Ana Perez", csv_text)
+        self.assertIn("1A", csv_text)
+        self.assertIn("Aula 1A", csv_text)
+        self.assertIn("orarioo_generated_schedule_", response["Content-Disposition"])
+
+    def test_export_csv_by_group_entity_filter(self):
+        other_group = Group.objects.create(name="2A", stage=EducationalStage.PRIMARY)
+        other_subject = Subject.objects.create(
+            name="Language 2A",
+            weekly_hours=3,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=other_group,
+        )
+
+        self.create_schedule(
+            name="Sesion 1A",
+            group=self.group,
+            subject=self.subject,
+            observations=AUTO_GENERATED_OBSERVATION,
+        )
+        self.create_schedule(
+            name="Sesion 2A",
+            group=other_group,
+            subject=other_subject,
+            observations=AUTO_GENERATED_OBSERVATION,
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "csv",
+                "source": "generated",
+                "scope": "entity",
+                "entity_type": "group",
+                "entity_id": self.group.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        csv_text = response.content.decode("utf-8-sig")
+        self.assertIn("Mathematics", csv_text)
+        self.assertNotIn("Language 2A", csv_text)
+
+    @skipIf(not REPORTLAB_AVAILABLE, "reportlab is not installed")
+    def test_export_pdf_saved_returns_pdf_file(self):
+        self.create_schedule(
+            name="Horario Guardado",
+            observations="Saved timetable",
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "pdf",
+                "source": "saved",
+                "scope": "all",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertIn(
+            'filename="Horario Guardado.pdf"',
+            response["Content-Disposition"],
+        )
+
+    def test_export_entity_scope_requires_valid_entity_data(self):
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "csv",
+                "source": "all",
+                "scope": "entity",
+                "entity_type": "group",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+
+    @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
+    def test_export_cards_mode_with_specific_teacher_without_teacher_all(self):
+        second_teacher = Teacher.objects.create(
+            name="Julian",
+            max_weekly_hours=20,
+            working_hours=12,
+        )
+        second_subject = Subject.objects.create(
+            name="Science",
+            weekly_hours=3,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=second_teacher,
+            group=self.group,
+        )
+
+        self.create_schedule(
+            name="Sesion Ana",
+            teacher=self.teacher,
+            subject=self.subject,
+            observations=AUTO_GENERATED_OBSERVATION,
+        )
+        self.create_schedule(
+            name="Sesion Julian",
+            teacher=second_teacher,
+            subject=second_subject,
+            observations=AUTO_GENERATED_OBSERVATION,
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "csv",
+                "source": "generated",
+                "selection_mode": "cards",
+                "group_all": "0",
+                "teacher_all": "0",
+                "classroom_all": "0",
+                "subject_all": "0",
+                "teacher_ids": str(second_teacher.id),
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        workbook = load_workbook(filename=BytesIO(response.content))
+        self.assertGreaterEqual(len(workbook.sheetnames), 1)
+        first_sheet = workbook[workbook.sheetnames[0]]
+        values = [
+            str(value)
+            for row in first_sheet.iter_rows(values_only=True)
+            for value in row
+            if value is not None
+        ]
+        joined = " ".join(values)
+        self.assertIn("Julian", joined)
+        self.assertNotIn("Ana Perez", joined)
+
+    @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
+    def test_export_cards_mode_with_no_selection_returns_only_header(self):
+        self.create_schedule(
+            name="Sesion Base",
+            observations=AUTO_GENERATED_OBSERVATION,
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "csv",
+                "source": "generated",
+                "selection_mode": "cards",
+                "group_all": "0",
+                "teacher_all": "0",
+                "classroom_all": "0",
+                "subject_all": "0",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        workbook = load_workbook(filename=BytesIO(response.content))
+        self.assertEqual(workbook.sheetnames, ["Sin datos"])
+        sheet = workbook["Sin datos"]
+        self.assertEqual(sheet.max_row, 1)
 
     def test_update_schedule(self):
         schedule = self.create_schedule()
