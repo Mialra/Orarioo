@@ -39,6 +39,7 @@ try:
 except ImportError:
     REPORTLAB_AVAILABLE = False
 
+
 class ScheduleViewSet(AuditableModelViewSet):
     """CRUD API for schedules."""
 
@@ -231,8 +232,8 @@ class ScheduleViewSet(AuditableModelViewSet):
     @classmethod
     def _parse_export_params(cls, request):
         export_format = (
-            request.query_params.get("export_format") or "csv"
-        ).strip().lower()
+            (request.query_params.get("export_format") or "csv").strip().lower()
+        )
         if export_format not in {"csv", "pdf"}:
             return None, Response(
                 {"detail": "export_format must be one of: csv, pdf."},
@@ -341,7 +342,9 @@ class ScheduleViewSet(AuditableModelViewSet):
     @classmethod
     def _build_export_filename(cls, params, saved_schedule_name=""):
         if params["source"] == "saved" and saved_schedule_name:
-            stem = cls._sanitize_filename_stem(saved_schedule_name, "orarioo_saved_schedule")
+            stem = cls._sanitize_filename_stem(
+                saved_schedule_name, "orarioo_saved_schedule"
+            )
         else:
             date_token = timezone.now().strftime("%Y%m%d_%H%M%S")
             stem = f"orarioo_generated_schedule_{date_token}"
@@ -400,14 +403,16 @@ class ScheduleViewSet(AuditableModelViewSet):
             model_cls = config["model"]
             name_map = {
                 obj.id: obj.name
-                for obj in model_cls.objects.filter(id__in=selected_ids).only("id", "name")
+                for obj in model_cls.objects.filter(id__in=selected_ids).only(
+                    "id", "name"
+                )
             }
 
             for object_id in selected_ids:
                 object_name = name_map.get(object_id, f"{config['label']} {object_id}")
-                object_queryset = queryset.filter(**{f"{field_name}_id": object_id}).order_by(
-                    "start_time", "id"
-                )
+                object_queryset = queryset.filter(
+                    **{f"{field_name}_id": object_id}
+                ).order_by("start_time", "id")
                 units.append(
                     {
                         "entity_type": entity_type,
@@ -445,7 +450,9 @@ class ScheduleViewSet(AuditableModelViewSet):
                 ]
             )
 
-        response = HttpResponse(output.getvalue(), content_type="text/csv; charset=utf-8")
+        response = HttpResponse(
+            output.getvalue(), content_type="text/csv; charset=utf-8"
+        )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
@@ -522,8 +529,7 @@ class ScheduleViewSet(AuditableModelViewSet):
         response = HttpResponse(
             buffer.getvalue(),
             content_type=(
-                "application/vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
+                "application/vnd.openxmlformats-officedocument." "spreadsheetml.sheet"
             ),
         )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
@@ -574,9 +580,7 @@ class ScheduleViewSet(AuditableModelViewSet):
                 slot_keys.append(slot)
 
             key = (day_name, slot)
-            cell_content.setdefault(key, []).append(
-                cls._describe_schedule(schedule)
-            )
+            cell_content.setdefault(key, []).append(cls._describe_schedule(schedule))
 
             # Track stages for TC breaks
             normalized_stage = cls._normalize_stage(
