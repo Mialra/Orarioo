@@ -7,8 +7,11 @@ from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from auditableEntity.audit import create_audit_entry, suppress_audit_events
+from auditableEntity.models import AuditActionType
 from classroom.models import Classroom
 from common.drf import AuditableModelViewSet
 from group.models import Group
@@ -888,6 +891,75 @@ class ScheduleViewSet(AuditableModelViewSet):
             {
                 "count": len(serialized.data),
                 "results": serialized.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @staticmethod
+    def _parse_saved_timetable_name(payload):
+        timetable_name = (payload.get("timetable_name") or "").strip()
+        if not timetable_name:
+            return None, Response(
+                {"timetable_name": "timetable_name is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return timetable_name, None
+
+    @staticmethod
+    def _fetch_saved_timetable_schedules(*, request_user, timetable_name):
+        saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
+        schedules = list(
+            Schedule.objects.filter(
+                users=request_user,
+                observations=saved_observation,
+            ).order_by("id")
+        )
+        if not schedules:
+            return None, Response(
+                {"detail": "Saved timetable not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return schedules, None
+
+    @action(detail=False, methods=["post"], url_path="delete-saved-timetable")
+    def delete_saved_timetable(self, request):
+        timetable_name, error_response = self._parse_saved_timetable_name(request.data)
+        if error_response is not None:
+            return error_response
+
+        schedules, error_response = self._fetch_saved_timetable_schedules(
+            request_user=request.user,
+            timetable_name=timetable_name,
+        )
+        if error_response is not None:
+            return error_response
+
+        deleted_count = len(schedules)
+        representative_schedule_id = schedules[0].pk
+        with suppress_audit_events(("schedule", AuditActionType.DELETE)):
+            for schedule in schedules:
+                schedule.delete()
+
+        create_audit_entry(
+            model=Schedule,
+            entity_id=representative_schedule_id,
+            entity_name=timetable_name,
+            action_type=AuditActionType.DELETE,
+            detail=(
+                f'Se elimino el horario guardado "{timetable_name}" '
+                f"con {deleted_count} sesiones."
+            ),
+            changed_fields=[
+                {
+                    "campo": "Sesiones eliminadas",
+                    "valor_anterior": deleted_count,
+                }
+            ],
+        )
+        return Response(
+            {
+                "detail": "Saved timetable deleted successfully.",
+                "deleted_count": deleted_count,
             },
             status=status.HTTP_200_OK,
         )

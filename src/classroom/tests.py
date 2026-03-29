@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from auditableEntity.models import AuditActionType, AuditEntry
 from classroom.models import Classroom
 from common.test_utils import AuthenticatedAdminAPIMixin
 
@@ -33,6 +34,7 @@ class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
     def test_update_classroom(self):
         classroom = Classroom.objects.create(name="Aula Antiguo Nombre")
+        AuditEntry.objects.all().delete()
 
         payload = {"name": "Aula Nuevo Nombre"}
 
@@ -43,6 +45,20 @@ class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         classroom.refresh_from_db()
         self.assertEqual(classroom.name, "Aula Nuevo Nombre")
+        entry = AuditEntry.objects.filter(entity_type="classroom").latest("id")
+        self.assertEqual(entry.action_type, AuditActionType.UPDATE)
+        self.assertEqual(entry.entity_name, "Aula Nuevo Nombre")
+        self.assertEqual(entry.actor, self.user)
+        self.assertEqual(
+            entry.changed_fields,
+            [
+                {
+                    "campo": "Nombre",
+                    "valor_anterior": "Aula Antiguo Nombre",
+                    "valor_nuevo": "Aula Nuevo Nombre",
+                }
+            ],
+        )
 
     def test_delete_classroom(self):
         classroom = Classroom.objects.create(name="Aula a eliminar")

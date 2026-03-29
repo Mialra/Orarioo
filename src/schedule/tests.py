@@ -7,6 +7,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from auditableEntity.models import AuditActionType, AuditEntry
 from classroom.models import Classroom
 from common.test_utils import AuthenticatedAdminAPIMixin
 from group.models import EducationalStage, Group
@@ -417,6 +418,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
     def test_generate_basic_schedule(self):
         Classroom.objects.all().delete()
+        AuditEntry.objects.all().delete()
 
         response = self.generate_schedule()
 
@@ -432,6 +434,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(schedule.users.first().id, self.user.id)
         self.assertIsNotNone(schedule.classroom_id)
         self.assertIsNotNone(schedule.group_id)
+        self.assertEqual(
+            AuditEntry.objects.filter(
+                entity_type="schedule",
+                action_type=AuditActionType.CREATE,
+            ).count(),
+            self.subject.weekly_hours,
+        )
 
     def test_generate_basic_schedule_avoids_teacher_overlap(self):
         Subject.objects.create(
@@ -525,6 +534,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             updated_by=self.user.email,
             users=[self.user],
         )
+        AuditEntry.objects.all().delete()
 
         response = self.client.post(
             reverse("schedule-save-generated"),
@@ -544,6 +554,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(schedule_2.name, "Horario Guardado")
         self.assertEqual(schedule_1.observations, "Saved timetable: Horario Guardado")
         self.assertEqual(schedule_2.observations, "Saved timetable: Horario Guardado")
+        self.assertGreaterEqual(
+            AuditEntry.objects.filter(
+                entity_type="schedule",
+                action_type=AuditActionType.UPDATE,
+            ).count(),
+            2,
+        )
 
     def test_save_generated_schedules_in_bulk_assigns_additional_users(self):
         start_time = timezone.now() + timedelta(days=1)
@@ -597,6 +614,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             updated_by=self.user.email,
             users=[self.user],
         )
+        AuditEntry.objects.all().delete()
 
         target_slot_index = slots.index(primary_slots[2])
 
@@ -615,6 +633,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         schedule_to_move.refresh_from_db()
         self.assertEqual(schedule_to_move.start_time, primary_slots[2]["start"])
         self.assertEqual(schedule_to_move.end_time, primary_slots[2]["end"])
+        self.assertGreaterEqual(
+            AuditEntry.objects.filter(
+                entity_type="schedule",
+                action_type=AuditActionType.UPDATE,
+            ).count(),
+            1,
+        )
 
     def test_save_generated_rejects_non_auto_generated_sessions(self):
         schedule = self.create_schedule()
@@ -723,6 +748,70 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["id"], saved_schedule.id)
+
+    def test_delete_saved_timetable_creates_single_audit_entry(self):
+        start_time = timezone.now() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        self.create_schedule(
+            name="Horario demo admin",
+            start_time=start_time,
+            end_time=end_time,
+            observations="Saved timetable: Horario demo admin",
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+        self.create_schedule(
+            name="Horario demo admin",
+            start_time=start_time + timedelta(hours=1),
+            end_time=end_time + timedelta(hours=1),
+            observations="Saved timetable: Horario demo admin",
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+        AuditEntry.objects.all().delete()
+
+        response = self.client.post(
+            reverse("schedule-delete-saved-timetable"),
+            {"timetable_name": "Horario demo admin"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(
+            Schedule.objects.filter(
+                observations="Saved timetable: Horario demo admin"
+            ).exists()
+        )
+        entries = list(
+            AuditEntry.objects.filter(
+                entity_type="schedule",
+                action_type=AuditActionType.DELETE,
+            )
+        )
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].entity_name, "Horario demo admin")
+        self.assertEqual(
+            entries[0].changed_fields,
+            [{"campo": "Sesiones eliminadas", "valor_anterior": 2}],
+        )
+
+    def test_delete_single_schedule_keeps_minimal_delete_audit(self):
+        schedule = self.create_schedule(name="Horario suelto")
+        AuditEntry.objects.all().delete()
+
+        response = self.client.delete(reverse("schedule-detail", args=[schedule.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        entry = AuditEntry.objects.get(
+            entity_type="schedule",
+            action_type=AuditActionType.DELETE,
+        )
+        self.assertEqual(
+            entry.changed_fields,
+            [{"campo": "Nombre", "valor_anterior": "Horario suelto"}],
+        )
 
     def test_generate_basic_schedule_requires_teacher(self):
         Teacher.objects.all().delete()

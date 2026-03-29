@@ -6,6 +6,8 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from common.drf import AuditActorViewMixin
+from common.permissions import IsManagementUser
 from user.models import RoleChoices, User
 from user.serializers import (
     LoginSerializer,
@@ -15,18 +17,6 @@ from user.serializers import (
     UserSerializer,
     UserUpdateSerializer,
 )
-
-
-class IsAdministrator(permissions.BasePermission):
-    """Permission to check if user has management access."""
-
-    def has_permission(self, request, view):
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECCION]
-        )
-
 
 class IsAdministratorOrSelf(permissions.BasePermission):
     """Permission for administrators or the user themselves to access"""
@@ -63,7 +53,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         )
 
 
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing users.
 
@@ -105,10 +95,10 @@ class UserViewSet(viewsets.ModelViewSet):
             return [permissions.AllowAny()]
         if self.action == "managed_create":
             # Authenticated staff (administrator/direccion) can create managed users
-            return [IsAdministrator()]
+            return [IsManagementUser()]
         if self.action in ["list", "destroy", "update", "partial_update"]:
             # Administrator and direccion have the same management scope.
-            return [IsAdministrator()]
+            return [IsManagementUser()]
         if self.action == "retrieve":
             # User can see their own profile, administrator can see any
             return [IsAdministratorOrSelf()]
@@ -132,7 +122,7 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["post"],
-        permission_classes=[IsAdministrator],
+        permission_classes=[IsManagementUser],
         url_path="managed_create",
     )
     def managed_create(self, request):

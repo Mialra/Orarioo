@@ -6,6 +6,9 @@ from schedule.views import ScheduleViewSet
 schedule_list, schedule_detail = build_crud_views(ScheduleViewSet)
 schedule_generate = ScheduleViewSet.as_view({"post": "generate"})
 schedule_saved = ScheduleViewSet.as_view({"get": "saved"})
+schedule_delete_saved_timetable = ScheduleViewSet.as_view(
+    {"post": "delete_saved_timetable"}
+)
 schedule_save_generated = ScheduleViewSet.as_view({"post": "save_generated"})
 schedule_apply_manual_change = ScheduleViewSet.as_view({"post": "apply_manual_change"})
 schedule_export = ScheduleViewSet.as_view({"get": "export"})
@@ -13,6 +16,11 @@ schedule_export = ScheduleViewSet.as_view({"get": "export"})
 urlpatterns = [
     path("schedules/", schedule_list, name="schedule-list"),
     path("schedules/saved/", schedule_saved, name="schedule-saved"),
+    path(
+        "schedules/delete-saved-timetable/",
+        schedule_delete_saved_timetable,
+        name="schedule-delete-saved-timetable",
+    ),
     path("schedules/export/", schedule_export, name="schedule-export"),
     path("schedules/generate/", schedule_generate, name="schedule-generate"),
     path(
