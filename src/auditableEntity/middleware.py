@@ -8,6 +8,8 @@ class AuditActorMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        actor = request.user if getattr(request.user, "is_authenticated", False) else None
+        actor = (
+            request.user if getattr(request.user, "is_authenticated", False) else None
+        )
         with audit_actor_context(user=actor):
             return self.get_response(request)

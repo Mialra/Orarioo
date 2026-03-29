@@ -110,8 +110,7 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
                 raise ValidationError(
                     {
                         "tipo_accion": (
-                            "Debe ser uno de: "
-                            f"{', '.join(AuditActionType.values)}."
+                            "Debe ser uno de: " f"{', '.join(AuditActionType.values)}."
                         )
                     }
                 )

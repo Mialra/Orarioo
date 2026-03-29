@@ -152,10 +152,7 @@ def _serialize_scalar(value):
     if isinstance(value, list):
         return [_serialize_scalar(item) for item in value]
     if isinstance(value, dict):
-        return {
-            str(key): _serialize_scalar(item)
-            for key, item in value.items()
-        }
+        return {str(key): _serialize_scalar(item) for key, item in value.items()}
     if isinstance(value, (int, float, str)):
         return value
     return str(value)
@@ -285,7 +282,7 @@ def build_m2m_detail(*, model, entity_name, field_name):
     safe_name = entity_name or "sin nombre"
     return (
         f'Se modificó {entity_phrase} "{safe_name}". '
-        f'Se actualizó el campo {get_field_label(field_name)}.'
+        f"Se actualizó el campo {get_field_label(field_name)}."
     )
 
 

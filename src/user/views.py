@@ -18,6 +18,7 @@ from user.serializers import (
     UserUpdateSerializer,
 )
 
+
 class IsAdministratorOrSelf(permissions.BasePermission):
     """Permission for administrators or the user themselves to access"""
 

@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from auditableEntity.models import AuditActionType, AuditEntry, AuditableEntity
+from auditableEntity.models import AuditableEntity, AuditActionType, AuditEntry
 from classroom.models import Classroom
 from common.test_utils import AuthenticatedAdminAPIMixin
 from group.models import EducationalStage as GroupEducationalStage
@@ -104,7 +104,9 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        entry = AuditEntry.objects.get(entity_type="teacher", entity_id=response.data["id"])
+        entry = AuditEntry.objects.get(
+            entity_type="teacher", entity_id=response.data["id"]
+        )
         self.assertEqual(entry.action_type, AuditActionType.CREATE)
         self.assertEqual(entry.actor_name, self.user.get_full_name())
         self.assertEqual(entry.changed_fields[0]["campo"], "Nombre")
@@ -231,7 +233,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             entity_id=1,
             entity_name="Entrada propia",
             action_type=AuditActionType.CREATE,
-            detail="Se creo el profesor \"Entrada propia\".",
+            detail='Se creo el profesor "Entrada propia".',
             actor=self.user,
             actor_name=self.user.get_full_name(),
         )
@@ -240,7 +242,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             entity_id=2,
             entity_name="Entrada equipo",
             action_type=AuditActionType.CREATE,
-            detail="Se creo el profesor \"Entrada equipo\".",
+            detail='Se creo el profesor "Entrada equipo".',
             actor=self.team_user,
             actor_name=self.team_user.get_full_name(),
         )
@@ -249,7 +251,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             entity_id=3,
             entity_name="Entrada externa",
             action_type=AuditActionType.CREATE,
-            detail="Se creo el profesor \"Entrada externa\".",
+            detail='Se creo el profesor "Entrada externa".',
             actor=self.outside_user,
             actor_name=self.outside_user.get_full_name(),
         )
@@ -262,13 +264,15 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("Entrada equipo", names)
         self.assertNotIn("Entrada externa", names)
 
-    def test_audit_entries_endpoint_returns_fields_in_spanish_without_ids_or_email(self):
+    def test_audit_entries_endpoint_returns_fields_in_spanish_without_ids_or_email(
+        self,
+    ):
         AuditEntry.objects.create(
             entity_type="teacher",
             entity_id=5,
             entity_name="Entrada visible",
             action_type=AuditActionType.CREATE,
-            detail="Se creo el profesor \"Entrada visible\".",
+            detail='Se creo el profesor "Entrada visible".',
             actor=self.user,
             actor_name=self.user.get_full_name(),
         )
@@ -288,7 +292,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             entity_id=999,
             entity_name="Existing Audit",
             action_type=AuditActionType.CREATE,
-            detail="Se creo el profesor \"Existing Audit\".",
+            detail='Se creo el profesor "Existing Audit".',
             actor=self.user,
             actor_name=self.user.get_full_name(),
         )
@@ -372,7 +376,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             entity_id=21,
             entity_name="Entrada externa propia",
             action_type=AuditActionType.CREATE,
-            detail="Se creo el profesor \"Entrada externa propia\".",
+            detail='Se creo el profesor "Entrada externa propia".',
             actor=self.outside_user,
             actor_name=self.outside_user.get_full_name(),
         )
@@ -382,7 +386,9 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 1)
-        self.assertEqual(response.data["results"][0]["nombre_entidad"], "Entrada externa propia")
+        self.assertEqual(
+            response.data["results"][0]["nombre_entidad"], "Entrada externa propia"
+        )
 
     def test_audit_entries_detail_route_is_not_exposed(self):
         AuditEntry.objects.create(
@@ -390,7 +396,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             entity_id=8,
             entity_name="Sin detalle",
             action_type=AuditActionType.CREATE,
-            detail="Se creo el profesor \"Sin detalle\".",
+            detail='Se creo el profesor "Sin detalle".',
             actor=self.user,
             actor_name=self.user.get_full_name(),
         )

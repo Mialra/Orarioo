@@ -1,5 +1,6 @@
-from auditableEntity.audit import audit_actor_context
 from rest_framework import permissions, viewsets
+
+from auditableEntity.audit import audit_actor_context
 
 CRUD_LIST_ACTIONS = {"get": "list", "post": "create"}
 CRUD_DETAIL_ACTIONS = {
@@ -24,7 +25,9 @@ class AuditActorViewMixin:
 
     def initial(self, request, *args, **kwargs):
         super().initial(request, *args, **kwargs)
-        actor = request.user if getattr(request.user, "is_authenticated", False) else None
+        actor = (
+            request.user if getattr(request.user, "is_authenticated", False) else None
+        )
         self._audit_actor_scope = audit_actor_context(user=actor)
         self._audit_actor_scope.__enter__()
 

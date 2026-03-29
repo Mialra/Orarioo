@@ -1,5 +1,11 @@
 from django.apps import apps
-from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete, pre_save
+from django.db.models.signals import (
+    m2m_changed,
+    post_delete,
+    post_save,
+    pre_delete,
+    pre_save,
+)
 
 from auditableEntity.audit import (
     AUDITABLE_MODEL_LABELS,
@@ -123,7 +129,9 @@ def _build_m2m_handler(field_name):
             return
 
         before_values = getattr(instance, cache_name, [])
-        after_values = sorted(get_instance_name(item) for item in relation_manager.all())
+        after_values = sorted(
+            get_instance_name(item) for item in relation_manager.all()
+        )
         if before_values == after_values:
             if hasattr(instance, cache_name):
                 delattr(instance, cache_name)
