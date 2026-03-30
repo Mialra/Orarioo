@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest import skipIf
 
 from django.test import SimpleTestCase
 from django.urls import reverse
@@ -8,6 +9,7 @@ from rest_framework.test import APITestCase
 
 from auditableEntity.models import AuditableEntity, AuditActionType, AuditEntry
 from classroom.models import Classroom
+from common.export_utils import REPORTLAB_AVAILABLE
 from common.test_utils import AuthenticatedAdminAPIMixin
 from group.models import EducationalStage as GroupEducationalStage
 from group.models import Group
@@ -264,6 +266,15 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("Entrada equipo", names)
         self.assertNotIn("Entrada externa", names)
 
+    def test_audit_filter_users_endpoint_only_returns_current_user_and_team(self):
+        response = self.client.get(reverse("auditentry-filter-users"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        returned_ids = {item["id"] for item in response.data}
+        self.assertIn(self.user.id, returned_ids)
+        self.assertIn(self.team_user.id, returned_ids)
+        self.assertNotIn(self.outside_user.id, returned_ids)
+
     def test_audit_entries_endpoint_returns_fields_in_spanish_without_ids_or_email(
         self,
     ):
@@ -404,3 +415,98 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         response = self.client.get("/api/audit-entries/1/")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_audit_entries_endpoint_rejects_user_filter_outside_team(self):
+        response = self.client.get(
+            reverse("auditentry-list"),
+            {"usuario_id": self.outside_user.id},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("usuario_id", response.data)
+
+    def test_audit_entries_export_csv_applies_filters(self):
+        now = timezone.now()
+        own_entry = AuditEntry.objects.create(
+            entity_type="teacher",
+            entity_id=31,
+            entity_name="Profesor exportable",
+            action_type=AuditActionType.CREATE,
+            detail='Se creó el profesor "Profesor exportable".',
+            changed_fields=[
+                {
+                    "campo": "Preferencias horarias",
+                    "valor_nuevo": {
+                        "MON_09:30": "PREFER_YES",
+                        "MON_10:30": "AVAILABLE",
+                        "FRI_12:00": "PREFER_NO",
+                        "FRI_14:00": "UNAVAILABLE",
+                    },
+                }
+            ],
+            actor=self.user,
+            actor_name=self.user.get_full_name(),
+        )
+        own_entry.occurred_at = now
+        own_entry.save(update_fields=["occurred_at"])
+        AuditEntry.objects.create(
+            entity_type="classroom",
+            entity_id=32,
+            entity_name="Aula descartada",
+            action_type=AuditActionType.UPDATE,
+            detail='Se modificó el aula "Aula descartada".',
+            actor=self.user,
+            actor_name=self.user.get_full_name(),
+        )
+
+        response = self.client.get(
+            reverse("auditentry-export"),
+            {
+                "export_format": "csv",
+                "tipo_entidad": "profesor",
+                "tipo_accion": "creación",
+                "usuario_id": self.user.id,
+                "fecha_desde": now.date().isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        self.assertIn('filename="orarioo_audit_', response["Content-Disposition"])
+        csv_text = response.content.decode("utf-8-sig")
+        self.assertIn(f"'{now.strftime('%d/%m/%Y')}", csv_text)
+        self.assertIn("Profesor exportable", csv_text)
+        self.assertNotIn("Aula descartada", csv_text)
+        self.assertIn("Preferidas: Lunes a las 09:30.", csv_text)
+        self.assertIn("Disponibles: Lunes a las 10:30.", csv_text)
+
+    def test_audit_entries_export_rejects_invalid_format(self):
+        response = self.client.get(
+            reverse("auditentry-export"),
+            {"export_format": "xlsx"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("export_format", response.data)
+
+    @skipIf(not REPORTLAB_AVAILABLE, "reportlab is not installed")
+    def test_audit_entries_export_pdf_returns_pdf(self):
+        AuditEntry.objects.create(
+            entity_type="group",
+            entity_id=40,
+            entity_name="Grupo PDF",
+            action_type=AuditActionType.DELETE,
+            detail='Se eliminó el grupo "Grupo PDF".',
+            actor=self.user,
+            actor_name=self.user.get_full_name(),
+        )
+
+        response = self.client.get(
+            reverse("auditentry-export"),
+            {"export_format": "pdf"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn('filename="orarioo_audit_', response["Content-Disposition"])
+        self.assertTrue(response.content.startswith(b"%PDF"))

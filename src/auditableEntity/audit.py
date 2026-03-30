@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import date, datetime, time
 from decimal import Decimal
+from itertools import chain
 from uuid import UUID
 
 from auditableEntity.models import AuditActionType, AuditEntry
@@ -86,6 +87,28 @@ FIELD_LABELS = {
 }
 _AUDIT_ACTOR = ContextVar("audit_actor", default={"user": None})
 _AUDIT_SUPPRESSION = ContextVar("audit_suppression", default=frozenset())
+DISPLAY_VALUE_TRANSLATIONS = {
+    "Preschool": "Infantil",
+    "Primary": "Primaria",
+    "Secondary": "Secundaria",
+    "Administrator": "Administrador",
+    "Direccion": "Dirección",
+    "Normal": "Normal",
+    "TC": "TC",
+}
+PREFERENCE_GROUPS = [
+    ("PREFER_YES", "Preferidas"),
+    ("AVAILABLE", "Disponibles"),
+    ("PREFER_NO", "Poco preferidas"),
+    ("UNAVAILABLE", "No disponibles"),
+]
+PREFERENCE_DAY_NAMES = {
+    "MON": "Lunes",
+    "TUE": "Martes",
+    "WED": "Miércoles",
+    "THU": "Jueves",
+    "FRI": "Viernes",
+}
 
 
 def get_entity_type(model):
@@ -226,6 +249,85 @@ def build_m2m_changed_fields(*, field_name, before_values, after_values):
             "valor_nuevo": after_values,
         }
     ]
+
+
+def format_display_value(value):
+    if isinstance(value, list):
+        return ", ".join(format_display_value(item) for item in value) or "-"
+
+    if isinstance(value, dict):
+        preference_lines = _build_preference_display_lines(value)
+        if preference_lines is not None:
+            return " | ".join(preference_lines) or "-"
+        return (
+            "; ".join(
+                f"{key}: {format_display_value(item)}"
+                for key, item in value.items()
+            )
+            or "-"
+        )
+
+    if value in (None, ""):
+        return "-"
+
+    return DISPLAY_VALUE_TRANSLATIONS.get(str(value), str(value))
+
+
+def _build_preference_display_lines(value):
+    if not isinstance(value, dict) or not value:
+        return None
+    if not all(
+        isinstance(key, str)
+        and "_" in key
+        and len(key.split("_", 1)[0]) == 3
+        for key in value
+    ):
+        return None
+
+    grouped = {code: [] for code, _ in PREFERENCE_GROUPS}
+    for slot_key, state in sorted(value.items(), key=lambda item: item[0]):
+        if state not in grouped:
+            continue
+        day_code, hour = slot_key.split("_", 1)
+        grouped[state].append(f"{PREFERENCE_DAY_NAMES.get(day_code, day_code)} a las {hour}")
+
+    return [
+        f"{label}: {', '.join(grouped[state_code])}."
+        for state_code, label in PREFERENCE_GROUPS
+        if grouped[state_code]
+    ]
+
+
+def format_changed_fields_for_export(changed_fields):
+    lines = []
+    for change in changed_fields or []:
+        field_name = change.get("campo", "")
+        old_value = format_display_value(change.get("valor_anterior"))
+        new_value = format_display_value(change.get("valor_nuevo"))
+
+        if field_name == "Franja horaria preferida" and new_value == "-":
+            continue
+
+        preference_sections = None
+        if field_name == "Preferencias horarias":
+            raw_value = (
+                change.get("valor_nuevo")
+                if "valor_nuevo" in change
+                else change.get("valor_anterior")
+            )
+            preference_sections = _build_preference_display_lines(raw_value)
+
+        if preference_sections:
+            lines.extend(chain([f"{field_name}:"], preference_sections))
+            continue
+
+        if "valor_anterior" in change and "valor_nuevo" in change:
+            lines.append(f"{field_name}: cambió de {old_value} a {new_value}.")
+        elif "valor_nuevo" in change:
+            lines.append(f"{field_name}: {new_value}.")
+        else:
+            lines.append(f"{field_name}: {old_value}.")
+    return "\n".join(lines)
 
 
 def get_current_actor():

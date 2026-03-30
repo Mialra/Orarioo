@@ -1,7 +1,7 @@
 import logging
 import random
 import re
-from io import BytesIO, StringIO
+from io import BytesIO
 
 from django.db.models import Q
 from django.http import HttpResponse
@@ -14,6 +14,7 @@ from auditableEntity.audit import create_audit_entry, suppress_audit_events
 from auditableEntity.models import AuditActionType
 from classroom.models import Classroom
 from common.drf import AuditableModelViewSet
+from common.export_utils import build_csv_response, sanitize_filename_stem
 from group.models import Group
 from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
 from schedule.algorithm.generator import ScheduleReplanner
@@ -313,16 +314,6 @@ class ScheduleViewSet(AuditableModelViewSet):
             "saved_timetable_name": saved_timetable_name,
         }, None
 
-    @staticmethod
-    def _sanitize_filename_stem(value, fallback):
-        candidate = (value or "").strip()
-        if not candidate:
-            candidate = fallback
-
-        candidate = re.sub(r"[\\/:*?\"<>|]+", "_", candidate)
-        candidate = re.sub(r"\s+", " ", candidate).strip(" .")
-        return candidate or fallback
-
     @classmethod
     def _resolve_saved_schedule_name(cls, params, queryset):
         explicit_name = (params.get("saved_timetable_name") or "").strip()
@@ -345,7 +336,7 @@ class ScheduleViewSet(AuditableModelViewSet):
     @classmethod
     def _build_export_filename(cls, params, saved_schedule_name=""):
         if params["source"] == "saved" and saved_schedule_name:
-            stem = cls._sanitize_filename_stem(
+            stem = sanitize_filename_stem(
                 saved_schedule_name, "orarioo_saved_schedule"
             )
         else:
@@ -429,35 +420,25 @@ class ScheduleViewSet(AuditableModelViewSet):
 
     @staticmethod
     def _build_csv_response(rows, filename):
-        output = StringIO()
-        output.write("\ufeff")
-
         header = [
             "Asignatura",
             "Profesor",
             "Curso",
             "Aula",
         ]
-
-        import csv
-
-        writer = csv.writer(output)
-        writer.writerow(header)
-        for row in rows:
-            writer.writerow(
+        return build_csv_response(
+            header,
+            [
                 [
                     row["subject"],
                     row["teacher"],
                     row["group"],
                     row["classroom"],
                 ]
-            )
-
-        response = HttpResponse(
-            output.getvalue(), content_type="text/csv; charset=utf-8"
+                for row in rows
+            ],
+            filename,
         )
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        return response
 
     @classmethod
     @staticmethod

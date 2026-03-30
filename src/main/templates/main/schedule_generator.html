@@ -1295,6 +1295,7 @@
             let currentUsers = [];
             let currentUserProfile = null;
             let currentAuditEntries = [];
+            let currentAuditUsers = [];
             let savedTimetableGroups = [];
             let selectedSavedTimetableIndex = null;
             let selectedSavedTimetableName = null;
@@ -1389,6 +1390,10 @@
             auditContent.innerHTML = `
                 <div class="section-title">Historial de Auditoría</div>
                 <div class="schedule-filter-bar">
+                    <label for="auditUserFilter">Usuario:</label>
+                    <select id="auditUserFilter" class="schedule-filter-select">
+                        <option value="">Todos</option>
+                    </select>
                     <label for="auditEntityTypeFilter">Entidad:</label>
                     <select id="auditEntityTypeFilter" class="schedule-filter-select">
                         <option value="">Todas</option>
@@ -1411,7 +1416,8 @@
                     <label for="auditDateToFilter">Hasta:</label>
                     <input type="date" id="auditDateToFilter" style="max-width: 180px;" />
                     <button class="btn-primary" id="auditFilterBtn" type="button">Filtrar</button>
-                    <button class="btn-secondary" id="auditRelta setBtn" type="button">Limpiar</button>
+                    <button class="btn-secondary" id="auditResetBtn" type="button">Limpiar</button>
+                    <button class="btn-secondary" id="auditExportBtn" type="button">Exportar...</button>
                 </div>
                 <div class="table-container" style="margin-top: 18px;">
                     <table>
@@ -1440,11 +1446,34 @@
                 </div>
                 <div id="auditDetailModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="auditDetailModalTitle">
                     <div class="modal-card">
-                        <h2 class="modal-title" id="auditDetailModalTitle">Detalle de auditoria</h2>
+                        <h2 class="modal-title" id="auditDetailModalTitle">Detalle de auditoría</h2>
                         <p class="modal-subtitle" id="auditDetailModalSubtitle">Consulta ampliada del cambio seleccionado.</p>
                         <div id="auditDetailModalBody"></div>
                         <div class="action-buttons" style="justify-content: flex-end; margin-top: 20px;">
                             <button class="btn-secondary" id="auditDetailCloseBtn" type="button">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="auditExportModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="auditExportModalTitle">
+                    <div class="modal-card">
+                        <h2 class="modal-title" id="auditExportModalTitle">Exportar auditoría</h2>
+                        <p class="modal-subtitle">Exporta el historial actual aplicando filtros opcionales.</p>
+                        <div class="form-group">
+                            <label for="auditExportFormat">Formato</label>
+                            <select id="auditExportFormat">
+                                <option value="csv">CSV</option>
+                                <option value="pdf">PDF</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="auditExportUserFilter">Usuario</label>
+                            <select id="auditExportUserFilter">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="action-buttons" style="justify-content: flex-end; margin-top: 20px;">
+                            <button class="btn-secondary" id="cancelAuditExportBtn" type="button">Cancelar</button>
+                            <button class="btn-primary" id="submitAuditExportBtn" type="button">Exportar</button>
                         </div>
                     </div>
                 </div>
@@ -1459,6 +1488,52 @@
             auditState.next = null;
             auditState.previous = null;
             auditState.loaded = false;
+        };
+
+        const renderAuditUserFilters = () => {
+            const options = [
+                '<option value="">Todos</option>',
+                ...currentAuditUsers.map(
+                    (user) =>
+                        `<option value="${escapeHtml(String(user.id))}">${escapeHtml(user.nombre || "-")}</option>`
+                ),
+            ].join("");
+
+            const historySelect = document.getElementById("auditUserFilter");
+            const exportSelect = document.getElementById("auditExportUserFilter");
+            if (historySelect) {
+                const currentValue = historySelect.value;
+                historySelect.innerHTML = options;
+                historySelect.value = currentAuditUsers.some((user) => String(user.id) === currentValue)
+                    ? currentValue
+                    : "";
+            }
+            if (exportSelect) {
+                const currentValue = exportSelect.value;
+                exportSelect.innerHTML = options;
+                exportSelect.value = currentAuditUsers.some((user) => String(user.id) === currentValue)
+                    ? currentValue
+                    : "";
+            }
+        };
+
+        const loadAuditUsers = async () => {
+            if (!canViewAuditHistory()) {
+                currentAuditUsers = [];
+                renderAuditUserFilters();
+                return;
+            }
+
+            const result = await apiCall("/audit-entries/filter-users/");
+            if (!result.ok) {
+                currentAuditUsers = [];
+                renderAuditUserFilters();
+                showAlert("error", extractApiErrorMessage(result.data, "No se pudieron cargar los usuarios de auditoría."));
+                return;
+            }
+
+            currentAuditUsers = Array.isArray(result.data) ? result.data : [];
+            renderAuditUserFilters();
         };
 
         const formatAuditValue = (value) => {
@@ -1599,16 +1674,59 @@
             const params = new URLSearchParams();
             params.set("page", String(page));
 
+            const actorId = document.getElementById("auditUserFilter")?.value || "";
             const entityType = document.getElementById("auditEntityTypeFilter")?.value || "";
             const actionType = document.getElementById("auditActionTypeFilter")?.value || "";
             const dateFrom = document.getElementById("auditDateFromFilter")?.value || "";
             const dateTo = document.getElementById("auditDateToFilter")?.value || "";
 
+            if (actorId) params.set("usuario_id", actorId);
             if (entityType) params.set("tipo_entidad", entityType);
             if (actionType) params.set("tipo_accion", actionType);
             if (dateFrom) params.set("fecha_desde", dateFrom);
             if (dateTo) params.set("fecha_hasta", dateTo);
             return params.toString();
+        };
+
+        const openAuditExportModal = () => {
+            document.getElementById("auditExportFormat").value = "csv";
+            document.getElementById("auditExportUserFilter").value =
+                document.getElementById("auditUserFilter")?.value || "";
+            document.getElementById("auditExportModal").classList.add("show");
+        };
+
+        const closeAuditExportModal = () => {
+            document.getElementById("auditExportModal")?.classList.remove("show");
+        };
+
+        const buildAuditExportQueryString = () => {
+            const params = new URLSearchParams();
+            params.set(
+                "export_format",
+                document.getElementById("auditExportFormat")?.value || "csv"
+            );
+
+            const entityType = document.getElementById("auditEntityTypeFilter")?.value || "";
+            const actionType = document.getElementById("auditActionTypeFilter")?.value || "";
+            const dateFrom = document.getElementById("auditDateFromFilter")?.value || "";
+            const dateTo = document.getElementById("auditDateToFilter")?.value || "";
+            const actorId = document.getElementById("auditExportUserFilter")?.value || "";
+
+            if (actorId) params.set("usuario_id", actorId);
+            if (entityType) params.set("tipo_entidad", entityType);
+            if (actionType) params.set("tipo_accion", actionType);
+            if (dateFrom) params.set("fecha_desde", dateFrom);
+            if (dateTo) params.set("fecha_hasta", dateTo);
+            return params.toString();
+        };
+
+        const exportAuditEntries = async () => {
+            try {
+                await downloadFileFromApi(`/audit-entries/export/?${buildAuditExportQueryString()}`);
+                closeAuditExportModal();
+            } catch (error) {
+                showAlert("error", error.message || "No se pudo exportar la auditoría.");
+            }
         };
 
         const loadAuditEntries = async (page = 1) => {
@@ -2560,7 +2678,9 @@
                 logoutBtn.style.display = "none";
                 refreshBtn.style.display = "none";
                 currentUserProfile = null;
+                currentAuditUsers = [];
                 resetAuditState();
+                renderAuditUserFilters();
                 renderAuditEntries();
                 updateAuditTabVisibility();
             }
@@ -2810,6 +2930,7 @@
             currentSchedules = scheduleData;
             currentUsers = userData;
             updateAuditTabVisibility();
+            await loadAuditUsers();
 
             document.getElementById("statTeachers").textContent = teachers.data?.count || teacherData.length;
             document.getElementById("statClassrooms").textContent = classrooms.data?.count || classroomData.length;
@@ -2837,6 +2958,7 @@
                 loadAuditEntries(1);
             }
             if (event.target?.id === "auditResetBtn") {
+                document.getElementById("auditUserFilter").value = "";
                 document.getElementById("auditEntityTypeFilter").value = "";
                 document.getElementById("auditActionTypeFilter").value = "";
                 document.getElementById("auditDateFromFilter").value = "";
@@ -2849,6 +2971,12 @@
             if (event.target?.id === "auditNextBtn" && auditState.next) {
                 loadAuditEntries(auditState.page + 1);
             }
+            if (event.target?.id === "auditExportBtn") {
+                openAuditExportModal();
+            }
+            if (event.target?.id === "submitAuditExportBtn") {
+                exportAuditEntries();
+            }
             if (event.target?.dataset?.auditDetailIndex) {
                 openAuditDetailModal(parseInt(event.target.dataset.auditDetailIndex, 10));
             }
@@ -2857,6 +2985,12 @@
                 event.target?.id === "auditDetailModal"
             ) {
                 closeAuditDetailModal();
+            }
+            if (
+                event.target?.id === "cancelAuditExportBtn" ||
+                event.target?.id === "auditExportModal"
+            ) {
+                closeAuditExportModal();
             }
         });
 
