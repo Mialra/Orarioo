@@ -143,6 +143,7 @@
         input[type="email"],
         input[type="password"],
         input[type="number"],
+        input[type="date"],
         select,
         textarea {
             width: 100%;
@@ -158,6 +159,7 @@
         input[type="email"]:focus,
         input[type="password"]:focus,
         input[type="number"]:focus,
+        input[type="date"]:focus,
         select:focus,
         textarea:focus {
             outline: none;
@@ -306,6 +308,32 @@
 
         .schedule-filter-select {
             max-width: 260px;
+        }
+
+        .audit-detail-cell {
+            max-width: 420px;
+            white-space: normal;
+        }
+
+        .audit-summary {
+            color: #596285;
+            font-size: 0.92em;
+            margin-right: auto;
+        }
+
+        .audit-detail-button {
+            white-space: nowrap;
+        }
+
+        .audit-detail-list {
+            margin: 0;
+            padding-left: 18px;
+            color: #334;
+            line-height: 1.5;
+        }
+
+        .audit-detail-list li + li {
+            margin-top: 8px;
         }
 
         table {
@@ -1266,10 +1294,18 @@
             let currentSchedules = [];
             let currentUsers = [];
             let currentUserProfile = null;
+            let currentAuditEntries = [];
             let savedTimetableGroups = [];
             let selectedSavedTimetableIndex = null;
             let selectedSavedTimetableName = null;
             let currentExportSource = "generated";
+            const auditState = {
+                page: 1,
+                count: 0,
+                next: null,
+                previous: null,
+                loaded: false,
+            };
             const exportEntityState = {
                 group: false,
                 teacher: false,
@@ -1314,6 +1350,305 @@
             }
 
             return fallback;
+        };
+
+        const escapeHtml = (value) =>
+            String(value ?? "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#39;");
+
+        const canViewAuditHistory = () => {
+            return Boolean(currentUserProfile);
+        };
+
+        const ensureAuditUI = () => {
+            if (document.getElementById("auditTabButton")) {
+                return;
+            }
+
+            const tabs = document.querySelector(".tabs");
+            const usersTab = document.querySelector('.tab-content[data-tab="users"]');
+            if (!tabs || !usersTab) {
+                return;
+            }
+
+            const auditButton = document.createElement("button");
+            auditButton.className = "tab-btn";
+            auditButton.dataset.tab = "audit";
+            auditButton.id = "auditTabButton";
+            auditButton.style.display = "none";
+            auditButton.textContent = "Historial";
+            tabs.insertBefore(auditButton, tabs.children[2] || null);
+
+            const auditContent = document.createElement("div");
+            auditContent.className = "tab-content";
+            auditContent.dataset.tab = "audit";
+            auditContent.innerHTML = `
+                <div class="section-title">Historial de Auditoría</div>
+                <div class="schedule-filter-bar">
+                    <label for="auditEntityTypeFilter">Entidad:</label>
+                    <select id="auditEntityTypeFilter" class="schedule-filter-select">
+                        <option value="">Todas</option>
+                        <option value="schedule">Horario</option>
+                        <option value="teacher">Profesor</option>
+                        <option value="classroom">Aula</option>
+                        <option value="subject">Asignatura</option>
+                        <option value="group">Grupo</option>
+                        <option value="user">Usuario</option>
+                    </select>
+                    <label for="auditActionTypeFilter">Acción:</label>
+                    <select id="auditActionTypeFilter" class="schedule-filter-select">
+                        <option value="">Todas</option>
+                        <option value="CREATE">Creación</option>
+                        <option value="UPDATE">Modificación</option>
+                        <option value="DELETE">Borrado</option>
+                    </select>
+                    <label for="auditDateFromFilter">Desde:</label>
+                    <input type="date" id="auditDateFromFilter" style="max-width: 180px;" />
+                    <label for="auditDateToFilter">Hasta:</label>
+                    <input type="date" id="auditDateToFilter" style="max-width: 180px;" />
+                    <button class="btn-primary" id="auditFilterBtn" type="button">Filtrar</button>
+                    <button class="btn-secondary" id="auditRelta setBtn" type="button">Limpiar</button>
+                </div>
+                <div class="table-container" style="margin-top: 18px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Usuario</th>
+                                <th>Entidad</th>
+                                <th>Nombre</th>
+                                <th>Acción</th>
+                                <th>Resumen</th>
+                                <th>Detalle</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditEntriesList">
+                            <tr>
+                                <td colspan="7" class="empty-state">Carga el historial para ver los cambios auditados.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="schedule-filter-bar" style="margin-top: 16px;">
+                    <span class="audit-summary" id="auditEntriesSummary">Sin datos cargados.</span>
+                    <button class="btn-secondary" id="auditPrevBtn" type="button" disabled>Anterior</button>
+                    <button class="btn-secondary" id="auditNextBtn" type="button" disabled>Siguiente</button>
+                </div>
+                <div id="auditDetailModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="auditDetailModalTitle">
+                    <div class="modal-card">
+                        <h2 class="modal-title" id="auditDetailModalTitle">Detalle de auditoria</h2>
+                        <p class="modal-subtitle" id="auditDetailModalSubtitle">Consulta ampliada del cambio seleccionado.</p>
+                        <div id="auditDetailModalBody"></div>
+                        <div class="action-buttons" style="justify-content: flex-end; margin-top: 20px;">
+                            <button class="btn-secondary" id="auditDetailCloseBtn" type="button">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            usersTab.parentNode.insertBefore(auditContent, usersTab);
+        };
+
+        const resetAuditState = () => {
+            currentAuditEntries = [];
+            auditState.page = 1;
+            auditState.count = 0;
+            auditState.next = null;
+            auditState.previous = null;
+            auditState.loaded = false;
+        };
+
+        const formatAuditValue = (value) => {
+            if (Array.isArray(value)) {
+                return value.length ? value.map((item) => formatAuditValue(item)).join(", ") : "-";
+            }
+            if (value && typeof value === "object") {
+                const entries = Object.entries(value);
+                if (
+                    entries.length &&
+                    entries.every(([key]) => /^[A-Z]{3}_\d{2}:\d{2}$/.test(key))
+                ) {
+                    const dayNames = {
+                        MON: "Lunes",
+                        TUE: "Martes",
+                        WED: "Miercoles",
+                        THU: "Jueves",
+                        FRI: "Viernes",
+                    };
+                    const stateNames = {
+                        AVAILABLE: "disponible",
+                        UNAVAILABLE: "no disponible",
+                        PREFER_YES: "preferida",
+                        PREFER_NO: "poco preferida",
+                    };
+                    return entries
+                        .sort(([left], [right]) => left.localeCompare(right, "es"))
+                        .map(([key, state]) => {
+                            const [dayCode, hour] = key.split("_");
+                            return `${dayNames[dayCode] || dayCode} a las ${hour}: ${stateNames[state] || state}`;
+                        })
+                        .join("; ");
+                }
+                return entries
+                    .map(([key, item]) => `${key}: ${formatAuditValue(item)}`)
+                    .join("; ");
+            }
+            if (value === null || value === undefined || value === "") {
+                return "-";
+            }
+            return String(value);
+        };
+
+        const formatAuditChangeLine = (change) => {
+            const previousValue = formatAuditValue(change.valor_anterior);
+            const newValue = formatAuditValue(change.valor_nuevo);
+            if ("valor_anterior" in change && "valor_nuevo" in change) {
+                return `${change.campo}: cambio de ${previousValue} a ${newValue}.`;
+            }
+            if ("valor_nuevo" in change) {
+                return `${change.campo}: ${newValue}.`;
+            }
+            return `${change.campo}: ${previousValue}.`;
+        };
+
+        const formatAuditChanges = (changes) => {
+            if (!Array.isArray(changes) || !changes.length) {
+                return "-";
+            }
+
+            return changes.map((change) => formatAuditChangeLine(change));
+        };
+
+        const openAuditDetailModal = (entryIndex) => {
+            const entry = currentAuditEntries[entryIndex];
+            const modal = document.getElementById("auditDetailModal");
+            const subtitle = document.getElementById("auditDetailModalSubtitle");
+            const body = document.getElementById("auditDetailModalBody");
+            if (!entry || !modal || !subtitle || !body) {
+                return;
+            }
+
+            subtitle.textContent = `${entry.tipo_entidad || "Entidad"} · ${entry.nombre_entidad || "Sin nombre"} · ${entry.tipo_accion || "-"}`;
+            const changeLines = formatAuditChanges(entry.cambios);
+            if (changeLines === "-") {
+                body.innerHTML = "<p>No hay detalle adicional disponible.</p>";
+            } else {
+                body.innerHTML = `<ul class="audit-detail-list">${changeLines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>`;
+            }
+            modal.classList.add("show");
+        };
+
+        const closeAuditDetailModal = () => {
+            document.getElementById("auditDetailModal")?.classList.remove("show");
+        };
+
+        const renderAuditEntries = () => {
+            const tbody = document.getElementById("auditEntriesList");
+            const summary = document.getElementById("auditEntriesSummary");
+            const prevBtn = document.getElementById("auditPrevBtn");
+            const nextBtn = document.getElementById("auditNextBtn");
+            if (!tbody || !summary || !prevBtn || !nextBtn) {
+                return;
+            }
+
+            prevBtn.disabled = !auditState.previous;
+            nextBtn.disabled = !auditState.next;
+
+            if (!auditState.loaded) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="empty-state">Carga el historial para ver los cambios auditados.</td>
+                    </tr>
+                `;
+                summary.textContent = "Sin datos cargados.";
+                return;
+            }
+
+            if (!currentAuditEntries.length) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="empty-state">No se encontraron registros con los filtros seleccionados.</td>
+                    </tr>
+                `;
+                summary.textContent = "0 resultados.";
+                return;
+            }
+
+            tbody.innerHTML = currentAuditEntries
+                .map(
+                    (entry, index) => `
+                        <tr>
+                            <td>${escapeHtml(toIsoDateDisplay(entry.fecha))}</td>
+                            <td>${escapeHtml(entry.usuario || "-")}</td>
+                            <td>${escapeHtml(entry.tipo_entidad || "-")}</td>
+                            <td>${escapeHtml(entry.nombre_entidad || "-")}</td>
+                            <td>${escapeHtml(entry.tipo_accion || "-")}</td>
+                            <td class="audit-detail-cell">${escapeHtml(entry.detalle || "-")}</td>
+                            <td><button type="button" class="btn-secondary audit-detail-button" data-audit-detail-index="${index}">Ver detalle</button></td>
+                        </tr>
+                    `
+                )
+                .join("");
+            summary.textContent = `Mostrando ${currentAuditEntries.length} registro(s) de ${auditState.count}. Pagina ${auditState.page}.`;
+        };
+
+        const buildAuditQueryString = (page = 1) => {
+            const params = new URLSearchParams();
+            params.set("page", String(page));
+
+            const entityType = document.getElementById("auditEntityTypeFilter")?.value || "";
+            const actionType = document.getElementById("auditActionTypeFilter")?.value || "";
+            const dateFrom = document.getElementById("auditDateFromFilter")?.value || "";
+            const dateTo = document.getElementById("auditDateToFilter")?.value || "";
+
+            if (entityType) params.set("tipo_entidad", entityType);
+            if (actionType) params.set("tipo_accion", actionType);
+            if (dateFrom) params.set("fecha_desde", dateFrom);
+            if (dateTo) params.set("fecha_hasta", dateTo);
+            return params.toString();
+        };
+
+        const loadAuditEntries = async (page = 1) => {
+            if (!canViewAuditHistory()) {
+                return;
+            }
+
+            const result = await apiCall(`/audit-entries/?${buildAuditQueryString(page)}`);
+            if (!result.ok) {
+                showAlert("error", extractApiErrorMessage(result.data, "No se pudo cargar la auditoria."));
+                return;
+            }
+
+            auditState.page = page;
+            auditState.count = result.data?.count || 0;
+            auditState.next = result.data?.next || null;
+            auditState.previous = result.data?.previous || null;
+            auditState.loaded = true;
+            currentAuditEntries = result.data?.results || [];
+            renderAuditEntries();
+        };
+
+        const updateAuditTabVisibility = () => {
+            const auditButton = document.getElementById("auditTabButton");
+            if (!auditButton) {
+                return;
+            }
+
+            const canSeeAudit = canViewAuditHistory();
+            auditButton.style.display = canSeeAudit ? "inline-block" : "none";
+
+            if (canSeeAudit) {
+                return;
+            }
+
+            if (document.querySelector('.tab-btn.active')?.dataset.tab === "audit") {
+                activateTab("generator");
+            }
+            resetAuditState();
+            renderAuditEntries();
         };
 
         const apiCall = async (endpoint, method = "GET", body = null) => {
@@ -2171,18 +2506,17 @@
                 return;
             }
 
-            const results = await Promise.all(
-                group.sessions.map((session) => apiCall(`/schedules/${session.id}/`, "DELETE"))
-            );
-            const failed = results.filter((r) => !r.ok).length;
-            if (failed) {
-                showAlert("error", `No se pudieron eliminar ${failed} sesiones del horario.`);
-            } else {
-                showAlert("success", "✓ Horario eliminado correctamente");
-                if (selectedSavedTimetableIndex === index) {
-                    selectedSavedTimetableIndex = null;
-                    selectedSavedTimetableName = null;
-                }
+            const result = await apiCall("/schedules/delete-saved-timetable/", "POST", {
+                timetable_name: group.name,
+            });
+            if (!result.ok) {
+                showAlert("error", result.data.detail || "No se pudo eliminar el horario guardado.");
+                return;
+            }
+            showAlert("success", "✓ Horario eliminado correctamente");
+            if (selectedSavedTimetableIndex === index) {
+                selectedSavedTimetableIndex = null;
+                selectedSavedTimetableName = null;
             }
             loadAllData();
         };
@@ -2225,6 +2559,10 @@
                 signupBtn.style.display = "inline-block";
                 logoutBtn.style.display = "none";
                 refreshBtn.style.display = "none";
+                currentUserProfile = null;
+                resetAuditState();
+                renderAuditEntries();
+                updateAuditTabVisibility();
             }
         };
 
@@ -2404,14 +2742,30 @@
         };
 
         // Tabs
-        document.querySelectorAll(".tab-btn").forEach(btn => {
-            btn.onclick = () => {
-                document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-                document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-                btn.classList.add("active");
-                document.querySelector(`.tab-content[data-tab="${btn.dataset.tab}"]`).classList.add("active");
-            };
-        });
+        const activateTab = (tabName) => {
+            const button = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+            const content = document.querySelector(`.tab-content[data-tab="${tabName}"]`);
+            if (!button || !content || button.style.display === "none") {
+                return;
+            }
+
+            document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+            document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("active"));
+            button.classList.add("active");
+            content.classList.add("active");
+
+            if (tabName === "audit" && !auditState.loaded) {
+                loadAuditEntries(1);
+            }
+        };
+
+        const bindTabHandlers = () => {
+            document.querySelectorAll(".tab-btn").forEach((btn) => {
+                btn.onclick = () => {
+                    activateTab(btn.dataset.tab);
+                };
+            });
+        };
 
         // Load All Data
         const loadAllData = async () => {
@@ -2455,6 +2809,7 @@
             currentSubjects = subjectData;
             currentSchedules = scheduleData;
             currentUsers = userData;
+            updateAuditTabVisibility();
 
             document.getElementById("statTeachers").textContent = teachers.data?.count || teacherData.length;
             document.getElementById("statClassrooms").textContent = classrooms.data?.count || classroomData.length;
@@ -2471,7 +2826,39 @@
             populateSubjectAllowedClassroomsSelector(classroomData);
             populateScheduleCourseFilter(groupData);
             populateAllExportEntitySelects();
+
+            if (document.querySelector('.tab-btn.active')?.dataset.tab === "audit" && canViewAuditHistory()) {
+                loadAuditEntries(auditState.page || 1);
+            }
         };
+
+        document.addEventListener("click", (event) => {
+            if (event.target?.id === "auditFilterBtn") {
+                loadAuditEntries(1);
+            }
+            if (event.target?.id === "auditResetBtn") {
+                document.getElementById("auditEntityTypeFilter").value = "";
+                document.getElementById("auditActionTypeFilter").value = "";
+                document.getElementById("auditDateFromFilter").value = "";
+                document.getElementById("auditDateToFilter").value = "";
+                loadAuditEntries(1);
+            }
+            if (event.target?.id === "auditPrevBtn" && auditState.previous) {
+                loadAuditEntries(Math.max(1, auditState.page - 1));
+            }
+            if (event.target?.id === "auditNextBtn" && auditState.next) {
+                loadAuditEntries(auditState.page + 1);
+            }
+            if (event.target?.dataset?.auditDetailIndex) {
+                openAuditDetailModal(parseInt(event.target.dataset.auditDetailIndex, 10));
+            }
+            if (
+                event.target?.id === "auditDetailCloseBtn" ||
+                event.target?.id === "auditDetailModal"
+            ) {
+                closeAuditDetailModal();
+            }
+        });
 
         document.getElementById("managedUserCanLogin").onchange = (event) => {
             const wrap = document.getElementById("managedUserPasswordWrap");
@@ -3454,8 +3841,12 @@
         // Init
         resetSubjectPreferences();
         resetTeacherPreferences();
+        ensureAuditUI();
+        bindTabHandlers();
+        renderAuditEntries();
         updateAuthUI();
         });
     </script>
 </body>
 </html>
+

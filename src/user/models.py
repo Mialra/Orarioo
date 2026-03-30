@@ -111,3 +111,20 @@ class User(NamedEntity, AbstractUser):
     def is_direccion(self):
         """Checks if the user is direccion"""
         return self.role == RoleChoices.DIRECCION
+
+
+class CollaborationTeam(NamedEntity):
+    """Group of users that share audit visibility scope."""
+
+    members = models.ManyToManyField(
+        User,
+        related_name="collaboration_teams",
+        blank=True,
+    )
+
+    class Meta:
+        db_table = "collaboration_team"
+        ordering = ["name", "id"]
+
+    def __str__(self):
+        return self.name

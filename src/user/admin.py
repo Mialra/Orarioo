@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.utils.translation import gettext_lazy as _
 
-from user.models import User
+from user.models import CollaborationTeam, User
 
 
 @admin.register(User)
@@ -84,3 +84,10 @@ class UserAdmin(UserAdmin):
         if obj:  # When editing an existing user
             return self.readonly_fields + ["email"]
         return self.readonly_fields
+
+
+@admin.register(CollaborationTeam)
+class CollaborationTeamAdmin(admin.ModelAdmin):
+    list_display = ("name",)
+    search_fields = ("name",)
+    filter_horizontal = ("members",)

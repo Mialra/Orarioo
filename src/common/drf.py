@@ -1,5 +1,7 @@
 from rest_framework import permissions, viewsets
 
+from auditableEntity.audit import audit_actor_context
+
 CRUD_LIST_ACTIONS = {"get": "list", "post": "create"}
 CRUD_DETAIL_ACTIONS = {
     "get": "retrieve",
@@ -18,7 +20,27 @@ def build_crud_views(viewset_class):
     )
 
 
-class AuditableModelViewSet(viewsets.ModelViewSet):
+class AuditActorViewMixin:
+    _audit_actor_scope = None
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        actor = (
+            request.user if getattr(request.user, "is_authenticated", False) else None
+        )
+        self._audit_actor_scope = audit_actor_context(user=actor)
+        self._audit_actor_scope.__enter__()
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        try:
+            return super().finalize_response(request, response, *args, **kwargs)
+        finally:
+            if self._audit_actor_scope is not None:
+                self._audit_actor_scope.__exit__(None, None, None)
+                self._audit_actor_scope = None
+
+
+class AuditableModelViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
     """Base ViewSet that populates audit fields from authenticated user."""
 
     permission_classes = [permissions.IsAuthenticated]
