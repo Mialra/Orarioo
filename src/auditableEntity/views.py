@@ -1,4 +1,4 @@
-from datetime import datetime, time
+﻿from datetime import datetime, time
 
 from django.db import models
 from django.utils import timezone
@@ -8,10 +8,19 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from auditableEntity.audit import AUDITABLE_ENTITY_TYPES, ENTITY_LABELS, format_changed_fields_for_export
+from auditableEntity.audit import (
+    AUDITABLE_ENTITY_TYPES,
+    ENTITY_LABELS,
+    format_changed_fields_for_export,
+)
 from auditableEntity.models import AuditActionType, AuditEntry
 from auditableEntity.serializers import AuditEntrySerializer
-from common.export_utils import REPORTLAB_AVAILABLE, build_csv_response, build_table_pdf_response, sanitize_filename_stem
+from common.export_utils import (
+    REPORTLAB_AVAILABLE,
+    build_csv_response,
+    build_table_pdf_response,
+    sanitize_filename_stem,
+)
 from user.models import CollaborationTeam, User
 
 
@@ -35,10 +44,10 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
     }
     ACTION_FILTER_ALIASES = {
         "create": "CREATE",
-        "creación": "CREATE",
+        "creaci\u00f3n": "CREATE",
         "creacion": "CREATE",
         "update": "UPDATE",
-        "modificación": "UPDATE",
+        "modificaci\u00f3n": "UPDATE",
         "modificacion": "UPDATE",
         "delete": "DELETE",
         "borrado": "DELETE",
@@ -81,21 +90,10 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
             {field_name: "Debe ser una fecha u hora valida en formato ISO."}
         )
 
-    def _apply_filters(self, queryset, params):
+    def _resolve_entity_type_filter(self, params):
         raw_entity_type = (params.get("tipo_entidad") or "").strip().lower()
         entity_type = self.ENTITY_FILTER_ALIASES.get(raw_entity_type, "")
-        if entity_type:
-            if entity_type not in AUDITABLE_ENTITY_TYPES:
-                raise ValidationError(
-                    {
-                        "tipo_entidad": (
-                            "Debe ser uno de: "
-                            f"{', '.join(sorted(AUDITABLE_ENTITY_TYPES))}."
-                        )
-                    }
-                )
-            queryset = queryset.filter(entity_type=entity_type)
-        elif raw_entity_type:
+        if not entity_type and raw_entity_type:
             raise ValidationError(
                 {
                     "tipo_entidad": (
@@ -105,54 +103,83 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
                     )
                 }
             )
+        if entity_type and entity_type not in AUDITABLE_ENTITY_TYPES:
+            raise ValidationError(
+                {
+                    "tipo_entidad": (
+                        "Debe ser uno de: "
+                        f"{', '.join(sorted(AUDITABLE_ENTITY_TYPES))}."
+                    )
+                }
+            )
+        return entity_type
 
+    def _resolve_action_type_filter(self, params):
         raw_action_type = (params.get("tipo_accion") or "").strip().lower()
         action_type = self.ACTION_FILTER_ALIASES.get(raw_action_type, "")
-        if action_type:
-            if action_type not in set(AuditActionType.values):
-                raise ValidationError(
-                    {
-                        "tipo_accion": (
-                            "Debe ser uno de: " f"{', '.join(AuditActionType.values)}."
-                        )
-                    }
-                )
-            queryset = queryset.filter(action_type=action_type)
-        elif raw_action_type:
+        if not action_type and raw_action_type:
             raise ValidationError(
                 {
                     "tipo_accion": (
                         "Debe ser uno de: CREATE, UPDATE, DELETE, "
-                        "creación, creacion, modificación, modificacion, borrado."
+                        "creaci\u00f3n, creacion, modificaci\u00f3n, modificacion, borrado."
                     )
                 }
             )
+        if action_type and action_type not in set(AuditActionType.values):
+            raise ValidationError(
+                {
+                    "tipo_accion": (
+                        "Debe ser uno de: " f"{', '.join(AuditActionType.values)}."
+                    )
+                }
+            )
+        return action_type
 
+    def _resolve_actor_id_filter(self, params):
         raw_actor_id = params.get("usuario_id")
-        if raw_actor_id not in (None, ""):
-            actor_id = self._parse_positive_int(raw_actor_id, "usuario_id")
-            if actor_id not in self._allowed_actor_ids():
-                raise ValidationError(
-                    {"usuario_id": "Debes seleccionar un usuario válido de tu equipo."}
-                )
+        if raw_actor_id in (None, ""):
+            return None
+
+        actor_id = self._parse_positive_int(raw_actor_id, "usuario_id")
+        if actor_id not in self._allowed_actor_ids():
+            raise ValidationError(
+                {"usuario_id": "Debes seleccionar un usuario v\u00e1lido de tu equipo."}
+            )
+        return actor_id
+
+    def _resolve_date_filters(self, params):
+        date_from = self._normalize_datetime(
+            params.get("fecha_desde"),
+            field_name="fecha_desde",
+        )
+        date_to = self._normalize_datetime(
+            params.get("fecha_hasta"),
+            field_name="fecha_hasta",
+            end_of_day=True,
+        )
+        return date_from, date_to
+
+    def _apply_filters(self, queryset, params):
+        entity_type = self._resolve_entity_type_filter(params)
+        if entity_type:
+            queryset = queryset.filter(entity_type=entity_type)
+
+        action_type = self._resolve_action_type_filter(params)
+        if action_type:
+            queryset = queryset.filter(action_type=action_type)
+
+        actor_id = self._resolve_actor_id_filter(params)
+        if actor_id is not None:
             queryset = queryset.filter(actor_id=actor_id)
 
         actor_name = (params.get("usuario") or "").strip()
         if actor_name:
             queryset = queryset.filter(actor_name__icontains=actor_name)
 
-        date_from = self._normalize_datetime(
-            params.get("fecha_desde"),
-            field_name="fecha_desde",
-        )
+        date_from, date_to = self._resolve_date_filters(params)
         if date_from is not None:
             queryset = queryset.filter(occurred_at__gte=date_from)
-
-        date_to = self._normalize_datetime(
-            params.get("fecha_hasta"),
-            field_name="fecha_hasta",
-            end_of_day=True,
-        )
         if date_to is not None:
             queryset = queryset.filter(occurred_at__lte=date_to)
 
@@ -185,9 +212,7 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
     def _parse_export_format(raw_value):
         export_format = (raw_value or "csv").strip().lower()
         if export_format not in {"csv", "pdf"}:
-            raise ValidationError(
-                {"export_format": "Debe ser uno de: csv, pdf."}
-            )
+            raise ValidationError({"export_format": "Debe ser uno de: csv, pdf."})
         return export_format
 
     @staticmethod
@@ -199,13 +224,15 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
     @staticmethod
     def _build_export_rows(queryset, *, for_csv=False):
         action_labels = {
-            AuditActionType.CREATE: "Creación",
-            AuditActionType.UPDATE: "Modificación",
+            AuditActionType.CREATE: "Creaci\u00f3n",
+            AuditActionType.UPDATE: "Modificaci\u00f3n",
             AuditActionType.DELETE: "Borrado",
         }
         rows = []
         for entry in queryset:
-            occurred_at = timezone.localtime(entry.occurred_at).strftime("%d/%m/%Y %H:%M")
+            occurred_at = timezone.localtime(entry.occurred_at).strftime(
+                "%d/%m/%Y %H:%M"
+            )
             rows.append(
                 [
                     f"'{occurred_at}" if for_csv else occurred_at,
@@ -221,14 +248,16 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="export")
     def export(self, request):
-        export_format = self._parse_export_format(request.query_params.get("export_format"))
+        export_format = self._parse_export_format(
+            request.query_params.get("export_format")
+        )
         queryset = self.get_queryset()
         headers = [
             "Fecha",
             "Usuario",
             "Entidad",
             "Nombre",
-            "Acción",
+            "Acci\u00f3n",
             "Resumen",
             "Detalle",
         ]
@@ -242,7 +271,8 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
             raise ValidationError(
                 {
                     "detail": (
-                        "La exportación PDF no está disponible porque reportlab no está instalado."
+                        "La exportaci\u00f3n PDF no est\u00e1 disponible porque reportlab "
+                        "no est\u00e1 instalado."
                     )
                 }
             )
@@ -250,7 +280,7 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
             headers=headers,
             rows=self._build_export_rows(queryset),
             filename=filename,
-            title_text="Historial de auditoría",
+            title_text="Historial de auditor\u00eda",
         )
 
     @action(detail=False, methods=["get"], url_path="filter-users")

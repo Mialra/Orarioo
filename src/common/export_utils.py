@@ -9,7 +9,13 @@ try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import (
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
 
     REPORTLAB_AVAILABLE = True
 except ImportError:
@@ -110,7 +116,10 @@ def build_table_pdf_response(
 
     normalized_rows = rows or [[empty_message] + ([""] * (len(headers) - 1))]
     table_rows = [
-        [Paragraph(normalize_pdf_export_cell(value), header_style) for value in headers],
+        [
+            Paragraph(normalize_pdf_export_cell(value), header_style)
+            for value in headers
+        ],
         *[
             [
                 Paragraph(

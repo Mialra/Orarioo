@@ -336,9 +336,7 @@ class ScheduleViewSet(AuditableModelViewSet):
     @classmethod
     def _build_export_filename(cls, params, saved_schedule_name=""):
         if params["source"] == "saved" and saved_schedule_name:
-            stem = sanitize_filename_stem(
-                saved_schedule_name, "orarioo_saved_schedule"
-            )
+            stem = sanitize_filename_stem(saved_schedule_name, "orarioo_saved_schedule")
         else:
             date_token = timezone.now().strftime("%Y%m%d_%H%M%S")
             stem = f"orarioo_generated_schedule_{date_token}"

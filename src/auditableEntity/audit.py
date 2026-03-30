@@ -261,8 +261,7 @@ def format_display_value(value):
             return " | ".join(preference_lines) or "-"
         return (
             "; ".join(
-                f"{key}: {format_display_value(item)}"
-                for key, item in value.items()
+                f"{key}: {format_display_value(item)}" for key, item in value.items()
             )
             or "-"
         )
@@ -277,9 +276,7 @@ def _build_preference_display_lines(value):
     if not isinstance(value, dict) or not value:
         return None
     if not all(
-        isinstance(key, str)
-        and "_" in key
-        and len(key.split("_", 1)[0]) == 3
+        isinstance(key, str) and "_" in key and len(key.split("_", 1)[0]) == 3
         for key in value
     ):
         return None
@@ -289,7 +286,9 @@ def _build_preference_display_lines(value):
         if state not in grouped:
             continue
         day_code, hour = slot_key.split("_", 1)
-        grouped[state].append(f"{PREFERENCE_DAY_NAMES.get(day_code, day_code)} a las {hour}")
+        grouped[state].append(
+            f"{PREFERENCE_DAY_NAMES.get(day_code, day_code)} a las {hour}"
+        )
 
     return [
         f"{label}: {', '.join(grouped[state_code])}."
