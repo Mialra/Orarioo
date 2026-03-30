@@ -22,7 +22,7 @@ from auditableEntity.audit import (
 )
 from auditableEntity.models import AuditActionType
 
-_SIGNALS_REGISTERED = False
+_unused_SIGNALS_REGISTERED = False
 
 
 def _handle_pre_save(sender, instance, **kwargs):
@@ -160,9 +160,9 @@ def _build_m2m_handler(field_name):
 
 
 def register_audit_signals():
-    global _SIGNALS_REGISTERED
+    global _unused_SIGNALS_REGISTERED
 
-    if _SIGNALS_REGISTERED:
+    if _unused_SIGNALS_REGISTERED:
         return
 
     for label in AUDITABLE_MODEL_LABELS:
@@ -202,4 +202,4 @@ def register_audit_signals():
         dispatch_uid="audit_subject_allowed_classrooms_m2m",
     )
 
-    _SIGNALS_REGISTERED = True
+    _unused_SIGNALS_REGISTERED = True
