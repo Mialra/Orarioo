@@ -17,8 +17,13 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orarioo_ci
       SECRET_KEY: ci-test-secret-key
+      DB_NAME: orarioo_ci
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_SSLMODE: disable
     
     strategy:
       max-parallel: 3
