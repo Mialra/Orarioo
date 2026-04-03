@@ -61,19 +61,28 @@ jobs:
           DATABASE_URL: postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }}
           SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
         run: |
-          python src/manage.py migrate --noinput
-        working-directory: .
+          python manage.py migrate --noinput
+        working-directory: src
 
-      # Step 5: Run tests with coverage
+      # Step 5: Load test data
+      - name: Load test data
+        env:
+          DATABASE_URL: postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }}
+          SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+        run: |
+          python load_test_data.py
+        working-directory: src
+
+      # Step 6: Run tests with coverage
       - name: Run tests with coverage
         env:
           DATABASE_URL: postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }}
           SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
         run: |
           pip install coverage
-          coverage run --source='src' src/manage.py test
+          coverage run --source='.' manage.py test
           coverage report --fail-under=70
-        working-directory: .
+        working-directory: src
 
       # Step 6: Upload coverage report to Codecov (optional)
       - name: Upload coverage to Codecov
