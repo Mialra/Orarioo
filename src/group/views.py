@@ -1,6 +1,11 @@
 from common.drf import AuditableModelViewSet
 from group.models import Group
 from group.serializers import GroupSerializer
+from main.views import render_admin_dashboard
+
+
+def admin_groups(request):
+    return render_admin_dashboard(request, "groups")
 
 
 class GroupViewSet(AuditableModelViewSet):
