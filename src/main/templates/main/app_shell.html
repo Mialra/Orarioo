@@ -1,0 +1,30 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Orarioo | App{% endblock %}
+
+{% block content %}
+<div class="app-shell container py-5">
+    <header class="app-header mb-4">
+        <div>
+            <p class="app-eyebrow mb-1">Area de trabajo</p>
+            <h1 class="mb-0">Frontend en construccion</h1>
+        </div>
+        <button id="logout-button" class="btn btn-outline-light" type="button">Cerrar sesion</button>
+    </header>
+
+    <section class="app-placeholder card border-0 shadow-sm">
+        <div class="card-body p-4 p-md-5">
+            <h2 class="h4">Siguiente paso</h2>
+            <p class="mb-0">
+                El nuevo dashboard se implementara por pestanas. Esta vista sirve como destino temporal
+                despues del login mientras construimos cada modulo del frontend.
+            </p>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'main/js/app-shell.js' %}"></script>
+{% endblock %}

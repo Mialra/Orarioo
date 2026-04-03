@@ -1,0 +1,222 @@
+.auth-page {
+    min-height: 100vh;
+}
+
+.auth-shell {
+    min-height: 100vh;
+}
+
+.auth-branding {
+    justify-content: center;
+    align-items: center;
+    color: #ffffff;
+    background:
+        radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.2), transparent 45%),
+        radial-gradient(circle at 85% 80%, rgba(255, 255, 255, 0.12), transparent 55%),
+        linear-gradient(145deg, #1d47c8 0%, #2f73f7 50%, #21a7ff 100%);
+}
+
+.auth-branding-content {
+    max-width: 500px;
+    min-height: 100%;
+}
+
+.auth-branding-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.auth-branding-badge i {
+    width: 16px;
+    height: 16px;
+}
+
+.auth-branding-list {
+    font-size: 1rem;
+}
+
+.auth-branding-list li {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0.55rem;
+    opacity: 0.95;
+}
+
+.auth-branding-list i {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    margin-top: 0.18rem;
+}
+
+.auth-branding-badge,
+.auth-branding h1,
+.auth-branding .lead,
+.auth-branding-list li {
+    opacity: 0;
+    transform: translateY(10px);
+    animation: auth-fade-up 0.55s ease forwards;
+}
+
+.auth-branding-badge {
+    animation-delay: 0.12s;
+}
+
+.auth-branding h1 {
+    animation-delay: 0.22s;
+}
+
+.auth-branding .lead {
+    animation-delay: 0.34s;
+}
+
+.auth-branding-list li:nth-child(1) {
+    animation-delay: 0.48s;
+}
+
+.auth-branding-list li:nth-child(2) {
+    animation-delay: 0.62s;
+}
+
+.auth-branding-list li:nth-child(3) {
+    animation-delay: 0.76s;
+}
+
+@keyframes auth-fade-up {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.auth-card {
+    max-width: 540px;
+    border-radius: 1.1rem;
+}
+
+.auth-card .form-control-lg,
+.auth-card .form-select-lg,
+.auth-card .input-group-lg > .form-control,
+.auth-card .input-group-lg > .btn {
+    font-size: 1rem;
+}
+
+.auth-card .form-control::placeholder {
+    color: #94a3b8;
+    opacity: 0.82;
+    font-size: 0.92rem;
+}
+
+.auth-alert {
+    display: none;
+}
+
+.auth-alert.error,
+.auth-alert.info,
+.auth-alert.success {
+    display: block;
+}
+
+.auth-alert.error {
+    --bs-alert-bg: var(--orarioo-danger-bg);
+    --bs-alert-color: var(--orarioo-danger-text);
+    --bs-alert-border-color: #fecaca;
+}
+
+.auth-alert.info {
+    --bs-alert-bg: var(--orarioo-info-bg);
+    --bs-alert-color: var(--orarioo-info-text);
+    --bs-alert-border-color: #bfdbfe;
+}
+
+.auth-alert.success {
+    --bs-alert-bg: var(--orarioo-success-bg);
+    --bs-alert-color: var(--orarioo-success-text);
+    --bs-alert-border-color: #bbf7d0;
+}
+
+.auth-link-btn {
+    color: var(--orarioo-primary);
+    text-decoration: none;
+}
+
+.auth-link-btn:hover {
+    color: var(--orarioo-primary-dark);
+    text-decoration: underline;
+}
+
+.password-toggle-btn {
+    min-width: 3rem;
+}
+
+.password-toggle-icon-slot,
+.password-toggle-icon {
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+}
+
+.info-icon-btn {
+    color: #6b7280;
+}
+
+.info-icon-btn:hover {
+    color: var(--orarioo-primary);
+}
+
+.auth-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+}
+
+.auth-submit .btn-loader {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-top-color: #ffffff;
+    display: none;
+    animation: auth-spin 0.8s linear infinite;
+}
+
+.auth-submit.is-loading .btn-loader {
+    display: inline-block;
+}
+
+.auth-submit.is-loading .btn-label {
+    opacity: 0.82;
+}
+
+@keyframes auth-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 991.98px) {
+    .auth-card {
+        max-width: 620px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-branding-badge,
+    .auth-branding h1,
+    .auth-branding .lead,
+    .auth-branding-list li {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+}

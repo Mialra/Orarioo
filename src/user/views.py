@@ -1,3 +1,4 @@
+from django.shortcuts import render
 from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -8,6 +9,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 from common.drf import AuditActorViewMixin
 from common.permissions import IsManagementUser
+from main.views import render_admin_dashboard
 from user.models import RoleChoices, User
 from user.serializers import (
     LoginSerializer,
@@ -17,6 +19,18 @@ from user.serializers import (
     UserSerializer,
     UserUpdateSerializer,
 )
+
+
+def sign_in(request):
+    return render(request, "main/login.html")
+
+
+def sign_up(request):
+    return render(request, "main/signup.html")
+
+
+def admin_users(request):
+    return render_admin_dashboard(request, "users")
 
 
 class IsAdministratorOrSelf(permissions.BasePermission):

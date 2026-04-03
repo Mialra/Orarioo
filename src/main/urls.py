@@ -1,9 +1,24 @@
 from django.urls import path
 
-from main.views import frontend_playground, manual_change, schedule_generator
+from main.views import dashboard, root_redirect
+from classroom.views import admin_classrooms
+from group.views import admin_groups
+from subject.views import admin_subjects
+from teacher.views import admin_teachers
+from user.views import admin_users, sign_in, sign_up
 
 urlpatterns = [
-    path("", frontend_playground, name="frontend-playground"),
-    path("schedule-generator/", schedule_generator, name="schedule-generator"),
-    path("manual-change/", manual_change, name="manual-change"),
+    path("", root_redirect, name="root-redirect"),
+    path("sign-in/", sign_in, name="sign-in"),
+    path("sign-up/", sign_up, name="sign-up"),
+    path("dashboard/", dashboard, {"section": "schedules"}, name="dashboard"),
+    path("dashboard/schedules/", dashboard, {"section": "schedules"}, name="dashboard-schedules"),
+    path("dashboard/saved/", dashboard, {"section": "saved"}, name="dashboard-saved"),
+    path("dashboard/administration/", admin_users, name="dashboard-administration"),
+    path("dashboard/administration/users/", admin_users, name="dashboard-administration-users"),
+    path("dashboard/administration/teachers/", admin_teachers, name="dashboard-administration-teachers"),
+    path("dashboard/administration/groups/", admin_groups, name="dashboard-administration-groups"),
+    path("dashboard/administration/subjects/", admin_subjects, name="dashboard-administration-subjects"),
+    path("dashboard/administration/classrooms/", admin_classrooms, name="dashboard-administration-classrooms"),
+    path("dashboard/audit/", dashboard, {"section": "audit"}, name="dashboard-audit"),
 ]
