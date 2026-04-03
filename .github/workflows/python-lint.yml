@@ -37,12 +37,12 @@ jobs:
 
       # Step 4: Run flake8 for PEP8 linting
       - name: Lint with flake8
-        run: flake8 src/app src/main
+        run: flake8 src
 
       # Step 5: Verify code formatting with Black
       - name: Check formatting with black
-        run: black --check src/app src/main
+        run: black --check src
 
       # Step 6: Verify import ordering with isort
       - name: Check import order with isort
-        run: isort --check-only src/app src/main
+        run: isort --profile black --check-only src
