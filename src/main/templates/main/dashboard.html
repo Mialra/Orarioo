@@ -1,0 +1,210 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Orarioo | Dashboard{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'main/css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-page">
+    <nav class="navbar navbar-expand-lg bg-white border-bottom shadow-sm sticky-top dash-navbar">
+        <div class="container-fluid px-3 px-lg-4">
+            <div class="dash-brand me-3">
+                <div class="dash-brand-icon" aria-hidden="true">
+                    <i data-lucide="calendar-days" class="dash-brand-lucide"></i>
+                </div>
+                <div>
+                    <h1>Orarioo</h1>
+                    <p>Gestión escolar</p>
+                </div>
+            </div>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#dashboardNav" aria-controls="dashboardNav" aria-expanded="false" aria-label="Mostrar navegación">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="dashboardNav">
+                <ul class="nav nav-pills mx-auto gap-2 py-3 py-lg-0" aria-label="Navegación principal">
+                    <li class="nav-item">
+                        <a class="nav-link dash-tab {% if dashboard_section == 'schedules' %}active{% endif %}" href="{% url 'dashboard-schedules' %}">
+                            <i data-lucide="calendar-days" class="dash-nav-icon" aria-hidden="true"></i>
+                            Generador
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link dash-tab {% if dashboard_section == 'saved' %}active{% endif %}" href="{% url 'dashboard-saved' %}">
+                            <i data-lucide="folder-open" class="dash-nav-icon" aria-hidden="true"></i>
+                            Guardados
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link dash-tab {% if dashboard_section == 'administration' %}active{% endif %}" href="{% url 'dashboard-administration' %}">
+                            <i data-lucide="settings" class="dash-nav-icon" aria-hidden="true"></i>
+                            Administración
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link dash-tab {% if dashboard_section == 'audit' %}active{% endif %}" href="{% url 'dashboard-audit' %}">
+                            <i data-lucide="file-text" class="dash-nav-icon" aria-hidden="true"></i>
+                            Auditoría
+                        </a>
+                    </li>
+                </ul>
+
+                <div class="d-flex align-items-center gap-2 ms-lg-3 pb-3 pb-lg-0">
+                    <span id="dashboard-user-initials" class="dash-avatar" aria-hidden="true">AP</span>
+                    <button id="logout-button" class="btn btn-outline-secondary btn-sm" type="button">Salir</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container-xl py-4 py-lg-5">
+        {% if dashboard_section == 'schedules' %}
+        <section class="card border-0 shadow-sm dash-generator-card">
+            <div class="card-body p-4 p-xl-5">
+                <div class="d-flex flex-column flex-lg-row gap-3 justify-content-between align-items-start mb-4">
+                    <div>
+                        <h2 class="h2 mb-2">Generador Automático de Horarios</h2>
+                        <p class="text-body-secondary mb-0">Configura los datos necesarios y genera un horario optimizado automáticamente.</p>
+                    </div>
+                    <button type="button" class="btn btn-link text-secondary p-0" aria-label="Cerrar panel">
+                        <i data-lucide="x" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <article class="col-6 col-xl-3">
+                        <div class="card border-0 h-100 dash-metric metric-blue">
+                            <div class="card-body">
+                                <strong>0</strong>
+                                <span>Cursos</span>
+                            </div>
+                        </div>
+                    </article>
+                    <article class="col-6 col-xl-3">
+                        <div class="card border-0 h-100 dash-metric metric-green">
+                            <div class="card-body">
+                                <strong>0</strong>
+                                <span>Profesores</span>
+                            </div>
+                        </div>
+                    </article>
+                    <article class="col-6 col-xl-3">
+                        <div class="card border-0 h-100 dash-metric metric-violet">
+                            <div class="card-body">
+                                <strong>0</strong>
+                                <span>Asignaturas</span>
+                            </div>
+                        </div>
+                    </article>
+                    <article class="col-6 col-xl-3">
+                        <div class="card border-0 h-100 dash-metric metric-amber">
+                            <div class="card-body">
+                                <strong>0</strong>
+                                <span>Aulas</span>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="card border-0 bg-body-tertiary mb-4">
+                    <div class="card-body">
+                        <h3 class="h5 mb-3">Criterios de generación</h3>
+                        <ul class="mb-0 text-body-secondary">
+                            <li>Se respetarán las preferencias de días de los profesores.</li>
+                            <li>Se evitarán conflictos de profesores y aulas.</li>
+                            <li>Se distribuirá la carga horaria de forma equilibrada.</li>
+                            <li>Podrás editar manualmente el horario después de generarlo.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary">Cancelar</button>
+                    <button type="button" class="btn btn-primary">Generar horario</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="alert alert-warning mt-3 mb-0" role="alert">
+            <h3 class="alert-heading h6 mb-2">Configuración incompleta</h3>
+            <p class="mb-2">Para generar un horario, necesitas configurar los siguientes elementos en el panel de administración:</p>
+            <ul class="mb-0">
+                <li>Al menos un curso.</li>
+                <li>Al menos un profesor.</li>
+                <li>Al menos una asignatura.</li>
+                <li>Al menos un aula.</li>
+            </ul>
+        </section>
+        {% elif dashboard_section == 'administration' %}
+        <section class="card border-0 shadow-sm admin-shell">
+            <div class="card-header bg-transparent border-0 px-4 px-lg-5 pt-4 pb-0">
+                <ul class="nav nav-tabs admin-subtabs border-0 gap-1" role="tablist" aria-label="Módulos de administración">
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link admin-subtab {% if dashboard_admin_tab == 'users' %}active{% endif %}" href="{% url 'dashboard-administration-users' %}">
+                            <i data-lucide="users" class="dash-nav-icon" aria-hidden="true"></i>
+                            Usuarios
+                        </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link admin-subtab {% if dashboard_admin_tab == 'teachers' %}active{% endif %}" href="{% url 'dashboard-administration-teachers' %}">
+                            <i data-lucide="graduation-cap" class="dash-nav-icon" aria-hidden="true"></i>
+                            Profesores
+                        </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link admin-subtab {% if dashboard_admin_tab == 'groups' %}active{% endif %}" href="{% url 'dashboard-administration-groups' %}">
+                            <i data-lucide="school" class="dash-nav-icon" aria-hidden="true"></i>
+                            Cursos
+                        </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link admin-subtab {% if dashboard_admin_tab == 'subjects' %}active{% endif %}" href="{% url 'dashboard-administration-subjects' %}">
+                            <i data-lucide="book-open" class="dash-nav-icon" aria-hidden="true"></i>
+                            Asignaturas
+                        </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link admin-subtab {% if dashboard_admin_tab == 'classrooms' %}active{% endif %}" href="{% url 'dashboard-administration-classrooms' %}">
+                            <i data-lucide="building-2" class="dash-nav-icon" aria-hidden="true"></i>
+                            Aulas
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="card-body p-4 p-lg-5">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+                    <div>
+                        <h2 class="h4 mb-1">{{ dashboard_admin_state.title }}</h2>
+                        <p class="text-body-secondary mb-0">{{ dashboard_admin_state.count_label }}</p>
+                    </div>
+                    <button class="btn btn-primary" type="button">
+                        <i data-lucide="plus" class="dash-nav-icon" aria-hidden="true"></i>
+                        {{ dashboard_admin_state.add_cta }}
+                    </button>
+                </div>
+
+                <div class="admin-empty-state">
+                    <p class="text-body-secondary mb-0 text-center">{{ dashboard_admin_state.empty_message }}</p>
+                </div>
+            </div>
+        </section>
+        {% else %}
+        <section class="card border-0 shadow-sm">
+            <div class="card-body p-4 p-lg-5 text-center">
+                <h2 class="h3 mb-2">{{ dashboard_section_title }}</h2>
+                <p class="text-body-secondary mb-0">Esta sección se construirá en la siguiente iteración del frontend.</p>
+            </div>
+        </section>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'main/js/dashboard.js' %}"></script>
+{% endblock %}
