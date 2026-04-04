@@ -1,8 +1,9 @@
+from rest_framework.pagination import PageNumberPagination
+
 from common.drf import AuditableModelViewSet
 from group.models import Group
 from group.serializers import GroupSerializer
 from main.views import render_admin_dashboard
-from rest_framework.pagination import PageNumberPagination
 
 
 def admin_groups(request):
