@@ -5,6 +5,9 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% if dashboard_section == 'audit' %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endif %}
 {% for stylesheet in dashboard_extra_css %}
 <link rel="stylesheet" href="{% static stylesheet %}">
 {% endfor %}
@@ -51,7 +54,7 @@
                     <li class="nav-item">
                         <a class="nav-link dash-tab {% if dashboard_section == 'audit' %}active{% endif %}" href="{% url 'dashboard-audit' %}">
                             <i data-lucide="file-text" class="dash-nav-icon" aria-hidden="true"></i>
-                            Auditoría
+                            Registro de cambios
                         </a>
                     </li>
                 </ul>
@@ -171,6 +174,10 @@
 {% endblock %}
 
 {% block extra_scripts %}
+{% if dashboard_section == 'audit' %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+{% endif %}
 <script src="{% static 'js/dashboard.js' %}"></script>
 {% for script in dashboard_extra_scripts %}
 <script src="{% static script %}"></script>

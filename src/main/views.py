@@ -4,14 +4,20 @@ SECTION_CONFIG = {
     "schedules": {
         "title": "Horarios",
         "template": "main/tabs/schedules.html",
+        "extra_css": [],
+        "extra_scripts": [],
     },
     "saved": {
         "title": "Guardados",
         "template": "main/tabs/saved.html",
+        "extra_css": [],
+        "extra_scripts": [],
     },
     "audit": {
-        "title": "Auditoría",
+        "title": "Registro de cambios",
         "template": "main/tabs/audit.html",
+        "extra_css": ["css/audit.css"],
+        "extra_scripts": ["js/audit.js"],
     },
 }
 
@@ -184,7 +190,7 @@ def dashboard(request, section="schedules"):
             "dashboard_section": current_section,
             "dashboard_section_title": route_config["title"],
             "dashboard_route_template": route_config["template"],
-            "dashboard_extra_css": [],
-            "dashboard_extra_scripts": [],
+            "dashboard_extra_css": route_config.get("extra_css", []),
+            "dashboard_extra_scripts": route_config.get("extra_scripts", []),
         },
     )

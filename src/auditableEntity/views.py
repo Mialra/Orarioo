@@ -1,9 +1,8 @@
 ﻿from datetime import datetime, time
 
-from django.db import models
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
-from rest_framework import permissions, viewsets
+from rest_framework import pagination, permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -15,18 +14,25 @@ from auditableEntity.audit import (
 )
 from auditableEntity.models import AuditActionType, AuditEntry
 from auditableEntity.serializers import AuditEntrySerializer
+from common.tenancy import get_active_team
 from common.export_utils import (
     REPORTLAB_AVAILABLE,
     build_csv_response,
     build_table_pdf_response,
     sanitize_filename_stem,
 )
-from user.models import CollaborationTeam, User
+from user.models import User
 
 
 class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
+    class AuditPagination(pagination.PageNumberPagination):
+        page_size = 7
+        page_size_query_param = "page_size"
+        max_page_size = 100
+
     queryset = AuditEntry.objects.select_related("actor").all()
     serializer_class = AuditEntrySerializer
+    pagination_class = AuditPagination
     permission_classes = [permissions.IsAuthenticated]
     ENTITY_FILTER_ALIASES = {
         "teacher": "teacher",
@@ -186,7 +192,8 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
     def get_queryset(self):
-        queryset = super().get_queryset().filter(actor_id__in=self._allowed_actor_ids())
+        active_team = get_active_team(self.request)
+        queryset = super().get_queryset().filter(team=active_team)
         queryset = self._apply_filters(queryset, self.request.query_params)
         return queryset.order_by("-occurred_at", "-id")
 
@@ -194,15 +201,10 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
         return set(self._allowed_users_queryset().values_list("id", flat=True))
 
     def _allowed_users_queryset(self):
-        current_user = self.request.user
-        team_ids = CollaborationTeam.objects.filter(members=current_user).values_list(
-            "id",
-            flat=True,
-        )
+        active_team = get_active_team(self.request)
         return (
             User.objects.filter(
-                models.Q(id=current_user.id)
-                | models.Q(collaboration_teams__id__in=team_ids)
+                collaboration_teams=active_team,
             )
             .distinct()
             .order_by("name", "family_name", "id")
