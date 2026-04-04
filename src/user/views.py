@@ -1,6 +1,8 @@
+from django.shortcuts import render
 from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -8,6 +10,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 from common.drf import AuditActorViewMixin
 from common.permissions import IsManagementUser
+from main.views import render_admin_dashboard
 from user.models import RoleChoices, User
 from user.serializers import (
     LoginSerializer,
@@ -17,6 +20,33 @@ from user.serializers import (
     UserSerializer,
     UserUpdateSerializer,
 )
+
+
+def sign_in(request):
+    return render(request, "auth/login.html")
+
+
+def sign_up(request):
+    return render(request, "auth/signup.html")
+
+
+def admin_users(request):
+    users = User.objects.filter(is_enabled=True).order_by("-created_at")
+    state = {
+        "title": "Gestión de Usuarios",
+        "description": "Administra el personal del centro, sus accesos y sus roles.",
+        "empty_message": "No hay usuarios registrados. Añade el primero para comenzar.",
+        "add_cta": "Añadir Usuario",
+    }
+
+    return render_admin_dashboard(
+        request,
+        "users",
+        {
+            "dashboard_admin_state": state,
+            "dashboard_admin_users": users,
+        },
+    )
 
 
 class IsAdministratorOrSelf(permissions.BasePermission):
@@ -69,8 +99,14 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
     - POST /api/users/me/ - Get current user data
     """
 
-    queryset = User.objects.all().order_by("-created_at")
+    class UserPagination(PageNumberPagination):
+        page_size = 9
+        page_size_query_param = "page_size"
+        max_page_size = 100
+
+    queryset = User.objects.filter(is_enabled=True).order_by("-created_at")
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = UserPagination
     serializer_action_classes = {
         "create": UserCreateSerializer,
         "managed_create": UserManagementCreateSerializer,
@@ -114,11 +150,11 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
         user = self.request.user
 
         if user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECCION]:
-            # Administrators and direccion see all users.
-            return User.objects.all().order_by("-created_at")
+            # Administrators and direccion see active users.
+            return User.objects.filter(is_enabled=True).order_by("-created_at")
 
         # Other users only see their own profile.
-        return User.objects.filter(id=user.id).order_by("-created_at")
+        return User.objects.filter(id=user.id, is_enabled=True).order_by("-created_at")
 
     @action(
         detail=False,

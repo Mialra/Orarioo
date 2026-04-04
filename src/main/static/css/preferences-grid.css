@@ -1,0 +1,131 @@
+.subject-pref-grid-wrap {
+    overflow-x: auto;
+}
+
+.pref-grid {
+    display: grid;
+    grid-template-columns: 6.25rem repeat(5, minmax(6.2rem, 1fr));
+    gap: 0.45rem;
+    min-width: 41rem;
+    align-items: center;
+    margin-top: 0.25rem;
+}
+
+.pref-grid .pref-grid-header {
+    font-size: 0.78rem;
+    color: #5b6370;
+    font-weight: 700;
+    text-align: center;
+    padding: 0.25rem;
+}
+
+.pref-hour {
+    text-align: left;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #556072;
+    padding: 0.25rem 0.3rem;
+}
+
+.subject-pref-cell {
+    border: 1px solid #d8deea;
+    border-radius: 0.45rem;
+    height: 2rem;
+    width: 100%;
+    cursor: pointer;
+    transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.subject-pref-cell:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+}
+
+.subject-pref-cell.state-AVAILABLE {
+    background: #dff5e6;
+    border-color: #9fd7b0;
+}
+
+.subject-pref-cell.state-PREFER_YES {
+    background: #bdecc8;
+    border-color: #43b66a;
+}
+
+.subject-pref-cell.state-PREFER_NO {
+    background: #fff0cc;
+    border-color: #f5c979;
+}
+
+.subject-pref-cell.state-UNAVAILABLE {
+    background: #ffdfe0;
+    border-color: #f2a1a5;
+}
+
+.pref-cell {
+    user-select: none;
+    min-width: 0;
+}
+
+.pref-cell.available {
+    background: #bbf7d0;
+    border-color: #86efac;
+}
+
+.pref-cell.prefer-yes {
+    background: #22c55e;
+    border-color: #16a34a;
+}
+
+.pref-cell.prefer-no {
+    background: #fde68a;
+    border-color: #facc15;
+}
+
+.pref-cell.unavailable {
+    background: #fca5a5;
+    border-color: #f87171;
+}
+
+.pref-state-AVAILABLE {
+    background: #dff5e6;
+    border-color: #9fd7b0;
+}
+
+.pref-state-PREFER_YES {
+    background: #bdecc8;
+    border-color: #43b66a;
+}
+
+.pref-state-PREFER_NO {
+    background: #fff0cc;
+    border-color: #f5c979;
+}
+
+.pref-state-UNAVAILABLE {
+    background: #ffdfe0;
+    border-color: #f2a1a5;
+}
+
+.admin-legend {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+    margin-top: 0.75rem;
+    justify-content: flex-end;
+}
+
+.admin-legend span {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+
+@media (max-width: 768px) {
+    .pref-grid {
+        min-width: 34rem;
+        grid-template-columns: 5.4rem repeat(5, minmax(5rem, 1fr));
+    }
+}

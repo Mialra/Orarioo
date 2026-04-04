@@ -1,0 +1,133 @@
+.admin-panel-tabs {
+    --admin-tab-gap: 18px;
+    padding: 1.5rem 3rem 0;
+    background: transparent;
+    border-bottom: 1px solid #d8e0eb;
+    box-shadow: none;
+}
+
+.admin-subtabs {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    flex-wrap: nowrap;
+    align-items: flex-end;
+    gap: var(--admin-tab-gap);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+}
+
+.admin-subtabs li {
+    display: flex;
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.admin-subtab {
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    color: #637389;
+    font-weight: 600;
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0 0 0.7rem;
+    margin-right: 0;
+    background: transparent;
+    text-decoration: none;
+}
+
+.admin-subtab:hover,
+.admin-subtab:focus-visible {
+    color: #1f5eff;
+    background: transparent;
+}
+
+.admin-subtab .dash-nav-icon {
+    color: inherit;
+}
+
+.admin-subtab.active,
+.admin-subtab.active:hover,
+.admin-subtab.active:focus-visible {
+    color: #1f5eff;
+    background: transparent;
+    border-bottom-color: #1f5eff;
+}
+
+.admin-panel-body {
+    padding: 1.5rem 1.5rem 2rem;
+}
+
+.admin-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.admin-panel-title {
+    margin: 0 0 0.25rem;
+    font-size: 1.5rem;
+    line-height: 1.2;
+}
+
+.admin-panel-copy,
+.admin-empty-message {
+    margin: 0;
+    color: var(--bs-secondary-color);
+}
+
+.admin-panel-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.admin-empty-message {
+    text-align: center;
+}
+
+@media (max-width: 991.98px) {
+    .admin-subtabs {
+        border-bottom: 0;
+        row-gap: 0;
+    }
+
+    .admin-panel-tabs {
+        padding: 1.25rem 1.5rem 0;
+    }
+
+    .admin-subtabs li {
+        flex: 1 1 0;
+    }
+
+    .admin-subtab {
+        margin-right: 0;
+        border-radius: 0;
+        padding: 0 0 0.65rem;
+        border-bottom-width: 2px;
+        white-space: nowrap;
+    }
+
+    .admin-subtab.active,
+    .admin-subtab.active:hover {
+        background: transparent;
+    }
+
+    .admin-panel-body {
+        padding: 1.5rem;
+    }
+
+    .admin-panel-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

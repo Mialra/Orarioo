@@ -1,0 +1,66 @@
+<section class="dash-panel dash-generator-card">
+    <div class="dash-panel-body">
+        <div class="dash-panel-header">
+            <div>
+                <h2 class="dash-panel-title">Generador Automático de Horarios</h2>
+                <p class="dash-panel-copy">Configura los datos necesarios y genera un horario optimizado automáticamente.</p>
+            </div>
+            <button type="button" class="dash-panel-close" aria-label="Cerrar panel">
+                <i data-lucide="x" aria-hidden="true"></i>
+            </button>
+        </div>
+
+        <div class="dash-metrics-grid">
+            <article class="dash-metric metric-blue">
+                <div class="dash-metric-body">
+                    <strong>0</strong>
+                    <span>Cursos</span>
+                </div>
+            </article>
+            <article class="dash-metric metric-green">
+                <div class="dash-metric-body">
+                    <strong>0</strong>
+                    <span>Profesores</span>
+                </div>
+            </article>
+            <article class="dash-metric metric-violet">
+                <div class="dash-metric-body">
+                    <strong>0</strong>
+                    <span>Asignaturas</span>
+                </div>
+            </article>
+            <article class="dash-metric metric-amber">
+                <div class="dash-metric-body">
+                    <strong>0</strong>
+                    <span>Aulas</span>
+                </div>
+            </article>
+        </div>
+
+        <div class="dash-criteria">
+            <h3 class="dash-criteria-title">Criterios de generación</h3>
+            <ul class="dash-criteria-list">
+                <li>Se respetarán las preferencias de días de los profesores.</li>
+                <li>Se evitarán conflictos de profesores y aulas.</li>
+                <li>Se distribuirá la carga horaria de forma equilibrada.</li>
+                <li>Podrás editar manualmente el horario después de generarlo.</li>
+            </ul>
+        </div>
+
+        <div class="dash-panel-actions">
+            <button type="button" class="btn btn-outline-secondary">Cancelar</button>
+            <button type="button" class="btn btn-primary">Generar horario</button>
+        </div>
+    </div>
+</section>
+
+<section class="alert alert-warning dash-warning" role="alert">
+    <h3 class="dash-warning-title">Configuración incompleta</h3>
+    <p class="dash-warning-copy">Para generar un horario, necesitas configurar los siguientes elementos en el panel de administración:</p>
+    <ul class="dash-warning-list">
+        <li>Al menos un curso.</li>
+        <li>Al menos un profesor.</li>
+        <li>Al menos una asignatura.</li>
+        <li>Al menos un aula.</li>
+    </ul>
+</section>

@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Orarioo | Sign Up{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock %}
+
+{% block content %}
+<main class="auth-shell container-fluid px-0">
+    <div class="row g-0 min-vh-100">
+        {% include 'auth/auth_branding.html' %}
+
+        <section class="col-12 col-lg-6 d-flex align-items-center justify-content-center p-3 p-md-4 p-xl-5">
+            <div class="card shadow-sm border-0 auth-card w-100">
+                <div class="card-body p-4 p-md-5">
+                    <header class="mb-4">
+                        <p class="text-uppercase fw-semibold small text-body-secondary mb-2">Registro</p>
+                        <h2 class="h3 mb-1">Crea tu cuenta</h2>
+                        <p class="text-body-secondary mb-0">Completa los datos para registrarte</p>
+                    </header>
+
+                    <div id="auth-alert" class="auth-alert alert" role="status" aria-live="polite"></div>
+
+                    <form id="signup-form" class="d-grid gap-3" novalidate>
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-semibold" for="given_name">Nombre</label>
+                                <input
+                                    id="given_name"
+                                    name="given_name"
+                                    class="form-control form-control-lg"
+                                    type="text"
+                                    autocomplete="given-name"
+                                    placeholder="Juan"
+                                    required
+                                >
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-semibold" for="family_name">Apellidos</label>
+                                <input
+                                    id="family_name"
+                                    name="family_name"
+                                    class="form-control form-control-lg"
+                                    type="text"
+                                    autocomplete="family-name"
+                                    placeholder="García"
+                                    required
+                                >
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="form-label fw-semibold d-flex align-items-center" for="role">
+                                Rol
+                                <button
+                                    type="button"
+                                    class="btn btn-link btn-sm p-0 ms-2 info-icon-btn"
+                                    data-bs-toggle="tooltip"
+                                    data-bs-placement="right"
+                                    title="Se usa para trazabilidad y auditoría de cambios que tu equipo realice en horarios."
+                                    aria-label="Información del rol"
+                                >
+                                    <i data-lucide="info" class="password-toggle-icon" aria-hidden="true"></i>
+                                </button>
+                            </label>
+                            <select id="role" name="role" class="form-select form-select-lg" required>
+                                <option value="direccion" selected>Dirección</option>
+                                <option value="administrator">Administrador</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="form-label fw-semibold" for="email">Correo electrónico</label>
+                            <input
+                                id="email"
+                                name="email"
+                                class="form-control form-control-lg"
+                                type="email"
+                                inputmode="email"
+                                autocomplete="email"
+                                placeholder="usuario@escuela.edu"
+                                required
+                            >
+                        </div>
+
+                        <div>
+                            <label class="form-label fw-semibold" for="password">Contraseña</label>
+                            <div class="input-group input-group-lg">
+                                <input
+                                    id="password"
+                                    name="password"
+                                    class="form-control"
+                                    type="password"
+                                    autocomplete="new-password"
+                                    placeholder="Crea una contraseña"
+                                    required
+                                >
+                                <button type="button" class="btn btn-outline-secondary password-toggle-btn" id="password-toggle" aria-label="Mostrar contraseña" title="Mostrar contraseña">
+                                    <span class="password-toggle-icon-slot" aria-hidden="true"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="form-label fw-semibold" for="password_confirm">Confirmar contraseña</label>
+                            <div class="input-group input-group-lg">
+                                <input
+                                    id="password_confirm"
+                                    name="password_confirm"
+                                    class="form-control"
+                                    type="password"
+                                    autocomplete="new-password"
+                                    placeholder="Repite la contraseña"
+                                    required
+                                >
+                                <button type="button" class="btn btn-outline-secondary password-toggle-btn" id="password-confirm-toggle" aria-label="Mostrar contraseña" title="Mostrar contraseña">
+                                    <span class="password-toggle-icon-slot" aria-hidden="true"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button id="signup-submit" class="btn btn-primary btn-lg auth-submit" type="submit">
+                            <span class="btn-label">Crear cuenta</span>
+                            <span class="btn-loader" aria-hidden="true"></span>
+                        </button>
+
+                        <div class="text-center border-top pt-3 mt-1">
+                            <p class="mb-0">¿Ya tienes cuenta? <a class="fw-semibold auth-link-btn" href="{% url 'sign-in' %}">Inicia sesión</a></p>
+                        </div>
+                    </form>
+
+                    <p class="small text-body-secondary text-center mt-4 mb-0 px-md-4">
+                        Al continuar, aceptas los Términos de Servicio y la Política de Privacidad de Orarioo (Por definir).
+                    </p>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/signup.js' %}"></script>
+{% endblock %}
