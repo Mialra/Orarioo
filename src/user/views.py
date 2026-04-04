@@ -2,6 +2,7 @@ from django.shortcuts import render
 from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -98,8 +99,14 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
     - POST /api/users/me/ - Get current user data
     """
 
+    class UserPagination(PageNumberPagination):
+        page_size = 9
+        page_size_query_param = "page_size"
+        max_page_size = 100
+
     queryset = User.objects.all().order_by("-created_at")
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = UserPagination
     serializer_action_classes = {
         "create": UserCreateSerializer,
         "managed_create": UserManagementCreateSerializer,

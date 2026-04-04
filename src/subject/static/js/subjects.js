@@ -463,7 +463,7 @@
         list: {
             container: elements.listContainer,
             paginationContainer: elements.paginationContainer,
-            pageSize: 15,
+            pageSize: 9,
             loadingMessage: "Cargando asignaturas...",
             emptyIcon: "book-open-text",
             emptyTitle: "No hay asignaturas",

@@ -66,7 +66,11 @@ ADMIN_ROUTE_CONFIG = {
     },
     "subjects": {
         "template": "administration_subjects.html",
-        "extra_css": ["css/teachers-admin.css", "css/preferences-grid.css", "css/subjects-admin.css"],
+        "extra_css": [
+            "css/teachers-admin.css",
+            "css/preferences-grid.css",
+            "css/subjects-admin.css",
+        ],
         "extra_scripts": [
             "js/admin-core/dom-helpers.js",
             "js/admin-core/api.js",

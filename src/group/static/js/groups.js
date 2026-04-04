@@ -157,7 +157,7 @@
         list: {
             container: elements.listContainer,
             paginationContainer: elements.paginationContainer,
-            pageSize: 15,
+            pageSize: 9,
             loadingMessage: "Cargando cursos...",
             emptyIcon: "users-round",
             emptyTitle: "No hay cursos",

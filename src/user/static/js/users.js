@@ -155,7 +155,7 @@
         list: {
             container: elements.listContainer,
             paginationContainer: elements.paginationContainer,
-            pageSize: 5,
+            pageSize: 9,
             loadingMessage: "Cargando usuarios...",
             emptyIcon: "users",
             emptyTitle: "No hay usuarios",

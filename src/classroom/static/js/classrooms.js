@@ -136,7 +136,7 @@
         list: {
             container: elements.listContainer,
             paginationContainer: elements.paginationContainer,
-            pageSize: 20,
+            pageSize: 9,
             loadingMessage: "Cargando aulas...",
             emptyIcon: "school",
             emptyTitle: "No hay aulas",
