@@ -60,8 +60,19 @@ ADMIN_ROUTE_CONFIG = {
     },
     "classrooms": {
         "template": "administration_classrooms.html",
-        "extra_css": [],
-        "extra_scripts": [],
+        "extra_css": ["css/classrooms-admin.css"],
+        "extra_scripts": [
+            "js/admin-core/dom-helpers.js",
+            "js/admin-core/api.js",
+            "js/admin-core/ui-state.js",
+            "js/admin-core/form-utils.js",
+            "js/admin-core/modal-utils.js",
+            "js/admin-core/list-renderer.js",
+            "js/admin-core/pagination.js",
+            "js/admin-core/crud-module.js",
+            "js/admin-base.js",
+            "js/classrooms.js",
+        ],
     },
 }
 
