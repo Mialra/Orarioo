@@ -1,8 +1,9 @@
+from rest_framework.pagination import PageNumberPagination
+
 from classroom.models import Classroom
 from classroom.serializers import ClassroomSerializer
 from common.drf import AuditableModelViewSet
 from main.views import render_admin_dashboard
-from rest_framework.pagination import PageNumberPagination
 
 
 def admin_classrooms(request):

@@ -78,7 +78,7 @@
     background: #fca5a5;
 }
 
-/* Backward-compatible aliases while the template is being stabilized. */
+
 .subject-preferences-panel {
     border: 1px solid #d9dfef;
     border-radius: 0.7rem;
@@ -105,8 +105,8 @@
 }
 
 #admin-teachers-list .admin-action-btn {
-    width: 1.3rem;
-    height: 1.3rem;
+    width: 1.6rem;
+    height: 1.6rem;
 }
 
 #admin-teachers-list .admin-action-btn i {

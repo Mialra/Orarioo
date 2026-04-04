@@ -194,7 +194,7 @@
                                     className: "flex-grow-1",
                                     children: [
                                         dom.createElement("h3", {
-                                            className: "h6 fw-bold mb-2",
+                                            className: "h6 mb-2",
                                             text: resolveTeacherName(teacher),
                                         }),
                                         dom.createElement("div", {
