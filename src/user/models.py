@@ -7,7 +7,7 @@ from namedEntity.models import NamedEntity
 
 class RoleChoices(models.TextChoices):
     ADMINISTRATOR = "administrator", _("Administrator")
-    DIRECTOR = "director", _("Director")
+    DIRECCION = "direccion", _("Direccion")
 
 
 class CustomUserManager(BaseUserManager):
@@ -61,8 +61,16 @@ class User(NamedEntity, AbstractUser):
     role = models.CharField(
         max_length=20,
         choices=RoleChoices.choices,
-        default=RoleChoices.DIRECTOR,
+        default=RoleChoices.DIRECCION,
         help_text=_("User role in the system"),
+    )
+    active_team = models.ForeignKey(
+        "user.CollaborationTeam",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="active_users",
+        help_text=_("Current collaboration team used as tenant context"),
     )
     is_enabled = models.BooleanField(
         default=True, db_column="activo", help_text=_("Indicates if the user is active")
@@ -108,6 +116,65 @@ class User(NamedEntity, AbstractUser):
         """Checks if the user is an administrator"""
         return self.role == RoleChoices.ADMINISTRATOR
 
-    def is_director(self):
-        """Checks if the user is a director"""
-        return self.role == RoleChoices.DIRECTOR
+    def is_direccion(self):
+        """Checks if the user is direccion"""
+        return self.role == RoleChoices.DIRECCION
+
+
+class CollaborationTeam(NamedEntity):
+    """Group of users that share audit visibility scope."""
+
+    members = models.ManyToManyField(
+        User,
+        related_name="collaboration_teams",
+        blank=True,
+    )
+
+    class Meta:
+        db_table = "collaboration_team"
+        ordering = ["name", "id"]
+
+    def __str__(self):
+        return self.name
+
+
+class CollaborationTeamInvitationStatus(models.TextChoices):
+    PENDING = "pending", _("Pending")
+    ACCEPTED = "accepted", _("Accepted")
+    REJECTED = "rejected", _("Rejected")
+
+
+class CollaborationTeamInvitation(models.Model):
+    team = models.ForeignKey(
+        CollaborationTeam,
+        on_delete=models.CASCADE,
+        related_name="invitations",
+    )
+    invited_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="team_invitations",
+    )
+    invited_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="sent_team_invitations",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=CollaborationTeamInvitationStatus.choices,
+        default=CollaborationTeamInvitationStatus.PENDING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "collaboration_team_invitation"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["invited_user", "status"]),
+            models.Index(fields=["team", "invited_user", "status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.invited_user.email} -> {self.team.name} ({self.status})"

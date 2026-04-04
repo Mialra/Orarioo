@@ -1,10 +1,24 @@
-from common.drf import AuditableModelViewSet
+from django.db.models.functions import Lower
+from rest_framework.pagination import PageNumberPagination
+
+from common.drf import TeamScopedAuditableModelViewSet
+from main.views import render_admin_dashboard
 from teacher.models import Teacher
 from teacher.serializers import TeacherSerializer
 
 
-class TeacherViewSet(AuditableModelViewSet):
+def admin_teachers(request):
+    return render_admin_dashboard(request, "teachers")
+
+
+class TeacherViewSet(TeamScopedAuditableModelViewSet):
     """CRUD API for teachers."""
 
-    queryset = Teacher.objects.all()
+    class TeacherPagination(PageNumberPagination):
+        page_size = 9
+        page_size_query_param = "page_size"
+        max_page_size = 100
+
+    queryset = Teacher.objects.all().order_by(Lower("name"), "id")
     serializer_class = TeacherSerializer
+    pagination_class = TeacherPagination

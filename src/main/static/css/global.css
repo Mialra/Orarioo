@@ -1,0 +1,32 @@
+:root {
+    --orarioo-primary: #2458f0;
+    --orarioo-primary-dark: #1239b2;
+    --orarioo-secondary: #2da3ff;
+    --orarioo-text: #1f2433;
+    --orarioo-text-light: #64748b;
+    --orarioo-border: #e5e9f2;
+    --orarioo-bg-light: #f8fafc;
+    --orarioo-danger-bg: #fee2e2;
+    --orarioo-danger-text: #b91c1c;
+    --orarioo-success-bg: #dcfce7;
+    --orarioo-success-text: #166534;
+    --orarioo-info-bg: #dbeafe;
+    --orarioo-info-text: #1e40af;
+    --orarioo-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --orarioo-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --orarioo-shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.12);
+    --bs-primary: var(--orarioo-primary);
+    --bs-primary-rgb: 36, 88, 240;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+.orarioo-body {
+    font-family: "Manrope", "Segoe UI", sans-serif;
+    color: var(--orarioo-text);
+    background: #ffffff;
+    line-height: 1.5;
+}

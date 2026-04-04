@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from auditableEntity.models import AuditActionType, AuditEntry
 from classroom.models import Classroom
 from common.test_utils import AuthenticatedAdminAPIMixin
 
@@ -20,7 +21,7 @@ class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(Classroom.objects.first().name, "Aula 1A")
 
     def test_list_and_retrieve_classroom(self):
-        classroom = Classroom.objects.create(name="Laboratorio 2")
+        classroom = Classroom.objects.create(name="Laboratorio 2", team=self.team)
 
         list_response = self.client.get(reverse("classroom-list"))
         detail_response = self.client.get(
@@ -32,7 +33,11 @@ class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(detail_response.data["name"], "Laboratorio 2")
 
     def test_update_classroom(self):
-        classroom = Classroom.objects.create(name="Aula Antiguo Nombre")
+        classroom = Classroom.objects.create(
+            name="Aula Antiguo Nombre",
+            team=self.team,
+        )
+        AuditEntry.objects.all().delete()
 
         payload = {"name": "Aula Nuevo Nombre"}
 
@@ -43,9 +48,23 @@ class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         classroom.refresh_from_db()
         self.assertEqual(classroom.name, "Aula Nuevo Nombre")
+        entry = AuditEntry.objects.filter(entity_type="classroom").latest("id")
+        self.assertEqual(entry.action_type, AuditActionType.UPDATE)
+        self.assertEqual(entry.entity_name, "Aula Nuevo Nombre")
+        self.assertEqual(entry.actor, self.user)
+        self.assertEqual(
+            entry.changed_fields,
+            [
+                {
+                    "campo": "Nombre",
+                    "valor_anterior": "Aula Antiguo Nombre",
+                    "valor_nuevo": "Aula Nuevo Nombre",
+                }
+            ],
+        )
 
     def test_delete_classroom(self):
-        classroom = Classroom.objects.create(name="Aula a eliminar")
+        classroom = Classroom.objects.create(name="Aula a eliminar", team=self.team)
 
         response = self.client.delete(reverse("classroom-detail", args=[classroom.id]))
 
@@ -68,18 +87,18 @@ class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("name", response.data)
 
-    def test_normalize_optional_classroom_type(self):
+    def test_create_non_shared_classroom(self):
         response = self.client.post(
             reverse("classroom-list"),
-            {"name": "Aula 3B", "classroom_type": "   LAB   "},
+            {"name": "Aula 3B", "is_shared": False},
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["classroom_type"], "LAB")
+        self.assertEqual(response.data["is_shared"], False)
 
     def test_reject_case_insensitive_duplicate_name(self):
-        Classroom.objects.create(name="Aula Norte")
+        Classroom.objects.create(name="Aula Norte", team=self.team)
 
         response = self.client.post(
             reverse("classroom-list"),

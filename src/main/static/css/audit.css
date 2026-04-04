@@ -1,0 +1,369 @@
+.audit-panel {
+    border: 1px solid #d9e3f2;
+}
+
+.audit-filters {
+    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+    border: 1px solid #e2eaf8;
+    border-radius: 1rem;
+    box-shadow: 0 10px 24px rgba(26, 53, 113, 0.06);
+}
+
+.audit-filters-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+}
+
+.audit-toolbar-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.75fr) minmax(280px, 1fr);
+    gap: 1.2rem;
+    align-items: stretch;
+}
+
+.audit-main-filters {
+    border: 1px solid #e4e9f5;
+    border-radius: 0.9rem;
+    background: #ffffff;
+    padding: 0.95rem;
+}
+
+.audit-main-filters-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.audit-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.audit-label-icon {
+    margin-right: 0.2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    color: #5b6f8f;
+    vertical-align: -0.125em;
+}
+
+.audit-label-icon svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+.audit-date-zone {
+    border: 1px solid #d9e6ff;
+    border-radius: 0.95rem;
+    background: linear-gradient(180deg, #f7faff 0%, #eef4ff 100%);
+    padding: 0.95rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.audit-control {
+    border: 1px solid #d8e0ef;
+    border-radius: 0.62rem;
+    background: #ffffff;
+    padding: 0.6rem 0.75rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.audit-control:hover {
+    border-color: #bdcade;
+}
+
+.audit-control:focus {
+    border-color: #6da0ff;
+    box-shadow: 0 0 0 0.2rem rgba(66, 133, 244, 0.15);
+}
+
+.audit-actions-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.audit-actions-primary {
+    display: flex;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+}
+
+.audit-btn-primary {
+    background: linear-gradient(180deg, #2f73f7 0%, #2359cf 100%);
+    border: 0;
+    color: #ffffff;
+    border-radius: 0.65rem;
+    padding: 0.58rem 1rem;
+    font-weight: 700;
+    box-shadow: 0 7px 16px rgba(36, 93, 214, 0.26);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.audit-btn-primary:hover,
+.audit-btn-primary:focus {
+    color: #ffffff;
+    filter: brightness(1.03);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(36, 93, 214, 0.28);
+}
+
+.audit-btn-ghost {
+    border: 1px solid #d4dceb;
+    border-radius: 0.65rem;
+    color: #3f5578;
+    background: #ffffff;
+    padding: 0.56rem 0.95rem;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.audit-btn-ghost:hover,
+.audit-btn-ghost:focus {
+    background: #f5f8ff;
+    border-color: #becce6;
+    color: #2b3f63;
+}
+
+.audit-export-group {
+    display: inline-flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid #e3eaf8;
+    background: #fbfcff;
+}
+
+.audit-btn-export {
+    border: 1px solid #cfdcf4;
+    border-radius: 0.62rem;
+    background: #ffffff;
+    color: #2d4f91;
+    font-weight: 600;
+    padding: 0.5rem 0.82rem;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.audit-btn-export:hover,
+.audit-btn-export:focus {
+    border-color: #9db8ee;
+    background: #eef4ff;
+    color: #213f79;
+}
+
+.audit-table {
+    min-width: 940px;
+}
+
+.audit-date-range-input {
+    cursor: pointer;
+    border-color: #cfdbf5;
+    background:
+        linear-gradient(180deg, #ffffff 0%, #f6f9ff 100%),
+        #ffffff;
+    background-repeat: no-repeat;
+    background-position: right 0.8rem center;
+    background-size: auto;
+    padding-right: 2.4rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.audit-date-range-input:focus {
+    border-color: #8db1ff;
+    box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.18);
+}
+
+.audit-date-range-input::placeholder {
+    color: #7a8aa6;
+}
+
+.audit-date-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.audit-chip {
+    border: 1px solid #d6deee;
+    color: #445a7f;
+    background: #f5f7fb;
+    border-radius: 999px;
+    padding: 0.28rem 0.68rem;
+    line-height: 1.2;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.audit-chip:hover,
+.audit-chip:focus {
+    background: #eaf1ff;
+    border-color: #a8c2f4;
+    color: #234fbe;
+}
+
+.audit-chip.is-active {
+    background: #2f66f4;
+    border-color: #2f66f4;
+    color: #ffffff;
+}
+
+.audit-date-hint {
+    margin-bottom: 0;
+    color: #687994;
+    font-size: 0.8rem;
+}
+
+.audit-table thead th {
+    white-space: nowrap;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6f7f98;
+    background: #f8fbff;
+}
+
+.audit-table td {
+    vertical-align: top;
+    font-size: 0.92rem;
+}
+
+.audit-cell-detail,
+.audit-cell-changes {
+    max-width: 320px;
+    white-space: pre-wrap;
+}
+
+.audit-detail-button {
+    width: 1.9rem;
+    height: 1.9rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    line-height: 1;
+    color: #2563eb;
+    border-color: #bdd2ff;
+    background: #eaf1ff;
+}
+
+.audit-detail-icon {
+    width: 0.92rem;
+    height: 0.92rem;
+    display: block;
+    margin: auto;
+}
+
+.audit-detail-button:hover,
+.audit-detail-button:focus {
+    color: #1f4fc4;
+    border-color: #9fbcff;
+    background: #dce8ff;
+}
+
+.audit-action-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.2rem 0.58rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1;
+    background: #eef2f8;
+    color: #56657d;
+}
+
+.audit-action-create {
+    background: #daf3df;
+    color: #1d7a3c;
+}
+
+.audit-action-update {
+    background: #efe5ff;
+    color: #6d28d9;
+}
+
+.audit-action-delete {
+    background: #f7dde0;
+    color: #b1313b;
+}
+
+.modal-subtitle {
+    margin-bottom: 0.75rem;
+    color: #5d6f8f;
+}
+
+.audit-detail-list {
+    margin: 0;
+    padding-left: 1.2rem;
+}
+
+.audit-detail-list li {
+    margin-bottom: 0.45rem;
+    color: #1f3354;
+}
+
+.audit-summary {
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.audit-pagination-wrap {
+    min-height: 2rem;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.audit-pagination-wrap .pagination {
+    margin: 0;
+}
+
+.audit-footer {
+    justify-content: center !important;
+}
+
+@media (max-width: 1199.98px) {
+    .audit-toolbar-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .audit-main-filters-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 767.98px) {
+    .audit-main-filters-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .audit-actions-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .audit-actions-primary,
+    .audit-export-group {
+        width: 100%;
+    }
+
+    .audit-actions-primary .btn,
+    .audit-export-group .btn {
+        flex: 1 1 auto;
+        text-align: center;
+        justify-content: center;
+    }
+}

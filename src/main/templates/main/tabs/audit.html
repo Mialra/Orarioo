@@ -1,0 +1,133 @@
+<section class="dash-panel audit-panel">
+    <div class="dash-panel-body">
+        <div class="dash-panel-header mb-4">
+            <div>
+                <h2 class="dash-panel-title mb-2">{{ dashboard_section_title }}</h2>
+                <p class="dash-panel-copy">Consulta y exporta los eventos de tu equipo activo.</p>
+            </div>
+        </div>
+
+        <div class="audit-filters card border-0">
+            <div class="card-body">
+                <form id="audit-filters-form" class="audit-filters-form" novalidate>
+                    <div class="audit-toolbar-grid">
+                        <section class="audit-main-filters" aria-label="Filtros principales">
+                            <div class="audit-main-filters-grid">
+                                <div class="audit-field">
+                                    <label for="audit-filter-entity" class="form-label fw-semibold">
+                                        <span class="audit-label-icon" aria-hidden="true"><i data-lucide="layout-grid"></i></span>
+                                        Elemento
+                                    </label>
+                                    <select id="audit-filter-entity" class="form-select audit-control">
+                                        <option value="">Todas</option>
+                                        <option value="profesor">Profesor</option>
+                                        <option value="aula">Aula</option>
+                                        <option value="grupo">Grupo</option>
+                                        <option value="asignatura">Asignatura</option>
+                                        <option value="horario">Horario</option>
+                                        <option value="usuario">Usuario</option>
+                                    </select>
+                                </div>
+                                <div class="audit-field">
+                                    <label for="audit-filter-action" class="form-label fw-semibold">
+                                        <span class="audit-label-icon" aria-hidden="true"><i data-lucide="settings-2"></i></span>
+                                        Acción
+                                    </label>
+                                    <select id="audit-filter-action" class="form-select audit-control">
+                                        <option value="">Todas</option>
+                                        <option value="creación">Creación</option>
+                                        <option value="modificación">Modificación</option>
+                                        <option value="borrado">Borrado</option>
+                                    </select>
+                                </div>
+                                <div class="audit-field">
+                                    <label for="audit-filter-user" class="form-label fw-semibold">
+                                        <span class="audit-label-icon" aria-hidden="true"><i data-lucide="user"></i></span>
+                                        Usuario
+                                    </label>
+                                    <select id="audit-filter-user" class="form-select audit-control">
+                                        <option value="">Todos</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="audit-date-zone" aria-label="Rango de fechas">
+                            <label for="audit-filter-date-range" class="form-label fw-semibold">
+                                <span class="audit-label-icon" aria-hidden="true"><i data-lucide="calendar-days"></i></span>
+                                Rango de fechas
+                            </label>
+                            <input
+                                id="audit-filter-date-range"
+                                type="text"
+                                class="form-control audit-control audit-date-range-input"
+                                placeholder="Selecciona fecha de inicio y fin"
+                                autocomplete="off"
+                                readonly
+                            />
+                            <div class="audit-date-presets" role="group" aria-label="Atajos de rango de fechas">
+                                <button type="button" class="audit-chip" data-audit-range-preset="today">Hoy</button>
+                                <button type="button" class="audit-chip" data-audit-range-preset="last7">7 días</button>
+                                <button type="button" class="audit-chip" data-audit-range-preset="last30">30 días</button>
+                                <button type="button" class="audit-chip" data-audit-range-preset="month">Este mes</button>
+                            </div>
+                            <div class="form-text audit-date-hint">Desliza con la rueda sobre el calendario para cambiar de mes.</div>
+                        </section>
+                    </div>
+
+                    <div class="audit-actions-row">
+                        <div class="audit-actions-primary">
+                            <button id="audit-apply-filters" type="submit" class="btn audit-btn-primary">Aplicar filtros</button>
+                            <button id="audit-reset-filters" type="button" class="btn audit-btn-ghost">Limpiar</button>
+                        </div>
+                        <div class="audit-export-group" aria-label="Exportación de datos">
+                            <button id="audit-export-csv" type="button" class="btn audit-btn-export"><i data-lucide="download" aria-hidden="true"></i> CSV</button>
+                            <button id="audit-export-pdf" type="button" class="btn audit-btn-export"><i data-lucide="download" aria-hidden="true"></i> PDF</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="audit-error" class="alert alert-danger mt-3 d-none" role="alert"></div>
+
+        <div class="table-responsive mt-3">
+            <table class="table align-middle audit-table mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Fecha</th>
+                        <th scope="col">Usuario</th>
+                        <th scope="col">Entidad</th>
+                        <th scope="col">Acción</th>
+                        <th scope="col">Resumen</th>
+                        <th scope="col"></th>
+                    </tr>
+                </thead>
+                <tbody id="audit-table-body">
+                    <tr>
+                        <td colspan="6" class="text-center text-secondary py-4">Cargando actividad...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="audit-footer d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-3">
+            <div id="audit-pagination" class="audit-pagination-wrap" aria-label="Paginación de registro de cambios"></div>
+        </div>
+
+        <div class="modal fade" id="auditDetailModal" tabindex="-1" aria-labelledby="auditDetailModalTitle" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="auditDetailModalTitle">Detalle del cambio</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="modal-subtitle" id="auditDetailModalSubtitle">Consulta ampliada del cambio seleccionado.</p>
+                        <div id="auditDetailModalBody"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

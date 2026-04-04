@@ -2,7 +2,64 @@ from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from rest_framework import serializers
 
-from user.models import RoleChoices, User
+from user.models import (
+    CollaborationTeam,
+    CollaborationTeamInvitation,
+    CollaborationTeamInvitationStatus,
+    RoleChoices,
+    User,
+)
+
+
+class CollaborationTeamSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CollaborationTeam
+        fields = ["id", "name"]
+        read_only_fields = fields
+
+
+class CollaborationTeamCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255)
+
+    def validate_name(self, value):
+        normalized = value.strip()
+        if not normalized:
+            raise serializers.ValidationError("Team name cannot be empty.")
+        return normalized
+
+
+class CollaborationTeamInviteSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    team_id = serializers.IntegerField(required=False)
+
+
+class CollaborationTeamInvitationSerializer(serializers.ModelSerializer):
+    team = CollaborationTeamSerializer(read_only=True)
+    invited_by_email = serializers.EmailField(source="invited_by.email", read_only=True)
+    invited_by_name = serializers.CharField(source="invited_by.name", read_only=True)
+
+    class Meta:
+        model = CollaborationTeamInvitation
+        fields = [
+            "id",
+            "team",
+            "status",
+            "invited_by_email",
+            "invited_by_name",
+            "created_at",
+            "responded_at",
+        ]
+        read_only_fields = fields
+
+
+class CollaborationTeamInvitationRespondSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=["accept", "reject"])
+
+    def to_status(self):
+        action = self.validated_data["action"]
+        if action == "accept":
+            return CollaborationTeamInvitationStatus.ACCEPTED
+        return CollaborationTeamInvitationStatus.REJECTED
 
 
 class UserNameEmailValidationMixin:
@@ -26,6 +83,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     given_name = serializers.CharField(source="name")
     role_display = serializers.SerializerMethodField()
+    active_team = CollaborationTeamSerializer(read_only=True)
+    collaboration_teams = CollaborationTeamSerializer(many=True, read_only=True)
 
     class Meta:
         model = User
@@ -36,6 +95,8 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "role",
             "role_display",
+            "active_team",
+            "collaboration_teams",
             "is_enabled",
             "created_at",
             "updated_at",
@@ -62,8 +123,8 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
     )
     role = serializers.ChoiceField(
         choices=RoleChoices.choices,
-        default=RoleChoices.DIRECTOR,
-        help_text="User role (administrator, director)",
+        default=RoleChoices.DIRECCION,
+        help_text="User role (administrator, direccion)",
     )
 
     class Meta:
@@ -102,8 +163,8 @@ class UserManagementCreateSerializer(
     given_name = serializers.CharField(source="name")
     role = serializers.ChoiceField(
         choices=RoleChoices.choices,
-        default=RoleChoices.DIRECTOR,
-        help_text="User role (administrator, director)",
+        default=RoleChoices.DIRECCION,
+        help_text="User role (administrator, direccion)",
     )
     can_login = serializers.BooleanField(default=False)
     password = serializers.CharField(

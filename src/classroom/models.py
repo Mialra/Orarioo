@@ -2,11 +2,11 @@ from django.db import models
 from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
 
-from auditableEntity.models import AuditableEntity
+from auditableEntity.models import AuditableEntity, TeamScopedModel
 
 
-class Classroom(AuditableEntity):
-    classroom_type = models.CharField(max_length=150, blank=True, default="")
+class Classroom(TeamScopedModel, AuditableEntity):
+    is_shared = models.BooleanField(default=True)
 
     class Meta:
         db_table = "classroom"
@@ -15,7 +15,7 @@ class Classroom(AuditableEntity):
             UniqueConstraint(
                 Lower("name"),
                 name="classroom_name_ci_unique",
-            )
+            ),
         ]
 
     def __str__(self):

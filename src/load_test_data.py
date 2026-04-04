@@ -37,6 +37,7 @@ from subject.models import Subject  # noqa: E402
 from subject.models import SubjectTimePreferenceState  # noqa: E402
 from subject.models import SubjectType  # noqa: E402; noqa: E402
 from teacher.models import Teacher, TeacherTimePreferenceState  # noqa: E402
+from user.models import CollaborationTeam  # noqa: E402
 
 User = get_user_model()
 
@@ -89,6 +90,7 @@ def clear_existing_data():
     Group.objects.all().delete()
     Classroom.objects.all().delete()
     User.objects.filter(email__contains="test").delete()
+    CollaborationTeam.objects.filter(members__isnull=True).delete()
     print("✅ Existing test data cleared")
 
 
@@ -108,27 +110,35 @@ def create_users():
     users.append(admin)
     print(f"  ✓ Created administrator: {admin.email}")
 
-    # Directors for audit/review flow.
-    directors_data = [
+    # Direccion users for audit/review flow.
+    direccion_data = [
         ("direccion.academica@test.com", "María", "García López"),
         ("jefatura.estudios@test.com", "Juan", "Martínez Ruiz"),
     ]
 
-    for email, name, family_name in directors_data:
-        director = User.objects.create_user(
+    for email, name, family_name in direccion_data:
+        direccion_user = User.objects.create_user(
             email=email,
-            password="director123",
+            password="direccion123",
             name=name,
             family_name=family_name,
-            role="director",
+            role="direccion",
         )
-        users.append(director)
-        print(f"  ✓ Created director: {director.email}")
+        users.append(direccion_user)
+        print(f"  ✓ Created direccion user: {direccion_user.email}")
 
-    return users
+    admin_team = CollaborationTeam.objects.create(name=f"Equipo {admin.email}")
+    admin_team.members.set(users)
+    for user in users:
+        user.active_team = admin_team
+        user.save(update_fields=["active_team"])
+
+    print(f"  ✓ Created collaboration team for {admin.email}: {admin_team.name}")
+
+    return users, admin_team
 
 
-def create_teachers():
+def create_teachers(team):
     """Create realistic teacher catalog with availability constraints."""
     print("\n👨‍🏫 Creating teachers...")
 
@@ -287,6 +297,7 @@ def create_teachers():
             max_weekly_hours=max_hours,
             working_hours=0,
             time_preferences=time_preferences,
+            team=team,
             created_by="system",
         )
         teachers[key] = teacher
@@ -295,7 +306,7 @@ def create_teachers():
     return teachers
 
 
-def create_groups():
+def create_groups(team):
     """Create groups from 1º Infantil to 4º ESO (single line per year)."""
     print("\n👥 Creating groups...")
 
@@ -317,52 +328,60 @@ def create_groups():
 
     groups = {}
     for name, stage in groups_data:
-        group = Group.objects.create(name=name, stage=stage, created_by="system")
+        group = Group.objects.create(
+            name=name,
+            stage=stage,
+            team=team,
+            created_by="system",
+        )
         groups[name] = group
         print(f"  ✓ Created group: {group.name}")
 
     return groups
 
 
-def create_classrooms():
-    """Create classrooms with realistic room types."""
+def create_classrooms(team):
+    """Create classrooms with shared/non-shared metadata."""
     print("\n🏫 Creating classrooms...")
 
     classrooms_data = [
-        ("Aula 1º Infantil", "EARLY"),
-        ("Aula 2º Infantil", "EARLY"),
-        ("Aula 3º Infantil", "EARLY"),
-        ("Aula 1º Primaria", "STANDARD"),
-        ("Aula 2º Primaria", "STANDARD"),
-        ("Aula 3º Primaria", "STANDARD"),
-        ("Aula 4º Primaria", "STANDARD"),
-        ("Aula 5º Primaria", "STANDARD"),
-        ("Aula 6º Primaria", "STANDARD"),
-        ("Aula 1º ESO", "STANDARD"),
-        ("Aula 2º ESO", "STANDARD"),
-        ("Aula 3º ESO", "STANDARD"),
-        ("Aula 4º ESO", "STANDARD"),
-        ("Laboratorio", "LAB"),
-        ("Gimnasio", "GYM"),
-        ("Aula de Música", "MUSIC"),
-        ("Aula de Plástica", "ART"),
-        ("Aula de Tecnología", "TECH"),
+        ("Aula 1º Infantil", False),
+        ("Aula 2º Infantil", False),
+        ("Aula 3º Infantil", False),
+        ("Aula 1º Primaria", False),
+        ("Aula 2º Primaria", False),
+        ("Aula 3º Primaria", False),
+        ("Aula 4º Primaria", False),
+        ("Aula 5º Primaria", False),
+        ("Aula 6º Primaria", False),
+        ("Aula 1º ESO", False),
+        ("Aula 2º ESO", False),
+        ("Aula 3º ESO", False),
+        ("Aula 4º ESO", False),
+        ("Laboratorio", True),
+        ("Gimnasio", True),
+        ("Aula de Música", True),
+        ("Aula de Plástica", True),
+        ("Aula de Tecnología", True),
     ]
 
     classrooms = []
-    for name, classroom_type in classrooms_data:
+    for name, is_shared in classrooms_data:
         classroom = Classroom.objects.create(
             name=name,
-            classroom_type=classroom_type,
+            is_shared=is_shared,
+            team=team,
             created_by="system",
         )
         classrooms.append(classroom)
-        print(f"  ✓ Created classroom: {classroom.name} [{classroom.classroom_type}]")
+        print(
+            f"  ✓ Created classroom: {classroom.name} [{'shared' if classroom.is_shared else 'exclusive'}]"
+        )
 
     return classrooms
 
 
-def create_subjects(teachers, groups):
+def create_subjects(teachers, groups, team):  # noqa: C901
     """Create realistic curriculum-focused subjects, emphasizing Primary complexity."""
     print("\n📚 Creating subjects...")
 
@@ -414,7 +433,6 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRESCHOOL,
                     "teacher_key": "ef_1",
                     "group_name": grade,
-                    "required_classroom_type": "GYM",
                     "time_preferences": build_subject_time_preferences(
                         prefer_yes=midday_keys, prefer_no=late_keys
                     ),
@@ -478,7 +496,6 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "ef_1",
                     "group_name": grade,
-                    "required_classroom_type": "GYM",
                     "time_preferences": build_subject_time_preferences(
                         prefer_yes=midday_keys,
                         prefer_no=slot_keys(DAY_CODES, ["08:30"]),
@@ -491,7 +508,6 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "musica",
                     "group_name": grade,
-                    "required_classroom_type": "MUSIC",
                     "time_preferences": build_subject_time_preferences(
                         prefer_yes=slot_keys(DAY_CODES, ["12:00"])
                     ),
@@ -503,7 +519,6 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "plastica",
                     "group_name": grade,
-                    "required_classroom_type": "ART",
                     "time_preferences": build_subject_time_preferences(
                         prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])
                     ),
@@ -592,7 +607,6 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "ef_1",
                     "group_name": grade,
-                    "required_classroom_type": "GYM",
                 },
                 {
                     "name": f"Música {grade}",
@@ -601,7 +615,6 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "musica",
                     "group_name": grade,
-                    "required_classroom_type": "MUSIC",
                 },
                 {
                     "name": f"Religión/Valores {grade}",
@@ -618,7 +631,6 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "plastica",
                     "group_name": grade,
-                    "required_classroom_type": "ART",
                 },
                 {
                     "name": f"Tutoría {grade}",
@@ -681,7 +693,6 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.SECONDARY,
                     "teacher_key": science_teacher,
                     "group_name": grade,
-                    "required_classroom_type": "LAB",
                     "time_preferences": build_subject_time_preferences(
                         prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])
                     ),
@@ -693,7 +704,6 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.SECONDARY,
                     "teacher_key": "eso_tec",
                     "group_name": grade,
-                    "required_classroom_type": "TECH",
                 },
                 {
                     "name": f"Educación Física {grade}",
@@ -702,7 +712,6 @@ def create_subjects(teachers, groups):
                     "stage": EducationalStage.SECONDARY,
                     "teacher_key": "ef_1",
                     "group_name": grade,
-                    "required_classroom_type": "GYM",
                 },
                 {
                     "name": f"Música/Plástica {grade}",
@@ -713,9 +722,6 @@ def create_subjects(teachers, groups):
                         "musica" if grade in ["1º ESO", "2º ESO"] else "plastica"
                     ),
                     "group_name": grade,
-                    "required_classroom_type": (
-                        "MUSIC" if grade in ["1º ESO", "2º ESO"] else "ART"
-                    ),
                 },
                 {
                     "name": f"Tutoría {grade}",
@@ -757,14 +763,43 @@ def create_subjects(teachers, groups):
             weekly_hours=row["weekly_hours"],
             duration=row.get("duration", 1.0),
             preferred_time_slot=row.get("preferred_time_slot", ""),
-            required_classroom_type=row.get("required_classroom_type", ""),
             time_preferences=row.get("time_preferences", {}),
             stage=row["stage"],
             type=row.get("type", SubjectType.NORMAL),
             teacher=teachers[row["teacher_key"]],
             group=groups[row["group_name"]],
+            team=team,
             created_by="system",
         )
+        room_name_hint = f"Aula {subject.group.name}"
+        default_room = next(
+            (
+                room
+                for room in Classroom.objects.filter(team=team)
+                if room.name == room_name_hint
+            ),
+            None,
+        )
+        if default_room:
+            subject.allowed_classrooms.add(default_room)
+
+        lower_name = subject.name.lower()
+        shared_targets = []
+        if "educación física" in lower_name or "psicomotricidad" in lower_name:
+            shared_targets.append("Gimnasio")
+        if "tecnología" in lower_name:
+            shared_targets.append("Aula de Tecnología")
+        if "música" in lower_name:
+            shared_targets.append("Aula de Música")
+        if "plástica" in lower_name or "artística" in lower_name:
+            shared_targets.append("Aula de Plástica")
+        if "biología" in lower_name or "física y química" in lower_name:
+            shared_targets.append("Laboratorio")
+
+        if shared_targets:
+            extra_rooms = Classroom.objects.filter(team=team, name__in=shared_targets)
+            subject.allowed_classrooms.add(*extra_rooms)
+
         subjects.append(subject)
         print(
             f"  ✓ Created subject: {subject.name} "
@@ -776,7 +811,7 @@ def create_subjects(teachers, groups):
     return subjects
 
 
-def create_admin_saved_timetable(*, users):
+def create_admin_saved_timetable(*, users, team):
     """Create one saved timetable owned by admin user for manual testing."""
     print("\n🗓️ Creating saved timetable for admin...")
 
@@ -789,12 +824,14 @@ def create_admin_saved_timetable(*, users):
 
     # Build a deterministic small timetable to keep load_test_data fast.
     subjects = list(
-        Subject.objects.select_related("teacher", "group").order_by("id")[:12]
+        Subject.objects.filter(team=team)
+        .select_related("teacher", "group")
+        .order_by("id")[:12]
     )
     if not subjects:
         raise RuntimeError("No subjects found while creating saved admin timetable.")
 
-    classrooms = list(Classroom.objects.order_by("id"))
+    classrooms = list(Classroom.objects.filter(team=team).order_by("id"))
     if not classrooms:
         raise RuntimeError("No classrooms found while creating saved admin timetable.")
 
@@ -838,23 +875,15 @@ def create_admin_saved_timetable(*, users):
         start_time = slot["start"]
         end_time = slot["end"]
 
-        required_type = (subject.required_classroom_type or "").strip().casefold()
-        classroom = next(
-            (
-                room
-                for room in classrooms
-                if (room.classroom_type or "").strip().casefold() == required_type
-            ),
-            None,
-        )
-        if classroom is None:
-            classroom = classrooms[0]
+        allowed_rooms = list(subject.allowed_classrooms.all())
+        classroom = allowed_rooms[0] if allowed_rooms else classrooms[0]
 
         schedule = Schedule.objects.create(
             name=saved_name,
             start_time=start_time,
             end_time=end_time,
             observations=saved_observation,
+            team=team,
             teacher=subject.teacher,
             classroom=classroom,
             group=subject.group,
@@ -878,18 +907,22 @@ def main():
         clear_existing_data()
 
         # Create all entities
-        users = create_users()
-        teachers = create_teachers()
-        groups = create_groups()
-        classrooms = create_classrooms()
-        subjects = create_subjects(teachers, groups)
-        saved_admin_timetable = create_admin_saved_timetable(users=users)
+        users, demo_team = create_users()
+        teachers = create_teachers(demo_team)
+        groups = create_groups(demo_team)
+        classrooms = create_classrooms(demo_team)
+        subjects = create_subjects(teachers, groups, demo_team)
+        saved_admin_timetable = create_admin_saved_timetable(
+            users=users,
+            team=demo_team,
+        )
         # schedules = create_schedules(teachers, subjects, classrooms, groups, users)
 
         print("\n" + "=" * 60)
         print("✅ Test data loaded successfully!")
         print("\n📊 Summary:")
         print(f"  • {len(users)} users created")
+        print("  • 1 collaboration team created")
         print(f"  • {len(teachers)} teachers created")
         print(f"  • {len(subjects)} subjects created")
         print(f"  • {len(classrooms)} classrooms created")
@@ -898,7 +931,7 @@ def main():
         # print(f"  • {len(schedules)} schedules created")
         print("\n🔑 Login credentials:")
         print("  Admin: admin@test.com / admin123")
-        print("  Dirección: direccion.academica@test.com / director123")
+        print("  Dirección: direccion.academica@test.com / direccion123")
         print("=" * 60)
 
     except Exception as e:
