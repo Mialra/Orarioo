@@ -271,6 +271,7 @@ class ScheduleReplanner:
             classroom_by_session=classroom_by_session,
             slots=slots,
             actor_email=actor_email,
+            team=team,
         )
 
     @staticmethod
@@ -371,6 +372,7 @@ class ScheduleReplanner:
         classroom_by_session,
         slots,
         actor_email,
+        team,
     ):
         updated = []
 
@@ -387,7 +389,8 @@ class ScheduleReplanner:
             schedule.end_time = end_time
             schedule.teacher = session["teacher"]
             schedule.group = session.get("group") or cls._get_or_create_group(
-                actor_email
+                actor_email,
+                team,
             )
             schedule.subject = session["subject"]
             schedule.classroom = classroom_by_session[idx]

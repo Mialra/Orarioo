@@ -360,6 +360,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             given_name="Nombre",
             family_name="Original",
         )
+        self.team.members.add(managed_user)
         AuditEntry.objects.all().delete()
 
         response = self.client.patch(
