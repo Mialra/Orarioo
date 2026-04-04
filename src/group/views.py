@@ -1,6 +1,6 @@
 from rest_framework.pagination import PageNumberPagination
 
-from common.drf import AuditableModelViewSet
+from common.drf import TeamScopedAuditableModelViewSet
 from group.models import Group
 from group.serializers import GroupSerializer
 from main.views import render_admin_dashboard
@@ -10,7 +10,7 @@ def admin_groups(request):
     return render_admin_dashboard(request, "groups")
 
 
-class GroupViewSet(AuditableModelViewSet):
+class GroupViewSet(TeamScopedAuditableModelViewSet):
     """CRUD API for groups (courses)."""
 
     class GroupPagination(PageNumberPagination):

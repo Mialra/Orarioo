@@ -21,7 +21,7 @@ class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(Classroom.objects.first().name, "Aula 1A")
 
     def test_list_and_retrieve_classroom(self):
-        classroom = Classroom.objects.create(name="Laboratorio 2")
+        classroom = Classroom.objects.create(name="Laboratorio 2", team=self.team)
 
         list_response = self.client.get(reverse("classroom-list"))
         detail_response = self.client.get(
@@ -33,7 +33,10 @@ class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(detail_response.data["name"], "Laboratorio 2")
 
     def test_update_classroom(self):
-        classroom = Classroom.objects.create(name="Aula Antiguo Nombre")
+        classroom = Classroom.objects.create(
+            name="Aula Antiguo Nombre",
+            team=self.team,
+        )
         AuditEntry.objects.all().delete()
 
         payload = {"name": "Aula Nuevo Nombre"}
@@ -61,7 +64,7 @@ class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
 
     def test_delete_classroom(self):
-        classroom = Classroom.objects.create(name="Aula a eliminar")
+        classroom = Classroom.objects.create(name="Aula a eliminar", team=self.team)
 
         response = self.client.delete(reverse("classroom-detail", args=[classroom.id]))
 
@@ -95,7 +98,7 @@ class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.data["is_shared"], False)
 
     def test_reject_case_insensitive_duplicate_name(self):
-        Classroom.objects.create(name="Aula Norte")
+        Classroom.objects.create(name="Aula Norte", team=self.team)
 
         response = self.client.post(
             reverse("classroom-list"),

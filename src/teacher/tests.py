@@ -21,12 +21,14 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Teacher.objects.count(), 1)
+        self.assertEqual(Teacher.objects.first().team, self.team)
 
     def test_list_and_retrieve_teacher(self):
         teacher = Teacher.objects.create(
             name="Carlos Gomez",
             max_weekly_hours=18,
             working_hours=10,
+            team=self.team,
         )
 
         list_response = self.client.get(reverse("teacher-list"))
@@ -41,6 +43,7 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Laura Ruiz",
             max_weekly_hours=22,
             working_hours=15,
+            team=self.team,
         )
 
         payload = {
@@ -63,6 +66,7 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Marta Lopez",
             max_weekly_hours=20,
             working_hours=10,
+            team=self.team,
         )
 
         response = self.client.delete(reverse("teacher-detail", args=[teacher.id]))
@@ -87,6 +91,7 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Pedro",
             max_weekly_hours=20,
             working_hours=10,
+            team=self.team,
         )
 
         payload = {

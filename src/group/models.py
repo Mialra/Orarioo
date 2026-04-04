@@ -2,7 +2,7 @@ from django.db import models
 from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
 
-from auditableEntity.models import AuditableEntity
+from auditableEntity.models import AuditableEntity, TeamScopedModel
 
 
 class EducationalStage(models.TextChoices):
@@ -11,7 +11,7 @@ class EducationalStage(models.TextChoices):
     SECONDARY = "secondary", "Secondary"
 
 
-class Group(AuditableEntity):
+class Group(TeamScopedModel, AuditableEntity):
     stage = models.CharField(max_length=20, choices=EducationalStage.choices)
 
     class Meta:

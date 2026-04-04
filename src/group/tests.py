@@ -20,7 +20,11 @@ class GroupApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(Group.objects.first().stage, EducationalStage.PRIMARY)
 
     def test_list_and_retrieve_group(self):
-        group = Group.objects.create(name="2B", stage=EducationalStage.SECONDARY)
+        group = Group.objects.create(
+            name="2B",
+            stage=EducationalStage.SECONDARY,
+            team=self.team,
+        )
 
         list_response = self.client.get(reverse("group-list"))
         detail_response = self.client.get(reverse("group-detail", args=[group.id]))
@@ -31,7 +35,11 @@ class GroupApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(detail_response.data["stage"], EducationalStage.SECONDARY)
 
     def test_update_group(self):
-        group = Group.objects.create(name="Infantil", stage=EducationalStage.PRESCHOOL)
+        group = Group.objects.create(
+            name="Infantil",
+            stage=EducationalStage.PRESCHOOL,
+            team=self.team,
+        )
 
         payload = {"name": "Infantil 5", "stage": EducationalStage.PRIMARY}
 
@@ -45,7 +53,11 @@ class GroupApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(group.stage, EducationalStage.PRIMARY)
 
     def test_delete_group(self):
-        group = Group.objects.create(name="3C", stage=EducationalStage.PRIMARY)
+        group = Group.objects.create(
+            name="3C",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
 
         response = self.client.delete(reverse("group-detail", args=[group.id]))
 
@@ -69,7 +81,11 @@ class GroupApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("name", response.data)
 
     def test_reject_case_insensitive_duplicate_name(self):
-        Group.objects.create(name="1A", stage=EducationalStage.PRIMARY)
+        Group.objects.create(
+            name="1A",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
 
         response = self.client.post(
             reverse("group-list"),

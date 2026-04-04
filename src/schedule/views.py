@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from auditableEntity.audit import create_audit_entry, suppress_audit_events
 from auditableEntity.models import AuditActionType
 from classroom.models import Classroom
-from common.drf import AuditableModelViewSet
+from common.drf import TeamScopedAuditableModelViewSet
 from common.export_utils import build_csv_response, sanitize_filename_stem
 from group.models import Group
 from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
@@ -44,7 +44,7 @@ except ImportError:
     REPORTLAB_AVAILABLE = False
 
 
-class ScheduleViewSet(AuditableModelViewSet):
+class ScheduleViewSet(TeamScopedAuditableModelViewSet):
     """CRUD API for schedules."""
 
     GENERATION_FAILED_DETAIL = (
@@ -357,7 +357,7 @@ class ScheduleViewSet(AuditableModelViewSet):
         return rows
 
     @classmethod
-    def _build_export_units(cls, queryset, params):
+    def _build_export_units(cls, queryset, params, active_team):
         units = []
         if params.get("scope") != "cards":
             rows = cls._build_export_rows(queryset)
@@ -395,9 +395,10 @@ class ScheduleViewSet(AuditableModelViewSet):
             model_cls = config["model"]
             name_map = {
                 obj.id: obj.name
-                for obj in model_cls.objects.filter(id__in=selected_ids).only(
-                    "id", "name"
-                )
+                for obj in model_cls.objects.filter(
+                    id__in=selected_ids,
+                    team=active_team,
+                ).only("id", "name")
             }
 
             for object_id in selected_ids:
@@ -741,7 +742,11 @@ class ScheduleViewSet(AuditableModelViewSet):
             )
 
         saved_schedule_name = self._resolve_saved_schedule_name(params, queryset)
-        units = self._build_export_units(queryset, params)
+        units = self._build_export_units(
+            queryset,
+            params,
+            active_team=self.get_active_team(),
+        )
         rows = self._build_export_rows(queryset)
         filename = self._build_export_filename(params, saved_schedule_name)
 
@@ -810,6 +815,7 @@ class ScheduleViewSet(AuditableModelViewSet):
 
     def generate(self, request):
         actor = getattr(request.user, "email", "")
+        active_team = self.get_active_team()
         raw_seed = request.data.get("seed")
         generation_options, options_error = self._parse_generation_options(request.data)
         if options_error is not None:
@@ -830,6 +836,7 @@ class ScheduleViewSet(AuditableModelViewSet):
             schedules = BasicScheduleGenerator.generate(
                 actor_email=actor,
                 user=request.user,
+                team=active_team,
                 random_seed=generation_seed,
                 generation_options=generation_options,
             )
@@ -885,12 +892,13 @@ class ScheduleViewSet(AuditableModelViewSet):
         return timetable_name, None
 
     @staticmethod
-    def _fetch_saved_timetable_schedules(*, request_user, timetable_name):
+    def _fetch_saved_timetable_schedules(*, request_user, timetable_name, team):
         saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
         schedules = list(
             Schedule.objects.filter(
                 users=request_user,
                 observations=saved_observation,
+                team=team,
             ).order_by("id")
         )
         if not schedules:
@@ -909,6 +917,7 @@ class ScheduleViewSet(AuditableModelViewSet):
         schedules, error_response = self._fetch_saved_timetable_schedules(
             request_user=request.user,
             timetable_name=timetable_name,
+            team=self.get_active_team(),
         )
         if error_response is not None:
             return error_response
@@ -987,18 +996,27 @@ class ScheduleViewSet(AuditableModelViewSet):
         return normalized_user_ids
 
     @staticmethod
-    def _fetch_target_users(normalized_user_ids):
+    def _fetch_target_users(normalized_user_ids, active_team):
         requested_ids = set(normalized_user_ids)
-        target_users = list(User.objects.filter(id__in=requested_ids))
+        target_users = list(
+            User.objects.filter(
+                id__in=requested_ids,
+                collaboration_teams=active_team,
+            )
+        )
         if len(target_users) != len(requested_ids):
             return None, Response(
-                {"detail": "Some user_ids do not exist."},
+                {
+                    "detail": (
+                        "Some user_ids do not exist or are outside the active team."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return target_users, None
 
     @staticmethod
-    def _fetch_eligible_schedules(normalized_ids, request_user, actor_email):
+    def _fetch_eligible_schedules(normalized_ids, request_user, actor_email, team):
         requested_ids = set(normalized_ids)
         schedules = list(
             Schedule.objects.filter(
@@ -1006,6 +1024,7 @@ class ScheduleViewSet(AuditableModelViewSet):
                 users=request_user,
                 created_by=actor_email,
                 observations=AUTO_GENERATED_OBSERVATION,
+                team=team,
             )
         )
         if len(schedules) != len(requested_ids):
@@ -1036,6 +1055,7 @@ class ScheduleViewSet(AuditableModelViewSet):
 
     def save_generated(self, request):
         actor = getattr(request.user, "email", "")
+        active_team = self.get_active_team()
         timetable_name = (request.data.get("timetable_name") or "").strip()
 
         if not timetable_name:
@@ -1063,7 +1083,10 @@ class ScheduleViewSet(AuditableModelViewSet):
             normalized_user_ids,
         )
 
-        target_users, error_response = self._fetch_target_users(normalized_user_ids)
+        target_users, error_response = self._fetch_target_users(
+            normalized_user_ids,
+            active_team,
+        )
         if error_response is not None:
             return error_response
 
@@ -1071,6 +1094,7 @@ class ScheduleViewSet(AuditableModelViewSet):
             normalized_ids,
             request.user,
             actor,
+            active_team,
         )
         if error_response is not None:
             return error_response
@@ -1136,6 +1160,7 @@ class ScheduleViewSet(AuditableModelViewSet):
         try:
             new_schedules = ScheduleReplanner.replan_with_manual_change(
                 user=request.user,
+                team=self.get_active_team(),
                 schedule_to_move_id=schedule_id,
                 new_slot_index=new_slot_index,
                 actor_email=actor,

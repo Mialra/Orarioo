@@ -1,4 +1,4 @@
-from datetime import timedelta
+﻿from datetime import timedelta
 from io import BytesIO
 from unittest import skipIf
 
@@ -42,15 +42,22 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             given_name="Api2",
             family_name="Tester2",
         )
+        self.team.members.add(self.other_user)
 
         self.teacher = Teacher.objects.create(
+            team=self.team,
             name="Ana Perez",
             max_weekly_hours=20,
             working_hours=12,
         )
-        self.classroom = Classroom.objects.create(name="Aula 1A")
-        self.group = Group.objects.create(name="1A", stage=EducationalStage.PRIMARY)
+        self.classroom = Classroom.objects.create(name="Aula 1A", team=self.team)
+        self.group = Group.objects.create(
+            name="1A",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
         self.subject = Subject.objects.create(
+            team=self.team,
             name="Mathematics",
             weekly_hours=5,
             duration=1.5,
@@ -109,6 +116,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         start_time = start_time or (timezone.now() + timedelta(days=1))
         end_time = end_time or (start_time + timedelta(hours=1))
         schedule = Schedule.objects.create(
+            team=self.team,
             name=name,
             start_time=start_time,
             end_time=end_time,
@@ -178,8 +186,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("orarioo_generated_schedule_", response["Content-Disposition"])
 
     def test_export_csv_by_group_entity_filter(self):
-        other_group = Group.objects.create(name="2A", stage=EducationalStage.PRIMARY)
+        other_group = Group.objects.create(
+            name="2A",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
         other_subject = Subject.objects.create(
+            team=self.team,
             name="Language 2A",
             weekly_hours=3,
             duration=1.0,
@@ -263,11 +276,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
     @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
     def test_export_cards_mode_with_specific_teacher_without_teacher_all(self):
         second_teacher = Teacher.objects.create(
+            team=self.team,
             name="Julian",
             max_weekly_hours=20,
             working_hours=12,
         )
         second_subject = Subject.objects.create(
+            team=self.team,
             name="Science",
             weekly_hours=3,
             duration=1.0,
@@ -444,6 +459,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
     def test_generate_basic_schedule_avoids_teacher_overlap(self):
         Subject.objects.create(
+            team=self.team,
             name="Physics",
             weekly_hours=1,
             duration=1.0,
@@ -465,8 +481,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(len(unique_starts), len(teacher_schedules))
 
     def test_generate_basic_schedule_avoids_teacher_overlap_across_groups(self):
-        group_2 = Group.objects.create(name="2A", stage=EducationalStage.PRIMARY)
+        group_2 = Group.objects.create(
+            name="2A",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
         Subject.objects.create(
+            team=self.team,
             name="Mathematics 2A",
             weekly_hours=5,
             duration=1.0,
@@ -488,11 +509,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
     def test_generate_basic_schedule_avoids_group_overlap(self):
         teacher_2 = Teacher.objects.create(
+            team=self.team,
             name="Carlos Torres",
             max_weekly_hours=20,
             working_hours=8,
         )
         Subject.objects.create(
+            team=self.team,
             name="Science",
             weekly_hours=5,
             duration=1.0,
@@ -855,8 +878,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("new_slot_index", response.data)
 
     def test_generate_rejects_teacher_over_max_with_multiple_subjects(self):
-        group_2 = Group.objects.create(name="2B", stage=EducationalStage.PRIMARY)
+        group_2 = Group.objects.create(
+            name="2B",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
         Subject.objects.create(
+            team=self.team,
             name="Physics",
             weekly_hours=3,
             duration=1.0,
@@ -881,6 +909,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.teacher.max_weekly_hours = 40
         self.teacher.save(update_fields=["max_weekly_hours"])
         Subject.objects.create(
+            team=self.team,
             name="Science",
             weekly_hours=21,
             duration=1.0,
@@ -942,13 +971,19 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.subject.save(update_fields=["weekly_hours"])
 
         teacher_2 = Teacher.objects.create(
+            team=self.team,
             name="Lucia Martin",
             max_weekly_hours=20,
             working_hours=12,
         )
-        group_2 = Group.objects.create(name="2A", stage=EducationalStage.PRIMARY)
+        group_2 = Group.objects.create(
+            name="2A",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
 
         Subject.objects.create(
+            team=self.team,
             name="TC 1A",
             weekly_hours=2,
             duration=1.0,
@@ -959,6 +994,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             group=self.group,
         )
         Subject.objects.create(
+            team=self.team,
             name="TC 2A",
             weekly_hours=2,
             duration=1.0,
@@ -983,7 +1019,11 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
     def test_generate_assigns_only_subject_allowed_classrooms(self):
         self.classroom.is_shared = True
         self.classroom.save(update_fields=["is_shared"])
-        assigned = Classroom.objects.create(name="Aula Asignada", is_shared=True)
+        assigned = Classroom.objects.create(
+            name="Aula Asignada",
+            is_shared=True,
+            team=self.team,
+        )
         self.subject.allowed_classrooms.set([assigned])
 
         response = self.generate_schedule()
@@ -1000,7 +1040,11 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.classroom.name = "Aula 1A"
         self.classroom.is_shared = False
         self.classroom.save(update_fields=["name", "is_shared"])
-        music_room = Classroom.objects.create(name="Aula de Música", is_shared=True)
+        music_room = Classroom.objects.create(
+            name="Aula de Musica",
+            is_shared=True,
+            team=self.team,
+        )
         self.subject.allowed_classrooms.set([self.classroom, music_room])
 
         response = self.generate_schedule()
@@ -1034,12 +1078,18 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.subject.save(update_fields=["weekly_hours"])
 
         teacher_2 = Teacher.objects.create(
+            team=self.team,
             name="Elena Ruiz",
             max_weekly_hours=20,
             working_hours=8,
         )
-        group_2 = Group.objects.create(name="2A", stage=EducationalStage.PRIMARY)
+        group_2 = Group.objects.create(
+            name="2A",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
         other_subject = Subject.objects.create(
+            team=self.team,
             name="Science",
             weekly_hours=1,
             duration=1.0,
@@ -1200,11 +1250,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.subject.save(update_fields=["weekly_hours"])
 
         teacher_2 = Teacher.objects.create(
+            team=self.team,
             name="Lucia Lopez",
             max_weekly_hours=20,
             working_hours=8,
         )
         Subject.objects.create(
+            team=self.team,
             name="Science",
             weekly_hours=1,
             duration=1.0,

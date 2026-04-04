@@ -92,7 +92,10 @@ def api_exception_handler(exc, context):
         response is not None
         and response.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR
     ):
-        logger.exception("Server-side API exception", exc_info=exc)
+        logger.error(
+            "Server-side API exception type=%s",
+            exc.__class__.__name__,
+        )
         return Response(
             {
                 "detail": "An internal server error occurred.",
@@ -111,7 +114,10 @@ def api_exception_handler(exc, context):
         )
 
     if response is None:
-        logger.exception("Unhandled backend exception", exc_info=exc)
+        logger.error(
+            "Unhandled backend exception type=%s",
+            exc.__class__.__name__,
+        )
         return Response(
             {
                 "detail": "An internal server error occurred.",

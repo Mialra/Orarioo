@@ -1,23 +1,47 @@
 from rest_framework import serializers
 
+from classroom.models import Classroom
 from common.serializer_utils import AUDIT_FIELD_NAMES
+from common.tenancy import get_active_team
 from common.validation import normalize_optional_text
+from group.models import Group
 from namedEntity.serializers import NamedEntityNameValidationMixin
 from schedule.models import Schedule
+from subject.models import Subject
+from teacher.models import Teacher
+from user.models import User
 
 
 class ScheduleSerializer(NamedEntityNameValidationMixin, serializers.ModelSerializer):
+    team = serializers.PrimaryKeyRelatedField(read_only=True)
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     classroom_name = serializers.CharField(source="classroom.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
     group_stage = serializers.CharField(source="group.stage", read_only=True)
     subject_name = serializers.CharField(source="subject.name", read_only=True)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if not request or not getattr(request, "user", None):
+            return
+
+        active_team = get_active_team(request)
+        self.fields["teacher"].queryset = Teacher.objects.filter(team=active_team)
+        self.fields["classroom"].queryset = Classroom.objects.filter(team=active_team)
+        self.fields["group"].queryset = Group.objects.filter(team=active_team)
+        self.fields["subject"].queryset = Subject.objects.filter(team=active_team)
+        self.fields["users"].queryset = User.objects.filter(
+            collaboration_teams=active_team,
+            is_enabled=True,
+        ).distinct()
+
     class Meta:
         model = Schedule
         fields = [
             "id",
             "name",
+            "team",
             "start_time",
             "end_time",
             "observations",

@@ -17,10 +17,12 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="John Doe",
             max_weekly_hours=40,
             working_hours=20,
+            team=self.team,
         )
         self.group = Group.objects.create(
             name="1º ESO A",
             stage=GroupEducationalStage.SECONDARY,
+            team=self.team,
         )
 
     def test_create_subject(self):
@@ -50,6 +52,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            team=self.team,
         )
 
         list_response = self.client.get(reverse("subject-list"))
@@ -69,6 +72,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            team=self.team,
         )
 
         payload = {
@@ -100,6 +104,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            team=self.team,
         )
 
         response = self.client.delete(reverse("subject-detail", args=[subject.id]))
@@ -147,6 +152,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            team=self.team,
         )
 
         self.assertEqual(subject.teacher.id, self.teacher.id)
@@ -207,6 +213,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            team=self.team,
         )
 
         payload = {
@@ -228,6 +235,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Pedro",
             max_weekly_hours=20,
             working_hours=10,
+            team=self.team,
         )
 
         payload = {

@@ -87,6 +87,33 @@
     background: #dbe7ff;
 }
 
+.dash-profile-menu {
+    min-width: 320px;
+}
+
+.dash-team-switch-item {
+    text-align: left;
+    border: 1px solid #dbe4f3;
+    background: #f8fbff;
+    color: #1f365c;
+    border-radius: 0.45rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.85rem;
+}
+
+.dash-team-switch-item.is-active {
+    border-color: #9ab7ff;
+    background: #e9f0ff;
+    font-weight: 700;
+}
+
+.dash-invitation-row {
+    border: 1px solid #dee6f2;
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    background: #fbfdff;
+}
+
 .dash-generator-card {
     border-radius: 1rem;
 }

@@ -12,6 +12,8 @@ from teacher.models import Teacher, TeacherTimePreferenceState
 class TeacherSerializer(NamedEntityNameValidationMixin, serializers.ModelSerializer):
     enforce_case_insensitive_unique_name = True
 
+    team = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = Teacher
         fields = with_audit_fields(
@@ -19,6 +21,7 @@ class TeacherSerializer(NamedEntityNameValidationMixin, serializers.ModelSeriali
             "max_weekly_hours",
             "working_hours",
             "time_preferences",
+            "team",
         )
         read_only_fields = AUDIT_READ_ONLY_FIELD_NAMES
 

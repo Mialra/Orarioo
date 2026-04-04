@@ -1,4 +1,4 @@
-from user.models import RoleChoices, User
+from user.models import CollaborationTeam, RoleChoices, User
 
 
 class AuthenticatedAdminAPIMixin:
@@ -26,4 +26,8 @@ class AuthenticatedAdminAPIMixin:
             email=f"{email_prefix}@test.com",
             role=RoleChoices.ADMINISTRATOR,
         )
+        self.team = CollaborationTeam.objects.create(name=f"{email_prefix} team")
+        self.team.members.add(self.user)
+        self.user.active_team = self.team
+        self.user.save(update_fields=["active_team"])
         self.client.force_authenticate(self.user)

@@ -35,6 +35,11 @@ def test_schedule_generation():
 
     print(f"\n👤 Using admin: {admin.email}")
 
+    active_team = admin.active_team or admin.collaboration_teams.order_by("id").first()
+    if not active_team:
+        print("❌ Admin user has no collaboration team. Run load_test_data.py first.")
+        sys.exit(1)
+
     start_time = time.time()
     print(f"⏱️  Starting schedule generation at {time.strftime('%H:%M:%S')}")
 
@@ -42,6 +47,7 @@ def test_schedule_generation():
         schedules = BasicScheduleGenerator.generate(
             actor_email="admin@test.com",
             user=admin,
+            team=active_team,
             random_seed=42,
         )
 
@@ -55,7 +61,7 @@ def test_schedule_generation():
         from schedule.models import Schedule
 
         by_group = (
-            Schedule.objects.filter(created_by="admin@test.com")
+            Schedule.objects.filter(created_by="admin@test.com", team=active_team)
             .values("group__name")
             .annotate(count=Count("id"))
             .order_by("group__name")

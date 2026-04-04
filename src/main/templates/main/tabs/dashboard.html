@@ -57,8 +57,50 @@
                 </ul>
 
                 <div class="d-flex align-items-center gap-2 ms-lg-3 pb-3 pb-lg-0">
-                    <span id="dashboard-user-initials" class="dash-avatar" aria-hidden="true">AP</span>
-                    <button id="logout-button" class="btn btn-outline-secondary btn-sm" type="button">Salir</button>
+                    <div class="dropdown">
+                        <button
+                            id="dashboard-profile-menu-button"
+                            class="btn btn-light d-inline-flex align-items-center gap-2 px-2 py-1 border"
+                            type="button"
+                            data-bs-toggle="dropdown"
+                            data-bs-auto-close="outside"
+                            aria-expanded="false"
+                        >
+                            <span id="dashboard-user-initials" class="dash-avatar" aria-hidden="true">AP</span>
+                            <span class="small fw-semibold text-secondary">Perfil</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end p-2 dash-profile-menu" aria-labelledby="dashboard-profile-menu-button">
+                            <li class="px-2 py-1">
+                                <div class="small text-uppercase text-secondary fw-semibold">Equipo actual</div>
+                                <div id="dashboard-current-team-name" class="fw-semibold">-</div>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li class="px-2 py-1">
+                                <div class="small text-uppercase text-secondary fw-semibold mb-1">Cambiar de equipo</div>
+                                <div id="dashboard-team-switch-list" class="d-grid gap-1"></div>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button id="dashboard-create-team" class="dropdown-item" type="button">Crear equipo</button>
+                            </li>
+                            <li>
+                                <button id="dashboard-invite-team-member" class="dropdown-item" type="button">Invitar usuarios</button>
+                            </li>
+                            <li>
+                                <button id="dashboard-view-pending-invitations" class="dropdown-item d-flex justify-content-between align-items-center" type="button">
+                                    <span>Ver invitaciones pendientes</span>
+                                    <span id="dashboard-pending-invitations-badge" class="badge text-bg-primary">0</span>
+                                </button>
+                            </li>
+                            <li>
+                                <button id="dashboard-leave-team" class="dropdown-item text-danger" type="button">Salir del equipo</button>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button id="logout-button" class="dropdown-item" type="button">Cerrar sesión</button>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
@@ -67,6 +109,64 @@
     <main class="container-xl py-4 py-lg-5">
         {% include dashboard_route_template %}
     </main>
+
+    <div class="modal fade" id="dashboardCreateTeamModal" tabindex="-1" aria-labelledby="dashboardCreateTeamModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="dashboardCreateTeamModalLabel">Crear equipo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="dashboard-new-team-name" class="form-label">Nombre del equipo</label>
+                    <input id="dashboard-new-team-name" type="text" class="form-control" maxlength="150" placeholder="Ej: Equipo de Jefatura" />
+                    <div id="dashboard-create-team-error" class="text-danger small mt-2 d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button id="dashboard-create-team-submit" type="button" class="btn btn-primary">Crear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="dashboardInviteTeamModal" tabindex="-1" aria-labelledby="dashboardInviteTeamModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="dashboardInviteTeamModalLabel">Invitar usuario</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="dashboard-invite-email" class="form-label">Email del usuario existente</label>
+                    <input id="dashboard-invite-email" type="email" class="form-control" placeholder="usuario@centro.com" />
+                    <div id="dashboard-invite-team-error" class="text-danger small mt-2 d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button id="dashboard-invite-team-submit" type="button" class="btn btn-primary">Enviar invitación</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="dashboardInvitationsModal" tabindex="-1" aria-labelledby="dashboardInvitationsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="dashboardInvitationsModalLabel">Invitaciones pendientes</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="dashboard-invitations-empty" class="text-secondary">No tienes invitaciones.</div>
+                    <div id="dashboard-invitations-list" class="d-grid gap-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 

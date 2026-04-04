@@ -54,15 +54,21 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         self.team = CollaborationTeam.objects.create(name="Equipo Auditoria")
         self.team.members.set([self.user, self.team_user])
+        self.user.active_team = self.team
+        self.user.save(update_fields=["active_team"])
         self.teacher = Teacher.objects.create(
             name="Audit Teacher",
             max_weekly_hours=20,
             working_hours=10,
+            team=self.team,
         )
-        self.classroom = Classroom.objects.create(name="Audit Classroom")
+        self.classroom = Classroom.objects.create(
+            name="Audit Classroom", team=self.team
+        )
         self.group = Group.objects.create(
             name="Audit Group",
             stage=GroupEducationalStage.PRIMARY,
+            team=self.team,
         )
         self.subject = Subject.objects.create(
             name="Audit Subject",
@@ -72,6 +78,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            team=self.team,
         )
         AuditEntry.objects.all().delete()
 
@@ -83,6 +90,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             start_time=start_time,
             end_time=end_time,
             observations="Initial",
+            team=self.team,
             teacher=self.teacher,
             classroom=self.classroom,
             group=self.group,
@@ -118,6 +126,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         group = Group.objects.create(
             name="Delete Me",
             stage=GroupEducationalStage.SECONDARY,
+            team=self.team,
         )
         AuditEntry.objects.all().delete()
 
@@ -149,7 +158,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
 
     def test_subject_allowed_classrooms_m2m_change_is_audited(self):
-        second_classroom = Classroom.objects.create(name="Lab 2")
+        second_classroom = Classroom.objects.create(name="Lab 2", team=self.team)
         AuditEntry.objects.all().delete()
 
         response = self.client.patch(
@@ -171,6 +180,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Laura Inicial",
             max_weekly_hours=18,
             working_hours=9,
+            team=self.team,
         )
         AuditEntry.objects.all().delete()
 
@@ -350,6 +360,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             given_name="Nombre",
             family_name="Original",
         )
+        self.team.members.add(managed_user)
         AuditEntry.objects.all().delete()
 
         response = self.client.patch(
