@@ -85,7 +85,7 @@
                                     className: "flex-grow-1 min-w-0",
                                     children: [
                                         dom.createElement("h3", {
-                                            className: "h6 fw-bold mb-1 text-truncate",
+                                            className: "h6 mb-1 text-truncate",
                                             text: resolveUserName(user),
                                         }),
                                         dom.createElement("p", {
