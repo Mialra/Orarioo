@@ -4,6 +4,7 @@ from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
 
 from auditableEntity.models import AuditableEntity
+from auditableEntity.models import TeamScopedModel
 
 
 class TeacherTimePreferenceState(models.TextChoices):
@@ -15,7 +16,7 @@ class TeacherTimePreferenceState(models.TextChoices):
     UNAVAILABLE = "UNAVAILABLE", "Unavailable"
 
 
-class Teacher(AuditableEntity):
+class Teacher(TeamScopedModel, AuditableEntity):
     max_weekly_hours = models.PositiveIntegerField()
     working_hours = models.PositiveIntegerField(default=0)
     time_preferences = models.JSONField(default=dict, blank=True)

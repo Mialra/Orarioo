@@ -4,6 +4,19 @@ from django.db import models
 from namedEntity.models import NamedEntity
 
 
+class TeamScopedModel(models.Model):
+    team = models.ForeignKey(
+        "user.CollaborationTeam",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="%(app_label)s_%(class)s_items",
+    )
+
+    class Meta:
+        abstract = True
+
+
 class AuditableEntity(NamedEntity):
     """Base abstract entity with audit fields."""
 

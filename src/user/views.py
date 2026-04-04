@@ -1,18 +1,32 @@
 from django.shortcuts import render
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from common.drf import AuditActorViewMixin
+from common.tenancy import get_active_team
 from common.permissions import IsManagementUser
 from main.views import render_admin_dashboard
-from user.models import RoleChoices, User
+from user.models import (
+    CollaborationTeam,
+    CollaborationTeamInvitation,
+    CollaborationTeamInvitationStatus,
+    RoleChoices,
+    User,
+)
 from user.serializers import (
+    CollaborationTeamCreateSerializer,
+    CollaborationTeamInvitationRespondSerializer,
+    CollaborationTeamInvitationSerializer,
+    CollaborationTeamInviteSerializer,
     LoginSerializer,
     UserChangePasswordSerializer,
     UserCreateSerializer,
@@ -84,6 +98,252 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         )
 
 
+class SetActiveTeamView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        team_id = request.data.get("team_id") or request.data.get("active_team")
+        if not team_id:
+            return Response(
+                {"team_id": "team_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            team_id = int(team_id)
+        except (TypeError, ValueError):
+            return Response(
+                {"team_id": "team_id must be a valid integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        team = request.user.collaboration_teams.filter(id=team_id).first()
+        if team is None:
+            return Response(
+                {"team_id": "The selected team does not belong to the user."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        request.user.active_team = team
+        request.user.save(update_fields=["active_team"])
+
+        return Response(
+            {"user": UserSerializer(request.user).data},
+            status=status.HTTP_200_OK,
+        )
+
+
+class CollaborationTeamCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = CollaborationTeamCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        team = CollaborationTeam.objects.create(name=serializer.validated_data["name"])
+        team.members.add(request.user)
+
+        if request.user.active_team_id is None:
+            request.user.active_team = team
+            request.user.save(update_fields=["active_team"])
+
+        return Response(
+            {
+                "team": {
+                    "id": team.id,
+                    "name": team.name,
+                },
+                "user": UserSerializer(request.user).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CollaborationTeamInviteView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = CollaborationTeamInviteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        team_id = serializer.validated_data.get("team_id")
+        if team_id:
+            team = request.user.collaboration_teams.filter(id=team_id).first()
+        else:
+            team = request.user.active_team
+            if team is None:
+                team = request.user.collaboration_teams.order_by("name", "id").first()
+
+        if team is None:
+            return Response(
+                {
+                    "detail": (
+                        "No active collaboration team found. "
+                        "Create or select a team first."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = serializer.validated_data["email"]
+        invited_user = User.objects.filter(email=email, is_enabled=True).first()
+        if invited_user is None:
+            return Response(
+                {
+                    "email": (
+                        "No active user exists with that email. "
+                        "Create the user first from Administracion > Usuarios."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if team.members.filter(id=invited_user.id).exists():
+            return Response(
+                {"detail": "The user already belongs to this collaboration team."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        pending_exists = CollaborationTeamInvitation.objects.filter(
+            team=team,
+            invited_user=invited_user,
+            status=CollaborationTeamInvitationStatus.PENDING,
+        ).exists()
+        if pending_exists:
+            return Response(
+                {
+                    "detail": (
+                        "There is already a pending invitation for this user "
+                        "in the selected collaboration team."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        invitation = CollaborationTeamInvitation.objects.create(
+            team=team,
+            invited_user=invited_user,
+            invited_by=request.user,
+            status=CollaborationTeamInvitationStatus.PENDING,
+        )
+
+        return Response(
+            {
+                "team": {"id": team.id, "name": team.name},
+                "invited_user": UserSerializer(invited_user).data,
+                "invitation": CollaborationTeamInvitationSerializer(invitation).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CollaborationTeamInvitationListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        invitations = CollaborationTeamInvitation.objects.filter(
+            invited_user=request.user
+        ).select_related("team", "invited_by")
+        serializer = CollaborationTeamInvitationSerializer(invitations, many=True)
+        pending_count = sum(
+            1
+            for item in serializer.data
+            if item["status"] == CollaborationTeamInvitationStatus.PENDING
+        )
+        return Response(
+            {
+                "count": len(serializer.data),
+                "pending_count": pending_count,
+                "results": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class CollaborationTeamInvitationRespondView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, invitation_id):
+        invitation = CollaborationTeamInvitation.objects.filter(
+            id=invitation_id,
+            invited_user=request.user,
+        ).select_related("team").first()
+        if invitation is None:
+            return Response(
+                {"detail": "Invitation not found for current user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if invitation.status != CollaborationTeamInvitationStatus.PENDING:
+            return Response(
+                {"detail": "This invitation was already answered."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = CollaborationTeamInvitationRespondSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_status = serializer.to_status()
+
+        if new_status == CollaborationTeamInvitationStatus.ACCEPTED:
+            invitation.team.members.add(request.user)
+
+        invitation.status = new_status
+        invitation.responded_at = timezone.now()
+        invitation.save(update_fields=["status", "responded_at"])
+
+        return Response(
+            {
+                "invitation": CollaborationTeamInvitationSerializer(invitation).data,
+                "user": UserSerializer(request.user).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class CollaborationTeamLeaveView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        raw_team_id = request.data.get("team_id") or getattr(
+            request.user.active_team, "id", None
+        )
+        if not raw_team_id:
+            return Response(
+                {"detail": "No team selected to leave."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            team_id = int(raw_team_id)
+        except (TypeError, ValueError):
+            return Response(
+                {"team_id": "team_id must be a valid integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        team = request.user.collaboration_teams.filter(id=team_id).first()
+        if team is None:
+            return Response(
+                {"detail": "You do not belong to the selected team."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        team.members.remove(request.user)
+
+        if request.user.active_team_id == team.id:
+            next_team = request.user.collaboration_teams.order_by("name", "id").first()
+            request.user.active_team = next_team
+            request.user.save(update_fields=["active_team"])
+
+        if not team.members.exists():
+            team.delete()
+
+        return Response(
+            {"user": UserSerializer(request.user).data},
+            status=status.HTTP_200_OK,
+        )
+
+
 class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing users.
@@ -150,8 +410,19 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
         user = self.request.user
 
         if user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECCION]:
-            # Administrators and direccion see active users.
-            return User.objects.filter(is_enabled=True).order_by("-created_at")
+            try:
+                active_team = get_active_team(self.request)
+            except PermissionDenied:
+                return User.objects.none()
+
+            return (
+                User.objects.filter(
+                    is_enabled=True,
+                    collaboration_teams=active_team,
+                )
+                .distinct()
+                .order_by("-created_at")
+            )
 
         # Other users only see their own profile.
         return User.objects.filter(id=user.id, is_enabled=True).order_by("-created_at")

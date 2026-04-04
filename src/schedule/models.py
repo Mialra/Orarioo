@@ -3,9 +3,10 @@ from django.db import models
 from django.db.models import F, Q
 
 from auditableEntity.models import AuditableEntity
+from auditableEntity.models import TeamScopedModel
 
 
-class Schedule(AuditableEntity):
+class Schedule(TeamScopedModel, AuditableEntity):
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
     observations = models.TextField(blank=True)

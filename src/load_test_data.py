@@ -28,6 +28,7 @@ from django.contrib.auth import get_user_model  # noqa: E402
 from classroom.models import Classroom  # noqa: E402
 from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
 from group.models import Group  # noqa: E402
+from user.models import CollaborationTeam  # noqa: E402
 from schedule.algorithm.slots import build_weekly_slots  # noqa: E402
 from schedule.algorithm.slots import session_stage_code  # noqa: E402
 from schedule.constants import SAVED_TIMETABLE_PREFIX  # noqa: E402
@@ -89,6 +90,7 @@ def clear_existing_data():
     Group.objects.all().delete()
     Classroom.objects.all().delete()
     User.objects.filter(email__contains="test").delete()
+    CollaborationTeam.objects.filter(members__isnull=True).delete()
     print("✅ Existing test data cleared")
 
 
@@ -125,10 +127,18 @@ def create_users():
         users.append(direccion_user)
         print(f"  ✓ Created direccion user: {direccion_user.email}")
 
-    return users
+    admin_team = CollaborationTeam.objects.create(name=f"Equipo {admin.email}")
+    admin_team.members.set(users)
+    for user in users:
+        user.active_team = admin_team
+        user.save(update_fields=["active_team"])
+
+    print(f"  ✓ Created collaboration team for {admin.email}: {admin_team.name}")
+
+    return users, admin_team
 
 
-def create_teachers():
+def create_teachers(team):
     """Create realistic teacher catalog with availability constraints."""
     print("\n👨‍🏫 Creating teachers...")
 
@@ -287,6 +297,7 @@ def create_teachers():
             max_weekly_hours=max_hours,
             working_hours=0,
             time_preferences=time_preferences,
+            team=team,
             created_by="system",
         )
         teachers[key] = teacher
@@ -295,7 +306,7 @@ def create_teachers():
     return teachers
 
 
-def create_groups():
+def create_groups(team):
     """Create groups from 1º Infantil to 4º ESO (single line per year)."""
     print("\n👥 Creating groups...")
 
@@ -317,14 +328,19 @@ def create_groups():
 
     groups = {}
     for name, stage in groups_data:
-        group = Group.objects.create(name=name, stage=stage, created_by="system")
+        group = Group.objects.create(
+            name=name,
+            stage=stage,
+            team=team,
+            created_by="system",
+        )
         groups[name] = group
         print(f"  ✓ Created group: {group.name}")
 
     return groups
 
 
-def create_classrooms():
+def create_classrooms(team):
     """Create classrooms with shared/non-shared metadata."""
     print("\n🏫 Creating classrooms...")
 
@@ -354,6 +370,7 @@ def create_classrooms():
         classroom = Classroom.objects.create(
             name=name,
             is_shared=is_shared,
+            team=team,
             created_by="system",
         )
         classrooms.append(classroom)
@@ -364,7 +381,7 @@ def create_classrooms():
     return classrooms
 
 
-def create_subjects(teachers, groups):  # noqa: C901
+def create_subjects(teachers, groups, team):  # noqa: C901
     """Create realistic curriculum-focused subjects, emphasizing Primary complexity."""
     print("\n📚 Creating subjects...")
 
@@ -751,11 +768,16 @@ def create_subjects(teachers, groups):  # noqa: C901
             type=row.get("type", SubjectType.NORMAL),
             teacher=teachers[row["teacher_key"]],
             group=groups[row["group_name"]],
+            team=team,
             created_by="system",
         )
         room_name_hint = f"Aula {subject.group.name}"
         default_room = next(
-            (room for room in Classroom.objects.all() if room.name == room_name_hint),
+            (
+                room
+                for room in Classroom.objects.filter(team=team)
+                if room.name == room_name_hint
+            ),
             None,
         )
         if default_room:
@@ -775,7 +797,7 @@ def create_subjects(teachers, groups):  # noqa: C901
             shared_targets.append("Laboratorio")
 
         if shared_targets:
-            extra_rooms = Classroom.objects.filter(name__in=shared_targets)
+            extra_rooms = Classroom.objects.filter(team=team, name__in=shared_targets)
             subject.allowed_classrooms.add(*extra_rooms)
 
         subjects.append(subject)
@@ -789,7 +811,7 @@ def create_subjects(teachers, groups):  # noqa: C901
     return subjects
 
 
-def create_admin_saved_timetable(*, users):
+def create_admin_saved_timetable(*, users, team):
     """Create one saved timetable owned by admin user for manual testing."""
     print("\n🗓️ Creating saved timetable for admin...")
 
@@ -802,12 +824,14 @@ def create_admin_saved_timetable(*, users):
 
     # Build a deterministic small timetable to keep load_test_data fast.
     subjects = list(
-        Subject.objects.select_related("teacher", "group").order_by("id")[:12]
+        Subject.objects.filter(team=team)
+        .select_related("teacher", "group")
+        .order_by("id")[:12]
     )
     if not subjects:
         raise RuntimeError("No subjects found while creating saved admin timetable.")
 
-    classrooms = list(Classroom.objects.order_by("id"))
+    classrooms = list(Classroom.objects.filter(team=team).order_by("id"))
     if not classrooms:
         raise RuntimeError("No classrooms found while creating saved admin timetable.")
 
@@ -859,6 +883,7 @@ def create_admin_saved_timetable(*, users):
             start_time=start_time,
             end_time=end_time,
             observations=saved_observation,
+            team=team,
             teacher=subject.teacher,
             classroom=classroom,
             group=subject.group,
@@ -882,18 +907,22 @@ def main():
         clear_existing_data()
 
         # Create all entities
-        users = create_users()
-        teachers = create_teachers()
-        groups = create_groups()
-        classrooms = create_classrooms()
-        subjects = create_subjects(teachers, groups)
-        saved_admin_timetable = create_admin_saved_timetable(users=users)
+        users, demo_team = create_users()
+        teachers = create_teachers(demo_team)
+        groups = create_groups(demo_team)
+        classrooms = create_classrooms(demo_team)
+        subjects = create_subjects(teachers, groups, demo_team)
+        saved_admin_timetable = create_admin_saved_timetable(
+            users=users,
+            team=demo_team,
+        )
         # schedules = create_schedules(teachers, subjects, classrooms, groups, users)
 
         print("\n" + "=" * 60)
         print("✅ Test data loaded successfully!")
         print("\n📊 Summary:")
         print(f"  • {len(users)} users created")
+        print("  • 1 collaboration team created")
         print(f"  • {len(teachers)} teachers created")
         print(f"  • {len(subjects)} subjects created")
         print(f"  • {len(classrooms)} classrooms created")

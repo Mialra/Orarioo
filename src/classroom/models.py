@@ -3,9 +3,10 @@ from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
 
 from auditableEntity.models import AuditableEntity
+from auditableEntity.models import TeamScopedModel
 
 
-class Classroom(AuditableEntity):
+class Classroom(TeamScopedModel, AuditableEntity):
     is_shared = models.BooleanField(default=True)
 
     class Meta:

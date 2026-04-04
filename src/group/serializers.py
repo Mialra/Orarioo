@@ -9,12 +9,14 @@ class GroupSerializer(NamedEntityNameValidationMixin, serializers.ModelSerialize
     enforce_case_insensitive_unique_name = True
 
     stage_display = serializers.SerializerMethodField()
+    team = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = Group
         fields = [
             "id",
             "name",
+            "team",
             "stage",
             "stage_display",
             *AUDIT_FIELD_NAMES,

@@ -4,6 +4,7 @@ from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
 
 from auditableEntity.models import AuditableEntity
+from auditableEntity.models import TeamScopedModel
 
 
 class EducationalStage(models.TextChoices):
@@ -30,7 +31,7 @@ class SubjectTimePreferenceState(models.TextChoices):
     UNAVAILABLE = "UNAVAILABLE", "Unavailable"
 
 
-class Subject(AuditableEntity):
+class Subject(TeamScopedModel, AuditableEntity):
     """Subject model representing an academic subject."""
 
     weekly_hours = models.PositiveIntegerField()

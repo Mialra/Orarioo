@@ -2,7 +2,7 @@ from rest_framework.pagination import PageNumberPagination
 
 from classroom.models import Classroom
 from classroom.serializers import ClassroomSerializer
-from common.drf import AuditableModelViewSet
+from common.drf import TeamScopedAuditableModelViewSet
 from main.views import render_admin_dashboard
 
 
@@ -10,7 +10,7 @@ def admin_classrooms(request):
     return render_admin_dashboard(request, "classrooms")
 
 
-class ClassroomViewSet(AuditableModelViewSet):
+class ClassroomViewSet(TeamScopedAuditableModelViewSet):
     """CRUD API for classrooms."""
 
     class ClassroomPagination(PageNumberPagination):
