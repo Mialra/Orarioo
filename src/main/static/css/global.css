@@ -27,6 +27,6 @@ body {
 .orarioo-body {
     font-family: "Manrope", "Segoe UI", sans-serif;
     color: var(--orarioo-text);
-    background: linear-gradient(180deg, #f5f8ff 0%, #eef4ff 100%);
+    background: #ffffff;
     line-height: 1.5;
 }

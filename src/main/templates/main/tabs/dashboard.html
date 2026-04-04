@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Orarioo | Dashboard{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% for stylesheet in dashboard_extra_css %}
+<link rel="stylesheet" href="{% static stylesheet %}">
+{% endfor %}
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-page">
+    <nav class="navbar navbar-expand-lg bg-white border-bottom shadow-sm sticky-top dash-navbar">
+        <div class="container-fluid px-3 px-lg-4">
+            <div class="dash-brand me-3">
+                <div class="dash-brand-icon" aria-hidden="true">
+                    <i data-lucide="calendar-days" class="dash-brand-lucide"></i>
+                </div>
+                <div>
+                    <h1>Orarioo</h1>
+                    <p>Gestión escolar</p>
+                </div>
+            </div>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#dashboardNav" aria-controls="dashboardNav" aria-expanded="false" aria-label="Mostrar navegación">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="dashboardNav">
+                <ul class="nav nav-pills mx-auto gap-2 py-3 py-lg-0" aria-label="Navegación principal">
+                    <li class="nav-item">
+                        <a class="nav-link dash-tab {% if dashboard_section == 'schedules' %}active{% endif %}" href="{% url 'dashboard-schedules' %}">
+                            <i data-lucide="calendar-days" class="dash-nav-icon" aria-hidden="true"></i>
+                            Generador
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link dash-tab {% if dashboard_section == 'saved' %}active{% endif %}" href="{% url 'dashboard-saved' %}">
+                            <i data-lucide="folder-open" class="dash-nav-icon" aria-hidden="true"></i>
+                            Guardados
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link dash-tab {% if dashboard_section == 'administration' %}active{% endif %}" href="{% url 'dashboard-administration' %}">
+                            <i data-lucide="settings" class="dash-nav-icon" aria-hidden="true"></i>
+                            Administración
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link dash-tab {% if dashboard_section == 'audit' %}active{% endif %}" href="{% url 'dashboard-audit' %}">
+                            <i data-lucide="file-text" class="dash-nav-icon" aria-hidden="true"></i>
+                            Auditoría
+                        </a>
+                    </li>
+                </ul>
+
+                <div class="d-flex align-items-center gap-2 ms-lg-3 pb-3 pb-lg-0">
+                    <span id="dashboard-user-initials" class="dash-avatar" aria-hidden="true">AP</span>
+                    <button id="logout-button" class="btn btn-outline-secondary btn-sm" type="button">Salir</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container-xl py-4 py-lg-5">
+        {% include dashboard_route_template %}
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/dashboard.js' %}"></script>
+{% for script in dashboard_extra_scripts %}
+<script src="{% static script %}"></script>
+{% endfor %}
+{% endblock %}

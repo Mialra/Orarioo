@@ -1,0 +1,16 @@
+<div class="admin-panel-body">
+    <div class="admin-panel-header">
+        <div>
+            <h2 class="admin-panel-title">{{ dashboard_admin_state.title }}</h2>
+            <p class="admin-panel-copy">{{ dashboard_admin_state.count_label }}</p>
+        </div>
+        <button class="btn btn-primary admin-panel-action" type="button">
+            <i data-lucide="plus" class="dash-nav-icon" aria-hidden="true"></i>
+            {{ dashboard_admin_state.add_cta }}
+        </button>
+    </div>
+
+    <div class="admin-empty-state">
+        <p class="admin-empty-message">{{ dashboard_admin_state.empty_message }}</p>
+    </div>
+</div>

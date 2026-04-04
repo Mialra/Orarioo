@@ -156,6 +156,22 @@
 
 .password-toggle-btn {
     min-width: 3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.password-toggle-btn,
+.password-toggle-btn:hover,
+.password-toggle-btn:focus,
+.password-toggle-btn:active {
+    color: #6b7280;
+    background-color: #ffffff;
+    border-color: var(--bs-border-color);
+}
+
+.password-toggle-btn:focus {
+    box-shadow: none;
 }
 
 .password-toggle-icon-slot,
@@ -163,6 +179,8 @@
     display: inline-flex;
     width: 18px;
     height: 18px;
+    align-items: center;
+    justify-content: center;
 }
 
 .info-icon-btn {

@@ -1,17 +1,17 @@
-{% extends 'main/base.html' %}
+{% extends 'base.html' %}
 {% load static %}
 
 {% block title %}Orarioo | Sign Up{% endblock %}
 {% block body_class %}auth-page{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'main/css/auth.css' %}">
+<link rel="stylesheet" href="{% static 'css/auth.css' %}">
 {% endblock %}
 
 {% block content %}
 <main class="auth-shell container-fluid px-0">
     <div class="row g-0 min-vh-100">
-        {% include 'main/partials/auth_branding.html' %}
+        {% include 'auth/auth_branding.html' %}
 
         <section class="col-12 col-lg-6 d-flex align-items-center justify-content-center p-3 p-md-4 p-xl-5">
             <div class="card shadow-sm border-0 auth-card w-100">
@@ -144,5 +144,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'main/js/signup.js' %}"></script>
+<script src="{% static 'js/signup.js' %}"></script>
 {% endblock %}

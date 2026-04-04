@@ -1,0 +1,195 @@
+<section class="admin-shell">
+  {% include 'main/tabs/_admin_tabs.html' %}
+  <div class="card-body p-4 p-lg-5">
+    <div
+      class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 pb-3 mb-3 border-bottom admin-users-header"
+    >
+      <div>
+        <h2 class="h4 fw-bold mb-1">{{ dashboard_admin_state.title }}</h2>
+        <p class="admin-users-description mb-0">
+          {{ dashboard_admin_state.description }}
+        </p>
+      </div>
+      <button
+        class="btn btn-primary fw-bold admin-add-user-btn"
+        type="button"
+        id="admin-add-user-btn"
+        data-bs-toggle="modal"
+        data-bs-target="#admin-user-modal"
+      >
+        <i
+          data-lucide="plus"
+          class="admin-add-user-icon"
+          aria-hidden="true"
+        ></i>
+        {{ dashboard_admin_state.add_cta }}
+      </button>
+    </div>
+    <div
+      id="admin-users-alert"
+      class="alert d-none mb-3"
+      role="status"
+      aria-live="polite"
+    ></div>
+    <p id="admin-users-empty-message" class="d-none text-center">
+      {{ dashboard_admin_state.empty_message }}
+    </p>
+    <!-- LIST -->
+    <div
+      id="admin-users-list"
+      class="d-grid gap-3 pt-1"
+      aria-busy="false"
+      aria-live="polite"
+    >
+      <div
+        class="card p-3 d-flex flex-row align-items-center justify-content-between"
+      >
+        <div class="d-flex align-items-center gap-3">
+          <!-- AVATAR -->
+          <div class="admin-user-avatar avatar-purple">
+            <i data-lucide="user"></i>
+          </div>
+          <div>
+            <div class="fw-semibold">Nombre Usuario</div>
+            <div class="small text-secondary">email@ejemplo.com</div>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <!-- ROLE -->
+          <span class="admin-role-pill admin-pill admin-pill--purple">
+            Dirección
+          </span>
+          <!-- EDIT -->
+          <button class="btn admin-icon-btn admin-user-edit-btn" title="Editar">
+            <i data-lucide="edit"></i>
+          </button>
+          <!-- DELETE -->
+          <button
+            class="btn admin-icon-btn admin-user-delete-btn"
+            title="Eliminar"
+          >
+            <i data-lucide="trash-2"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- PAGINATION -->
+    <div id="admin-users-pagination" class="mt-3"></div>
+  </div>
+  <div class="modal fade" id="admin-user-modal" tabindex="-1">
+    <div
+      class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down"
+    >
+      <div class="modal-content shadow-lg">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title h4 mb-0">Añadir usuario</h3>
+            <p class="text-body-secondary small mb-0">
+              Completa los datos para crear o editar el usuario.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+          ></button>
+        </div>
+        <div class="modal-body">
+          <form id="admin-user-form" class="row g-3">
+            <input type="hidden" id="admin-user-id" />
+            <input type="hidden" id="admin-user-mode" />
+            <div class="col-md-6">
+              <label class="form-label">Nombre*</label>
+              <input class="form-control" id="admin-user-given-name" required />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Apellidos</label>
+              <input class="form-control" id="admin-user-family-name" />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Correo electrónico*</label>
+              <input
+                type="email"
+                class="form-control"
+                id="admin-user-email"
+                required
+              />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Rol*</label>
+              <select class="form-select" id="admin-user-role">
+                <option value="direccion">Dirección</option>
+                <option value="administrator">Administrador</option>
+              </select>
+            </div>
+            <!-- ACTIONS -->
+            <div class="col-12 d-flex justify-content-center gap-3 mt-3">
+              <button
+                type="submit"
+                class="btn btn-primary px-4 admin-modal-action-btn"
+                id="admin-user-submit-btn"
+              >
+                <span
+                  id="admin-user-submit-spinner"
+                  class="spinner-border spinner-border-sm d-none me-2"
+                ></span>
+                <span id="admin-user-submit-text">Crear</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-light border px-4 admin-modal-action-btn"
+                id="admin-user-cancel-btn"
+                data-bs-dismiss="modal"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- DELETE MODAL -->
+  <div class="modal fade" id="admin-user-delete-modal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title h5 mb-0">Confirmar eliminación</h3>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+          ></button>
+        </div>
+        <div class="modal-body text-center py-4">
+          <p class="mb-2">
+            ¿Está seguro de que quiere eliminar al usuario
+            <strong id="admin-user-delete-name">seleccionado</strong>?
+          </p>
+          <p class="mb-0 text-secondary">Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-footer justify-content-center gap-2">
+          <button
+            type="button"
+            class="btn btn-light border"
+            id="admin-user-delete-cancel-btn"
+            data-bs-dismiss="modal"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-danger"
+            id="admin-user-delete-confirm-btn"
+          >
+            <span
+              id="admin-user-delete-spinner"
+              class="spinner-border spinner-border-sm d-none me-2"
+            ></span>
+            <span id="admin-user-delete-text">Eliminar</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,9 +1,6 @@
 .dashboard-page {
     min-height: 100vh;
-    background:
-        radial-gradient(circle at 15% 10%, rgba(173, 204, 255, 0.45), transparent 35%),
-        radial-gradient(circle at 80% 85%, rgba(173, 204, 255, 0.25), transparent 40%),
-        #f3f7ff;
+    background: linear-gradient(180deg, #f7f9fc 0%, #f4f7fb 100%);
 }
 
 .dash-navbar {
@@ -94,8 +91,64 @@
     border-radius: 1rem;
 }
 
+.dash-panel {
+    background: #ffffff;
+    border: 0;
+    border-radius: 1rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(15, 30, 60, 0.075);
+}
+
+.dash-panel-body {
+    padding: 1.5rem;
+}
+
+.dash-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.dash-panel-title {
+    margin: 0 0 0.5rem;
+    font-size: clamp(1.7rem, 1.4rem + 0.9vw, 2rem);
+    line-height: 1.15;
+}
+
+.dash-panel-copy {
+    margin: 0;
+    color: var(--bs-secondary-color);
+}
+
+.dash-panel-close {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--bs-secondary-color);
+}
+
+.dash-panel-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.dash-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
 .dash-metric {
+    height: 100%;
     border-radius: 0.8rem;
+}
+
+.dash-metric-body {
+    height: 100%;
+    padding: 1rem;
 }
 
 .dash-metric strong {
@@ -143,44 +196,70 @@
     color: #ea580c;
 }
 
+.dash-criteria {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    border-radius: 0.85rem;
+    background: var(--bs-tertiary-bg);
+}
+
+.dash-criteria-title {
+    margin: 0 0 1rem;
+    font-size: 1.25rem;
+}
+
+.dash-criteria-list,
+.dash-warning-list {
+    margin: 0;
+    color: var(--bs-secondary-color);
+}
+
+.dash-warning {
+    margin-top: 1rem;
+    margin-bottom: 0;
+}
+
+.dash-warning-title {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+}
+
+.dash-warning-copy {
+    margin: 0 0 0.5rem;
+}
+
+.dash-empty-panel {
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.dash-empty-title {
+    margin: 0 0 0.5rem;
+    font-size: 1.75rem;
+}
+
+.dash-empty-copy {
+    margin: 0;
+    color: var(--bs-secondary-color);
+}
+
 .admin-shell {
+    background: #ffffff;
+    border: 1px solid #d9e2ef;
     border-radius: 0.9rem;
-}
-
-.admin-subtabs {
-    border-bottom: 1px solid #e8edf7;
-    padding-bottom: 0.15rem;
-}
-
-.admin-subtab {
-    border: none;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
-    color: #5d6d86;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding-left: 0.15rem;
-    padding-right: 0.15rem;
-    margin-right: 1.15rem;
-}
-
-.admin-subtab:hover {
-    color: var(--orarioo-primary);
-}
-
-.admin-subtab.active,
-.admin-subtab.active:hover {
-    color: #2458f0;
-    background: transparent;
-    border-bottom-color: #2458f0;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(15, 30, 60, 0.04), 0 10px 24px rgba(15, 30, 60, 0.03);
 }
 
 .admin-empty-state {
     border-radius: 0.7rem;
     background: #f1f4f9;
     padding: 2.9rem 1.2rem;
+}
+
+.admin-shell > .card-body:first-of-type,
+.admin-shell > .admin-panel-body:first-of-type {
+    border-top: 1px solid #edf2f7;
 }
 
 @media (max-width: 991.98px) {
@@ -193,20 +272,20 @@
         justify-content: flex-start;
     }
 
-    .admin-subtabs {
-        border-bottom: 0;
-        row-gap: 0.45rem;
+    .dash-panel-header {
+        flex-direction: column;
     }
 
-    .admin-subtab {
-        margin-right: 0.6rem;
-        border-radius: 0.45rem;
-        padding: 0.4rem 0.6rem;
-        border-bottom-width: 0;
+    .dash-panel-body,
+    .dash-empty-panel {
+        padding: 1.5rem;
     }
 
-    .admin-subtab.active,
-    .admin-subtab.active:hover {
-        background: #e7eeff;
+    .dash-metrics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-shell {
+        box-shadow: 0 1px 2px rgba(15, 30, 60, 0.04);
     }
 }

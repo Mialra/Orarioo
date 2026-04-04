@@ -607,51 +607,6 @@ html, body {
     background: #fff;
 }
 
-/* ====== PÁGINA DE APP SHELL ====== */
-.app-shell {
-    min-height: 100vh;
-    padding: 2rem;
-    background: var(--orarioo-bg-light);
-}
-
-.app-header {
-    background: linear-gradient(135deg, var(--orarioo-primary), var(--orarioo-secondary));
-    color: white;
-    padding: 2rem;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 2rem;
-    box-shadow: var(--orarioo-shadow-md);
-}
-
-.app-eyebrow {
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    opacity: 0.9;
-}
-
-.app-placeholder {
-    background: white;
-    padding: 2.5rem;
-    border-radius: 12px;
-    box-shadow: var(--orarioo-shadow-sm);
-}
-
-.app-placeholder h2 {
-    color: var(--orarioo-text);
-    margin-bottom: 1rem;
-}
-
-.app-placeholder p {
-    color: var(--orarioo-text-light);
-    line-height: 1.6;
-}
-
 /* ====== RESPONSIVE ====== */
 @media (max-width: 900px) {
     .auth-container {
@@ -742,22 +697,6 @@ html, body {
     .auth-submit,
     .btn-primary {
         padding: 0.7rem 1rem;
-    }
-
-    .app-shell {
-        padding: 1rem;
-    }
-
-    .app-header {
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-        padding: 1.5rem;
-    }
-
-    .app-placeholder {
-        padding: 1.5rem;
-        text-align: center;
     }
 
     .dash-main {

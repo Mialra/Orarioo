@@ -22,15 +22,30 @@ from user.serializers import (
 
 
 def sign_in(request):
-    return render(request, "main/login.html")
+    return render(request, "auth/login.html")
 
 
 def sign_up(request):
-    return render(request, "main/signup.html")
+    return render(request, "auth/signup.html")
 
 
 def admin_users(request):
-    return render_admin_dashboard(request, "users")
+    users = User.objects.all().order_by("-created_at")
+    state = {
+        "title": "Gestión de Usuarios",
+        "description": "Administra el personal del centro, sus accesos y sus roles.",
+        "empty_message": "No hay usuarios registrados. Añade el primero para comenzar.",
+        "add_cta": "Añadir Usuario",
+    }
+
+    return render_admin_dashboard(
+        request,
+        "users",
+        {
+            "dashboard_admin_state": state,
+            "dashboard_admin_users": users,
+        },
+    )
 
 
 class IsAdministratorOrSelf(permissions.BasePermission):
