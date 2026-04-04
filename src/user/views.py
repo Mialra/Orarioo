@@ -31,7 +31,7 @@ def sign_up(request):
 
 
 def admin_users(request):
-    users = User.objects.all().order_by("-created_at")
+    users = User.objects.filter(is_enabled=True).order_by("-created_at")
     state = {
         "title": "Gestión de Usuarios",
         "description": "Administra el personal del centro, sus accesos y sus roles.",
@@ -104,7 +104,7 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
         page_size_query_param = "page_size"
         max_page_size = 100
 
-    queryset = User.objects.all().order_by("-created_at")
+    queryset = User.objects.filter(is_enabled=True).order_by("-created_at")
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = UserPagination
     serializer_action_classes = {
@@ -150,11 +150,11 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
         user = self.request.user
 
         if user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECCION]:
-            # Administrators and direccion see all users.
-            return User.objects.all().order_by("-created_at")
+            # Administrators and direccion see active users.
+            return User.objects.filter(is_enabled=True).order_by("-created_at")
 
         # Other users only see their own profile.
-        return User.objects.filter(id=user.id).order_by("-created_at")
+        return User.objects.filter(id=user.id, is_enabled=True).order_by("-created_at")
 
     @action(
         detail=False,
