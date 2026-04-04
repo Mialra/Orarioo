@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from classroom.models import Classroom
 from common.serializer_utils import AUDIT_FIELD_NAMES
 from common.tenancy import get_active_team
 from common.validation import (
@@ -7,7 +8,6 @@ from common.validation import (
     normalize_optional_text,
     normalize_time_preferences,
 )
-from classroom.models import Classroom
 from group.models import Group
 from namedEntity.serializers import NamedEntityNameValidationMixin
 from subject.models import Subject, SubjectTimePreferenceState

@@ -7,14 +7,20 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('schedule', '0004_schedule_schedule_end_after_start'),
-        ('user', '0006_alter_user_active_team'),
+        ("schedule", "0004_schedule_schedule_end_after_start"),
+        ("user", "0006_alter_user_active_team"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='schedule',
-            name='team',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='%(app_label)s_%(class)s_items', to='user.collaborationteam'),
+            model_name="schedule",
+            name="team",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="%(app_label)s_%(class)s_items",
+                to="user.collaborationteam",
+            ),
         ),
     ]

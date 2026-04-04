@@ -7,14 +7,20 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('subject', '0008_subject_allowed_classrooms'),
-        ('user', '0006_alter_user_active_team'),
+        ("subject", "0008_subject_allowed_classrooms"),
+        ("user", "0006_alter_user_active_team"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='subject',
-            name='team',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='%(app_label)s_%(class)s_items', to='user.collaborationteam'),
+            model_name="subject",
+            name="team",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="%(app_label)s_%(class)s_items",
+                to="user.collaborationteam",
+            ),
         ),
     ]

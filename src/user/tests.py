@@ -445,7 +445,9 @@ class UserApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         invited_user.refresh_from_db()
-        self.assertFalse(invited_user.collaboration_teams.filter(id=self.team.id).exists())
+        self.assertFalse(
+            invited_user.collaboration_teams.filter(id=self.team.id).exists()
+        )
         self.assertTrue(
             CollaborationTeamInvitation.objects.filter(
                 team=self.team,

@@ -7,13 +7,20 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('user', '0004_collaborationteam'),
+        ("user", "0004_collaborationteam"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='user',
-            name='active_team',
-            field=models.ForeignKey(blank=True, help_text='Current collaboration team context', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='active_users', to='user.collaborationteam'),
+            model_name="user",
+            name="active_team",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Current collaboration team context",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="active_users",
+                to="user.collaborationteam",
+            ),
         ),
     ]

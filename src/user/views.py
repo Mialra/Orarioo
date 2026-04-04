@@ -6,14 +6,14 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
-from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from common.drf import AuditActorViewMixin
-from common.tenancy import get_active_team
 from common.permissions import IsManagementUser
+from common.tenancy import get_active_team
 from main.views import render_admin_dashboard
 from user.models import (
     CollaborationTeam,
@@ -264,10 +264,14 @@ class CollaborationTeamInvitationRespondView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, invitation_id):
-        invitation = CollaborationTeamInvitation.objects.filter(
-            id=invitation_id,
-            invited_user=request.user,
-        ).select_related("team").first()
+        invitation = (
+            CollaborationTeamInvitation.objects.filter(
+                id=invitation_id,
+                invited_user=request.user,
+            )
+            .select_related("team")
+            .first()
+        )
         if invitation is None:
             return Response(
                 {"detail": "Invitation not found for current user."},

@@ -62,7 +62,9 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             working_hours=10,
             team=self.team,
         )
-        self.classroom = Classroom.objects.create(name="Audit Classroom", team=self.team)
+        self.classroom = Classroom.objects.create(
+            name="Audit Classroom", team=self.team
+        )
         self.group = Group.objects.create(
             name="Audit Group",
             stage=GroupEducationalStage.PRIMARY,

@@ -2,8 +2,7 @@ from django.db import models
 from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
 
-from auditableEntity.models import AuditableEntity
-from auditableEntity.models import TeamScopedModel
+from auditableEntity.models import AuditableEntity, TeamScopedModel
 
 
 class EducationalStage(models.TextChoices):

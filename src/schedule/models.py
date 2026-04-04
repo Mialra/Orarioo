@@ -2,8 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Q
 
-from auditableEntity.models import AuditableEntity
-from auditableEntity.models import TeamScopedModel
+from auditableEntity.models import AuditableEntity, TeamScopedModel
 
 
 class Schedule(TeamScopedModel, AuditableEntity):

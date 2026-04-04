@@ -7,14 +7,23 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('classroom', '0005_remove_classroom_classroom_shared_home_group_consistency_and_more'),
-        ('user', '0006_alter_user_active_team'),
+        (
+            "classroom",
+            "0005_remove_classroom_classroom_shared_home_group_consistency_and_more",
+        ),
+        ("user", "0006_alter_user_active_team"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='classroom',
-            name='team',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='%(app_label)s_%(class)s_items', to='user.collaborationteam'),
+            model_name="classroom",
+            name="team",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="%(app_label)s_%(class)s_items",
+                to="user.collaborationteam",
+            ),
         ),
     ]

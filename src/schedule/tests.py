@@ -1289,4 +1289,3 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             response,
             "Could not generate a feasible schedule",
         )
-
