@@ -57,6 +57,7 @@ def _handle_post_save(sender, instance, created, **kwargs):
                 changed_fields=changed_fields,
             ),
             changed_fields=changed_fields,
+            team=getattr(instance, "team", None),
         )
         return
 
@@ -79,6 +80,7 @@ def _handle_post_save(sender, instance, created, **kwargs):
             changed_fields=changed_fields,
         ),
         changed_fields=changed_fields,
+        team=getattr(instance, "team", None),
     )
 
 
@@ -106,6 +108,7 @@ def _handle_post_delete(sender, instance, **kwargs):
             changed_fields=changed_fields,
         ),
         changed_fields=changed_fields,
+        team=getattr(instance, "team", None),
     )
 
 
@@ -152,6 +155,7 @@ def _build_m2m_handler(field_name):
                 field_name=field_name,
             ),
             changed_fields=changed_fields,
+            team=getattr(instance, "team", None),
         )
         if hasattr(instance, cache_name):
             delattr(instance, cache_name)

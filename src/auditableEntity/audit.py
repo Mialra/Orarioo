@@ -395,10 +395,15 @@ def create_audit_entry(
     action_type,
     detail,
     changed_fields=None,
+    team=None,
 ):
     actor = get_current_actor()
+    resolved_team = team
+    if resolved_team is None and actor is not None:
+        resolved_team = getattr(actor, "active_team", None)
 
     return AuditEntry.objects.create(
+        team=resolved_team,
         entity_type=get_entity_type(model),
         entity_id=entity_id,
         entity_name=(entity_name or "")[:255],

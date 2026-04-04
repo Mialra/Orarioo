@@ -36,6 +36,13 @@ class AuditActionType(models.TextChoices):
 
 
 class AuditEntry(models.Model):
+    team = models.ForeignKey(
+        "user.CollaborationTeam",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_entries",
+    )
     entity_type = models.CharField(max_length=50)
     entity_id = models.PositiveBigIntegerField()
     entity_name = models.CharField(max_length=255, blank=True)
@@ -56,6 +63,10 @@ class AuditEntry(models.Model):
         db_table = "audit_entry"
         ordering = ["-occurred_at", "-id"]
         indexes = [
+            models.Index(
+                fields=["team", "occurred_at"],
+                name="audit_entry_team_oc_f2a670_idx",
+            ),
             models.Index(
                 fields=["entity_type", "entity_id"],
                 name="audit_entry_entity__202b83_idx",

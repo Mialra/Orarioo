@@ -943,6 +943,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                     "valor_anterior": deleted_count,
                 }
             ],
+            team=self.get_active_team(),
         )
         return Response(
             {

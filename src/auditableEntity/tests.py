@@ -56,6 +56,10 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.team.members.set([self.user, self.team_user])
         self.user.active_team = self.team
         self.user.save(update_fields=["active_team"])
+        self.outside_team = CollaborationTeam.objects.create(name="Equipo Externo")
+        self.outside_team.members.add(self.outside_user)
+        self.outside_user.active_team = self.outside_team
+        self.outside_user.save(update_fields=["active_team"])
         self.teacher = Teacher.objects.create(
             name="Audit Teacher",
             max_weekly_hours=20,
@@ -248,6 +252,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             detail='Se creo el profesor "Entrada propia".',
             actor=self.user,
             actor_name=self.user.get_full_name(),
+            team=self.team,
         )
         AuditEntry.objects.create(
             entity_type="teacher",
@@ -257,6 +262,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             detail='Se creo el profesor "Entrada equipo".',
             actor=self.team_user,
             actor_name=self.team_user.get_full_name(),
+            team=self.team,
         )
         AuditEntry.objects.create(
             entity_type="teacher",
@@ -266,6 +272,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             detail='Se creo el profesor "Entrada externa".',
             actor=self.outside_user,
             actor_name=self.outside_user.get_full_name(),
+            team=self.outside_team,
         )
 
         response = self.client.get(reverse("auditentry-list"))
@@ -296,6 +303,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             detail='Se creo el profesor "Entrada visible".',
             actor=self.user,
             actor_name=self.user.get_full_name(),
+            team=self.team,
         )
 
         response = self.client.get(reverse("auditentry-list"))
@@ -316,6 +324,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             detail='Se creo el profesor "Existing Audit".',
             actor=self.user,
             actor_name=self.user.get_full_name(),
+            team=self.team,
         )
         self.client.force_authenticate(self.team_user)
 
@@ -401,6 +410,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             detail='Se creo el profesor "Entrada externa propia".',
             actor=self.outside_user,
             actor_name=self.outside_user.get_full_name(),
+            team=self.outside_team,
         )
         self.client.force_authenticate(self.outside_user)
 
@@ -421,6 +431,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             detail='Se creo el profesor "Sin detalle".',
             actor=self.user,
             actor_name=self.user.get_full_name(),
+            team=self.team,
         )
 
         response = self.client.get("/api/audit-entries/1/")
@@ -457,6 +468,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             ],
             actor=self.user,
             actor_name=self.user.get_full_name(),
+            team=self.team,
         )
         own_entry.occurred_at = now
         own_entry.save(update_fields=["occurred_at"])
@@ -468,6 +480,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             detail='Se modificó el aula "Aula descartada".',
             actor=self.user,
             actor_name=self.user.get_full_name(),
+            team=self.team,
         )
 
         response = self.client.get(
@@ -510,6 +523,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             detail='Se eliminó el grupo "Grupo PDF".',
             actor=self.user,
             actor_name=self.user.get_full_name(),
+            team=self.team,
         )
 
         response = self.client.get(
