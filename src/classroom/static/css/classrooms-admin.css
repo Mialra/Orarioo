@@ -2,16 +2,6 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-#admin-classrooms-list .admin-action-btn {
-    width: 1.6rem;
-    height: 1.6rem;
-}
-
-#admin-classrooms-list .admin-action-btn i {
-    width: 0.78rem;
-    height: 0.78rem;
-}
-
 @media (max-width: 1399.98px) {
     #admin-classrooms-list.admin-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));

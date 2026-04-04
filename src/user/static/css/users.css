@@ -75,21 +75,6 @@
     background-color: #e0ecff;
 }
 
-.admin-icon-btn {
-    width: 2rem;
-    height: 2rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0.5rem;
-    line-height: 1;
-}
-
-.admin-icon-btn i {
-    width: 0.9rem;
-    height: 0.9rem;
-}
-
 .admin-user-edit-btn:hover,
 .admin-user-edit-btn:focus-visible {
     background-color: rgba(13, 110, 253, 0.12);

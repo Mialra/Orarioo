@@ -20,16 +20,6 @@
     margin-left: auto;
 }
 
-#admin-subjects-list .admin-action-btn {
-    width: 1.6rem;
-    height: 1.6rem;
-}
-
-#admin-subjects-list .admin-action-btn i {
-    width: 0.78rem;
-    height: 0.78rem;
-}
-
 @media (max-width: 1199.98px) {
     #admin-subjects-list.admin-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));

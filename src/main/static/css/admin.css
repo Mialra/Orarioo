@@ -1,3 +1,8 @@
+.admin-shell {
+    --admin-action-btn-size: 1.6rem;
+    --admin-action-icon-size: 0.78rem;
+}
+
 .admin-header {
     display: flex;
     justify-content: space-between;
@@ -90,19 +95,21 @@
     margin-left: auto;
 }
 
-.admin-action-btn {
-    width: 2rem;
-    height: 2rem;
+.admin-action-btn,
+.admin-icon-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border-radius: 0.5rem;
     line-height: 1;
+    width: var(--admin-action-btn-size);
+    height: var(--admin-action-btn-size);
 }
 
-.admin-action-btn i {
-    width: 0.9rem;
-    height: 0.9rem;
+.admin-action-btn i,
+.admin-icon-btn i {
+    width: var(--admin-action-icon-size);
+    height: var(--admin-action-icon-size);
 }
 
 .admin-list-state-icon {
