@@ -2,6 +2,7 @@ from common.drf import AuditableModelViewSet
 from group.models import Group
 from group.serializers import GroupSerializer
 from main.views import render_admin_dashboard
+from rest_framework.pagination import PageNumberPagination
 
 
 def admin_groups(request):
@@ -11,5 +12,11 @@ def admin_groups(request):
 class GroupViewSet(AuditableModelViewSet):
     """CRUD API for groups (courses)."""
 
+    class GroupPagination(PageNumberPagination):
+        page_size = 15
+        page_size_query_param = "page_size"
+        max_page_size = 100
+
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
+    pagination_class = GroupPagination
