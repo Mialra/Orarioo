@@ -1,7 +1,8 @@
-from common.drf import AuditableModelViewSet
 from django.db.models.functions import Lower
-from main.views import render_admin_dashboard
 from rest_framework.pagination import PageNumberPagination
+
+from common.drf import AuditableModelViewSet
+from main.views import render_admin_dashboard
 from teacher.models import Teacher
 from teacher.serializers import TeacherSerializer
 
