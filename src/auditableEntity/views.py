@@ -14,13 +14,13 @@ from auditableEntity.audit import (
 )
 from auditableEntity.models import AuditActionType, AuditEntry
 from auditableEntity.serializers import AuditEntrySerializer
-from common.tenancy import get_active_team
 from common.export_utils import (
     REPORTLAB_AVAILABLE,
     build_csv_response,
     build_table_pdf_response,
     sanitize_filename_stem,
 )
+from common.tenancy import get_active_team
 from user.models import User
 
 
