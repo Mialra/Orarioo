@@ -1,9 +1,9 @@
 (function () {
-    const admin = window.OrariooAdmin || {};
+    const admin = window.AdminBase || {};
     const dom = admin.dom;
 
     const formElement = document.getElementById("admin-user-form");
-    if (!formElement || !admin.initCrudModule || !dom) {
+    if (!formElement || !admin.createEntityManager || !dom) {
         return;
     }
 
@@ -121,7 +121,7 @@
         });
     }
 
-    admin.initCrudModule({
+    admin.createEntityManager({
         endpoint: "/api/users/",
         createEndpoint: "/api/users/managed_create/",
         getDetailEndpoint: function (id) {

@@ -18,7 +18,7 @@ SECTION_CONFIG = {
 ADMIN_ROUTE_CONFIG = {
     "users": {
         "template": "administration_users.html",
-        "extra_css": ["css/admin_users.css"],
+        "extra_css": ["css/users.css"],
         "extra_scripts": [
             "js/admin-core/dom-helpers.js",
             "js/admin-core/api.js",
@@ -28,13 +28,25 @@ ADMIN_ROUTE_CONFIG = {
             "js/admin-core/list-renderer.js",
             "js/admin-core/pagination.js",
             "js/admin-core/crud-module.js",
-            "js/admin_users.js",
+            "js/admin-base.js",
+            "js/users.js",
         ],
     },
     "teachers": {
         "template": "administration_teachers.html",
-        "extra_css": [],
-        "extra_scripts": [],
+        "extra_css": ["css/teachers-admin.css", "css/preferences-grid.css"],
+        "extra_scripts": [
+            "js/admin-core/dom-helpers.js",
+            "js/admin-core/api.js",
+            "js/admin-core/ui-state.js",
+            "js/admin-core/form-utils.js",
+            "js/admin-core/modal-utils.js",
+            "js/admin-core/list-renderer.js",
+            "js/admin-core/pagination.js",
+            "js/admin-core/crud-module.js",
+            "js/admin-base.js",
+            "js/teachers.js",
+        ],
     },
     "groups": {
         "template": "administration_groups.html",
@@ -55,35 +67,41 @@ ADMIN_ROUTE_CONFIG = {
 
 ADMIN_BASE_CSS = [
     "css/administration_navigation.css",
+    "css/admin.css",
 ]
 
 ADMIN_TAB_CONFIG = {
     "users": {
         "title": "Gestión de Usuarios",
+        "description": "Administra el personal del centro, sus accesos y sus roles.",
         "count_label": "0 usuarios registrados",
         "empty_message": "No hay usuarios registrados. Añade el primero para comenzar.",
         "add_cta": "Añadir Usuario",
     },
     "teachers": {
         "title": "Gestión de Profesores",
+        "description": "Administra el personal docente y su disponibilidad.",
         "count_label": "0 profesores registrados",
         "empty_message": "No hay profesores registrados. Añade el primero para comenzar.",
         "add_cta": "Añadir Profesor",
     },
     "groups": {
         "title": "Gestión de Cursos",
+        "description": "Administra los grupos y cursos académicos.",
         "count_label": "0 cursos registrados",
         "empty_message": "No hay cursos registrados. Añade el primero para comenzar.",
         "add_cta": "Añadir Curso",
     },
     "subjects": {
         "title": "Gestión de Asignaturas",
+        "description": "Administra las asignaturas y sus relaciones académicas.",
         "count_label": "0 asignaturas registradas",
         "empty_message": "No hay asignaturas registradas. Añade la primera para comenzar.",
         "add_cta": "Añadir Asignatura",
     },
     "classrooms": {
         "title": "Gestión de Aulas",
+        "description": "Administra las aulas disponibles para el horario.",
         "count_label": "0 aulas registradas",
         "empty_message": "No hay aulas registradas. Añade la primera para comenzar.",
         "add_cta": "Añadir Aula",

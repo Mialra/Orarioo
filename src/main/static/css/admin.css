@@ -1,0 +1,135 @@
+.admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.admin-description {
+    color: var(--bs-secondary-color);
+}
+
+.admin-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    white-space: nowrap;
+}
+
+.admin-add-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+}
+
+.admin-card {
+    border-radius: 0.9rem;
+}
+
+.admin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    gap: 1rem;
+    align-items: start;
+}
+
+.admin-avatar {
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.admin-avatar i {
+    width: 1rem;
+    height: 1rem;
+}
+
+.admin-avatar.variant-blue {
+    color: #2563eb;
+    background-color: #e0ecff;
+}
+
+.admin-avatar.variant-purple {
+    color: #7c3aed;
+    background-color: #f3e8ff;
+}
+
+.admin-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.admin-pill.variant-blue {
+    color: #2563eb;
+    background-color: #e0ecff;
+}
+
+.admin-pill.variant-purple {
+    color: #7c3aed;
+    background-color: #f3e8ff;
+}
+
+.admin-pill.variant-gray {
+    color: #4b5563;
+    background-color: #eef2f7;
+}
+
+.admin-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: auto;
+}
+
+.admin-action-btn {
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    line-height: 1;
+}
+
+.admin-action-btn i {
+    width: 0.9rem;
+    height: 0.9rem;
+}
+
+.admin-list-state-icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bs-light);
+    color: var(--bs-secondary-color);
+}
+
+.admin-modal-action-btn {
+    min-height: 2.25rem;
+    font-weight: 600;
+}
+
+.admin-form-footer {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.admin-empty-state {
+    border-radius: 0.7rem;
+    background: #f1f4f9;
+    padding: 2.25rem 1.2rem;
+}
