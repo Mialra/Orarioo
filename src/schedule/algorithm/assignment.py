@@ -6,14 +6,14 @@ except ModuleNotFoundError:  # pragma: no cover - depends on local Python versio
 from schedule.algorithm.constraints import (
     add_group_daily_capacity_constraints,
     add_group_no_intraday_gap_constraints,
-    add_resource_non_overlap_constraints,
     add_stage_slot_hard_constraints,
     add_subject_time_hard_constraints,
     add_teacher_time_hard_constraints,
+    add_tc_slot_capacity_constraints,
     apply_soft_constraints,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
-from schedule.algorithm.slots import slot_overlaps
+from schedule.algorithm.slots import build_real_time_intervals
 
 
 def solve_session_assignment(
@@ -24,6 +24,7 @@ def solve_session_assignment(
     random_seed=None,
     fixed_assignments=None,
     previous_assignment_by_session=None,
+    generation_options=None,
 ):
     if cp_model is None:  # pragma: no cover
         raise ScheduleGenerationError(
@@ -43,6 +44,7 @@ def solve_session_assignment(
         random_seed=random_seed,
         fixed_assignments=fixed_assignments,
         previous_assignment_by_session=previous_assignment_by_session,
+        generation_options=generation_options,
     )
 
 
@@ -54,6 +56,7 @@ def _cp_sat_session_assignment(
     random_seed,
     fixed_assignments,
     previous_assignment_by_session,
+    generation_options,
 ):
     model = cp_model.CpModel()
     session_count = len(sessions)
@@ -92,6 +95,13 @@ def _cp_sat_session_assignment(
         sessions=sessions,
         slots=slots,
     )
+    add_tc_slot_capacity_constraints(
+        model=model,
+        x=x,
+        sessions=sessions,
+        slots=slots,
+        generation_options=generation_options,
+    )
 
     _add_resource_interval_non_overlap_constraints(
         model=model,
@@ -108,21 +118,6 @@ def _cp_sat_session_assignment(
         resource_key="group_id",
     )
 
-    # Backward-compatible call (kept as no-op in hard constraints module).
-    add_resource_non_overlap_constraints(
-        model=model,
-        x=x,
-        slot_count=slot_count,
-        sessions=sessions,
-        resource_key="teacher_id",
-    )
-    add_resource_non_overlap_constraints(
-        model=model,
-        x=x,
-        slot_count=slot_count,
-        sessions=sessions,
-        resource_key="group_id",
-    )
     _add_classroom_non_overlap_constraints(
         model=model,
         y=y,
@@ -339,28 +334,22 @@ def _add_exactly_one_slot_and_classroom_constraints(
 
 
 def _add_classroom_non_overlap_constraints(*, model, y, slots, classrooms):
-    classroom_ids = {
-        classroom.id
-        for compatible_classrooms in classrooms.values()
-        for classroom in compatible_classrooms
-    }
+    real_time_intervals = build_real_time_intervals(slots=slots)
+    vars_by_classroom_and_slot = {}
+
+    for (_, slot_idx, classroom_id), var in y.items():
+        vars_by_classroom_and_slot.setdefault((classroom_id, slot_idx), []).append(var)
+
+    classroom_ids = {classroom_id for classroom_id, _ in vars_by_classroom_and_slot}
     for classroom_id in classroom_ids:
-        for left_slot in range(len(slots)):
-            for right_slot in range(left_slot, len(slots)):
-                if not slot_overlaps(
-                    left_slot=slots[left_slot],
-                    right_slot=slots[right_slot],
-                ):
-                    continue
-                model.Add(
-                    sum(
-                        var
-                        for (_, var_p_idx, var_classroom_id), var in y.items()
-                        if var_classroom_id == classroom_id
-                        and var_p_idx in (left_slot, right_slot)
-                    )
-                    <= 1
+        for interval in real_time_intervals:
+            interval_vars = []
+            for slot_idx in interval["slot_indices"]:
+                interval_vars.extend(
+                    vars_by_classroom_and_slot.get((classroom_id, slot_idx), [])
                 )
+            if interval_vars:
+                model.Add(sum(interval_vars) <= 1)
 
 
 def _add_resource_interval_non_overlap_constraints(
@@ -370,14 +359,14 @@ def _add_resource_interval_non_overlap_constraints(
         sessions=sessions,
         resource_key=resource_key,
     )
-    overlapping_slot_pairs = _build_overlapping_slot_pairs(slots=slots)
+    real_time_intervals = build_real_time_intervals(slots=slots)
 
     for resource_sessions in resource_to_sessions.values():
-        _add_resource_pair_constraints(
+        _add_resource_interval_capacity_constraints(
             model=model,
             x=x,
             resource_sessions=resource_sessions,
-            overlapping_slot_pairs=overlapping_slot_pairs,
+            real_time_intervals=real_time_intervals,
         )
 
 
@@ -398,39 +387,17 @@ def _session_resource_id(*, session, resource_key):
     return session.get(resource_key)
 
 
-def _build_overlapping_slot_pairs(*, slots):
-    overlapping_slot_pairs = []
-    slot_count = len(slots)
-    for left_idx in range(slot_count):
-        for right_idx in range(left_idx, slot_count):
-            if slot_overlaps(left_slot=slots[left_idx], right_slot=slots[right_idx]):
-                overlapping_slot_pairs.append((left_idx, right_idx))
-    return overlapping_slot_pairs
-
-
-def _add_resource_pair_constraints(
-    *, model, x, resource_sessions, overlapping_slot_pairs
+def _add_resource_interval_capacity_constraints(
+    *, model, x, resource_sessions, real_time_intervals
 ):
-    for first_pos, first_session in enumerate(resource_sessions):
-        for second_session in resource_sessions[first_pos + 1 :]:
-            _add_session_pair_overlap_constraints(
-                model=model,
-                x=x,
-                first_session=first_session,
-                second_session=second_session,
-                overlapping_slot_pairs=overlapping_slot_pairs,
-            )
-
-
-def _add_session_pair_overlap_constraints(
-    *, model, x, first_session, second_session, overlapping_slot_pairs
-):
-    for left_idx, right_idx in overlapping_slot_pairs:
-        model.Add(x[(first_session, left_idx)] + x[(second_session, right_idx)] <= 1)
-        if left_idx != right_idx:
-            model.Add(
-                x[(first_session, right_idx)] + x[(second_session, left_idx)] <= 1
-            )
+    for interval in real_time_intervals:
+        interval_terms = [
+            x[(session_idx, slot_idx)]
+            for session_idx in resource_sessions
+            for slot_idx in interval["slot_indices"]
+        ]
+        if interval_terms:
+            model.Add(sum(interval_terms) <= 1)
 
 
 def _extract_slot_and_classroom_assignment(

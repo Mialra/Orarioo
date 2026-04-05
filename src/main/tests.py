@@ -1,6 +1,29 @@
 from django.test import TestCase
+from django.urls import reverse
 
 
 class MainSmokeTests(TestCase):
     def test_placeholder(self):
         self.assertTrue(True)
+
+    def test_dashboard_saved_detail_route_sets_saved_section(self):
+        response = self.client.get(
+            reverse(
+                "dashboard-saved-detail",
+                kwargs={"timetable_name": "Horario Demo"},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["dashboard_section"], "saved")
+        self.assertEqual(
+            response.context["dashboard_saved_timetable_name"],
+            "Horario Demo",
+        )
+
+    def test_dashboard_saved_route_has_empty_selected_timetable_name(self):
+        response = self.client.get(reverse("dashboard-saved"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["dashboard_section"], "saved")
+        self.assertEqual(response.context["dashboard_saved_timetable_name"], "")

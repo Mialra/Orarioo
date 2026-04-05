@@ -1,9 +1,11 @@
 import logging
 import random
 import re
+from datetime import datetime, timedelta
 from io import BytesIO
 
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Max, Q
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
@@ -17,11 +19,23 @@ from common.drf import TeamScopedAuditableModelViewSet
 from common.export_utils import build_csv_response, sanitize_filename_stem
 from group.models import Group
 from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
+from schedule.algorithm.constraints.hard import (
+    group_daily_limit,
+    session_preference_state,
+    teacher_preference_state,
+)
 from schedule.algorithm.generator import ScheduleReplanner
+from schedule.algorithm.slots import (
+    STAGE_SLOT_WINDOWS,
+    session_stage_code,
+    slot_preference_key_from_datetime,
+)
 from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule
 from schedule.serializers import ScheduleSerializer
+from subject.models import SubjectTimePreferenceState
 from teacher.models import Teacher
+from teacher.models import TeacherTimePreferenceState
 from user.models import User
 
 logger = logging.getLogger(__name__)
@@ -53,6 +67,8 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
     DEFAULT_GENERATION_OPTIONS = {
         "recess_supervisors_preschool": 0,
         "recess_supervisors_primary": 0,
+        "include_tc": True,
+        "tc_capacity": 1,
     }
 
     queryset = Schedule.objects.all().select_related(
@@ -82,6 +98,14 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         "primary": [("11:30", "12:00")],
         "secondary": [("11:00", "11:30")],
     }
+    DAY_NAME_TO_WEEKDAY = {
+        "Lunes": 0,
+        "Martes": 1,
+        "Miércoles": 2,
+        "Jueves": 3,
+        "Viernes": 4,
+    }
+    WEEKDAY_TO_DAY_NAME = {value: key for key, value in DAY_NAME_TO_WEEKDAY.items()}
 
     @staticmethod
     def _parse_positive_int(raw_value, field_name):
@@ -344,10 +368,37 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
 
     @classmethod
     def _build_export_rows(cls, schedules):
+        weekday_to_name = {
+            0: "Lunes",
+            1: "Martes",
+            2: "Miércoles",
+            3: "Jueves",
+            4: "Viernes",
+            5: "Sábado",
+            6: "Domingo",
+        }
+
         rows = []
         for schedule in schedules:
+            local_start = (
+                timezone.localtime(schedule.start_time)
+                if schedule.start_time
+                else None
+            )
+            local_end = (
+                timezone.localtime(schedule.end_time)
+                if schedule.end_time
+                else None
+            )
             rows.append(
                 {
+                    "day": (
+                        weekday_to_name.get(local_start.weekday(), "")
+                        if local_start
+                        else ""
+                    ),
+                    "start": local_start.strftime("%H:%M") if local_start else "",
+                    "end": local_end.strftime("%H:%M") if local_end else "",
                     "subject": schedule.subject.name if schedule.subject else "",
                     "teacher": schedule.teacher.name if schedule.teacher else "",
                     "group": schedule.group.name if schedule.group else "",
@@ -420,6 +471,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
     @staticmethod
     def _build_csv_response(rows, filename):
         header = [
+            "Día",
+            "Inicio",
+            "Fin",
             "Asignatura",
             "Profesor",
             "Curso",
@@ -429,6 +483,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             header,
             [
                 [
+                    row["day"],
+                    row["start"],
+                    row["end"],
                     row["subject"],
                     row["teacher"],
                     row["group"],
@@ -439,7 +496,6 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             filename,
         )
 
-    @classmethod
     @staticmethod
     def _make_unique_sheet_title(base_title, used_titles):
         """Generate a unique Excel sheet title (max 31 chars)."""
@@ -464,6 +520,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         for row in rows:
             sheet.append(
                 [
+                    row["day"],
+                    row["start"],
+                    row["end"],
                     row["subject"],
                     row["teacher"],
                     row["group"],
@@ -480,7 +539,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         default_sheet = workbook.active
         workbook.remove(default_sheet)
 
-        headers = ["Asignatura", "Profesor", "Curso", "Aula"]
+        headers = ["Día", "Inicio", "Fin", "Asignatura", "Profesor", "Curso", "Aula"]
         used_titles = set()
 
         if not units:
@@ -530,7 +589,6 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             return "secondary"
         return value
 
-    @classmethod
     @staticmethod
     def _describe_schedule(schedule):
         """Get display name for a schedule's subject."""
@@ -782,11 +840,25 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         return value, None
 
     @classmethod
+    def _parse_generation_bool(cls, payload, field_name):
+        raw_value = payload.get(field_name)
+        if raw_value in (None, ""):
+            return None, None
+
+        if isinstance(raw_value, bool):
+            return raw_value, None
+
+        return cls._parse_bool_param(raw_value, field_name)
+
+    @classmethod
     def _parse_base_generation_int_options(cls, payload, options):
         int_fields = {
             "recess_supervisors_preschool": (0, 20),
             "recess_supervisors_primary": (0, 20),
         }
+
+        if options.get("include_tc", True):
+            int_fields["tc_capacity"] = (1, 10)
 
         for field_name, bounds in int_fields.items():
             parsed, error_response = cls._parse_generation_int(
@@ -802,8 +874,27 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         return None
 
     @classmethod
+    def _parse_base_generation_bool_options(cls, payload, options):
+        bool_fields = ["include_tc"]
+
+        for field_name in bool_fields:
+            parsed, error_response = cls._parse_generation_bool(payload, field_name)
+            if error_response is not None:
+                return error_response
+            if parsed is not None:
+                options[field_name] = parsed
+        return None
+
+    @classmethod
     def _parse_generation_options(cls, payload):
         options = dict(cls.DEFAULT_GENERATION_OPTIONS)
+        bool_options_error = cls._parse_base_generation_bool_options(
+            payload,
+            options,
+        )
+        if bool_options_error is not None:
+            return None, bool_options_error
+
         base_options_error = cls._parse_base_generation_int_options(
             payload,
             options,
@@ -865,14 +956,61 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    def saved(self, request):
-        saved_queryset = (
+    def _saved_queryset_for_user(self, request_user):
+        return (
             self.get_queryset()
             .exclude(observations=AUTO_GENERATED_OBSERVATION)
-            .filter(users=request.user)
-            .order_by("start_time", "id")
+            .filter(users=request_user)
+        )
+
+    def saved(self, request):
+        saved_queryset = self._saved_queryset_for_user(request.user).order_by(
+            "start_time", "id"
         )
         serialized = self.get_serializer(saved_queryset, many=True)
+        return Response(
+            {
+                "count": len(serialized.data),
+                "results": serialized.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def saved_summary(self, request):
+        summary_queryset = (
+            self._saved_queryset_for_user(request.user)
+            .exclude(name__isnull=True)
+            .exclude(name__exact="")
+            .values("name")
+            .annotate(updated_at=Max("updated_at"))
+            .order_by("-updated_at", "name")
+        )
+        summary_items = list(summary_queryset)
+        return Response(
+            {
+                "count": len(summary_items),
+                "results": summary_items,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def saved_detail(self, request):
+        timetable_name = (request.query_params.get("timetable_name") or "").strip()
+        if not timetable_name:
+            return Response(
+                {"detail": "timetable_name query parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        schedules, error_response = self._fetch_saved_timetable_schedules(
+            request_user=request.user,
+            timetable_name=timetable_name,
+            team=self.get_active_team(),
+        )
+        if error_response is not None:
+            return error_response
+
+        serialized = self.get_serializer(schedules, many=True)
         return Response(
             {
                 "count": len(serialized.data),
@@ -1054,6 +1192,15 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             )
             schedule.users.add(*target_users)
 
+    @staticmethod
+    def _saved_timetable_name_exists(*, request_user, timetable_name, team):
+        saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
+        return Schedule.objects.filter(
+            users=request_user,
+            observations=saved_observation,
+            team=team,
+        ).exists()
+
     def save_generated(self, request):
         actor = getattr(request.user, "email", "")
         active_team = self.get_active_team()
@@ -1062,6 +1209,21 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         if not timetable_name:
             return Response(
                 {"timetable_name": "timetable_name is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if self._saved_timetable_name_exists(
+            request_user=request.user,
+            timetable_name=timetable_name,
+            team=active_team,
+        ):
+            return Response(
+                {
+                    "timetable_name": (
+                        "A saved timetable with this name already exists. "
+                        "Use another name or delete the previous one."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1113,6 +1275,869 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "detail": "Generated schedules saved successfully.",
                 "saved_count": len(schedules),
                 "schedules": serialized.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @staticmethod
+    def _parse_hhmm(raw_value, field_name):
+        value = (raw_value or "").strip()
+        try:
+            return datetime.strptime(value, "%H:%M").time(), None
+        except ValueError:
+            return None, Response(
+                {"detail": f"{field_name} must follow HH:MM format."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    @classmethod
+    def _normalize_move_mode(cls, raw_mode):
+        mode = (raw_mode or "move").strip().lower()
+        if mode not in {"move", "swap"}:
+            return None, Response(
+                {"detail": "mode must be one of: move, swap."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return mode, None
+
+    @classmethod
+    def _parse_move_slot(cls, slot_data, slot_label, *, require_schedule_id=False):
+        if not isinstance(slot_data, dict):
+            return None, Response(
+                {"detail": f"{slot_label} must be an object."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        day_name = (slot_data.get("day") or "").strip()
+        if day_name not in cls.DAY_NAME_TO_WEEKDAY:
+            return None, Response(
+                {
+                    "detail": (
+                        f"{slot_label}.day must be one of: "
+                        "Lunes, Martes, Miércoles, Jueves, Viernes."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        start_raw = slot_data.get("start")
+        end_raw = slot_data.get("end")
+        start_time, start_error = cls._parse_hhmm(start_raw, f"{slot_label}.start")
+        if start_error is not None:
+            return None, start_error
+        end_time, end_error = cls._parse_hhmm(end_raw, f"{slot_label}.end")
+        if end_error is not None:
+            return None, end_error
+        if end_time <= start_time:
+            return None, Response(
+                {"detail": f"{slot_label}.end must be greater than {slot_label}.start."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        schedule_id = None
+        raw_schedule_id = slot_data.get("schedule_id")
+        if require_schedule_id and raw_schedule_id in (None, ""):
+            return None, Response(
+                {"detail": f"{slot_label}.schedule_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if raw_schedule_id not in (None, ""):
+            parsed_schedule_id, parse_error = cls._parse_positive_int(
+                raw_schedule_id,
+                f"{slot_label}.schedule_id",
+            )
+            if parse_error is not None:
+                return None, parse_error
+            schedule_id = parsed_schedule_id
+
+        return {
+            "day": day_name,
+            "start": start_time.strftime("%H:%M"),
+            "end": end_time.strftime("%H:%M"),
+            "start_time": start_time,
+            "end_time": end_time,
+            "schedule_id": schedule_id,
+        }, None
+
+    @classmethod
+    def _slot_descriptor_from_datetimes(cls, start_dt, end_dt):
+        local_start = timezone.localtime(start_dt)
+        local_end = timezone.localtime(end_dt)
+        return {
+            "day": cls.WEEKDAY_TO_DAY_NAME.get(local_start.weekday(), ""),
+            "start": local_start.strftime("%H:%M"),
+            "end": local_end.strftime("%H:%M"),
+        }
+
+    @classmethod
+    def _resolve_slot_datetimes_for_source_week(
+        cls,
+        *,
+        source_start,
+        day_name,
+        start_time,
+        end_time,
+    ):
+        source_local = timezone.localtime(source_start)
+        monday_date = source_local.date() - timedelta(days=source_local.weekday())
+        target_date = monday_date + timedelta(days=cls.DAY_NAME_TO_WEEKDAY[day_name])
+        current_tz = timezone.get_current_timezone()
+        target_start = timezone.make_aware(
+            datetime.combine(target_date, start_time),
+            current_tz,
+        )
+        target_end = timezone.make_aware(
+            datetime.combine(target_date, end_time),
+            current_tz,
+        )
+        return target_start, target_end
+
+    def _resolve_timetable_scope_queryset(
+        self,
+        *,
+        request_user,
+        source_schedule,
+        active_team,
+    ):
+        scoped_queryset = self.get_queryset().filter(
+            users=request_user,
+            team=active_team,
+        )
+        if source_schedule.observations == AUTO_GENERATED_OBSERVATION:
+            return scoped_queryset.filter(
+                observations=AUTO_GENERATED_OBSERVATION,
+                created_by=source_schedule.created_by,
+            )
+        if source_schedule.observations.startswith(f"{SAVED_TIMETABLE_PREFIX}:"):
+            return scoped_queryset.filter(observations=source_schedule.observations)
+        return scoped_queryset.filter(
+            name=source_schedule.name,
+            observations=source_schedule.observations,
+        )
+
+    @staticmethod
+    def _times_overlap(*, left_start, left_end, right_start, right_end):
+        return left_start < right_end and right_start < left_end
+
+    @staticmethod
+    def _normalize_clock(value):
+        return value.replace(second=0, microsecond=0, tzinfo=None)
+
+    def _is_stage_window_allowed(self, *, schedule, start_dt, end_dt):
+        stage_code = session_stage_code(
+            session={"group": schedule.group, "subject": schedule.subject}
+        )
+        allowed_windows = STAGE_SLOT_WINDOWS.get(stage_code, [])
+
+        local_start = timezone.localtime(start_dt)
+        local_end = timezone.localtime(end_dt)
+        if local_start.date() != local_end.date() or local_start.weekday() > 4:
+            return False
+
+        candidate_window = (
+            self._normalize_clock(local_start.time()),
+            self._normalize_clock(local_end.time()),
+        )
+        normalized_allowed = {
+            (self._normalize_clock(left), self._normalize_clock(right))
+            for left, right in allowed_windows
+        }
+        return candidate_window in normalized_allowed
+
+    @staticmethod
+    def _validate_target_preferences(*, schedule, start_dt):
+        slot_key = slot_preference_key_from_datetime(slot=start_dt)
+        if slot_key is None:
+            return None
+
+        session_ctx = {"subject": schedule.subject, "teacher": schedule.teacher}
+        subject_state = session_preference_state(
+            session=session_ctx,
+            slot_preference_key=slot_key,
+        )
+        if subject_state == SubjectTimePreferenceState.UNAVAILABLE:
+            return (
+                f"Subject '{schedule.subject.name}' is unavailable at {slot_key}."
+            )
+
+        teacher_state = teacher_preference_state(
+            session=session_ctx,
+            slot_preference_key=slot_key,
+        )
+        if teacher_state == TeacherTimePreferenceState.UNAVAILABLE:
+            return (
+                f"Teacher '{schedule.teacher.name}' is unavailable at {slot_key}."
+            )
+        return None
+
+    @staticmethod
+    def _build_hypothetical_times(*, scope_schedules, assignments):
+        hypothetical = {
+            schedule.id: (schedule.start_time, schedule.end_time)
+            for schedule in scope_schedules
+        }
+        hypothetical.update(assignments)
+        return hypothetical
+
+    def _validate_resource_overlaps_for_changes(
+        self,
+        *,
+        scope_schedules,
+        hypothetical_times,
+        changed_ids,
+    ):
+        schedule_by_id = {schedule.id: schedule for schedule in scope_schedules}
+        for changed_id in changed_ids:
+            current_schedule = schedule_by_id[changed_id]
+            current_start, current_end = hypothetical_times[changed_id]
+            for other_schedule in scope_schedules:
+                if other_schedule.id == changed_id:
+                    continue
+
+                other_start, other_end = hypothetical_times[other_schedule.id]
+                if not self._times_overlap(
+                    left_start=current_start,
+                    left_end=current_end,
+                    right_start=other_start,
+                    right_end=other_end,
+                ):
+                    continue
+
+                if (
+                    current_schedule.teacher_id is not None
+                    and current_schedule.teacher_id == other_schedule.teacher_id
+                ):
+                    return Response(
+                        {
+                            "detail": (
+                                "Teacher conflict detected in target slot for "
+                                f"'{current_schedule.teacher.name}'."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                if (
+                    current_schedule.group_id is not None
+                    and current_schedule.group_id == other_schedule.group_id
+                ):
+                    return Response(
+                        {
+                            "detail": (
+                                "Group conflict detected in target slot for "
+                                f"'{current_schedule.group.name}'."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                if (
+                    current_schedule.classroom_id is not None
+                    and current_schedule.classroom_id == other_schedule.classroom_id
+                ):
+                    return Response(
+                        {
+                            "detail": (
+                                "Classroom conflict detected in target slot for "
+                                f"'{current_schedule.classroom.name}'."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+        return None
+
+    def _validate_group_daily_limits(
+        self,
+        *,
+        scope_schedules,
+        hypothetical_times,
+        changed_group_ids,
+    ):
+        group_by_id = {}
+        day_count_by_group = {}
+
+        for schedule in scope_schedules:
+            if schedule.group_id not in changed_group_ids:
+                continue
+            group_by_id[schedule.group_id] = schedule.group
+            schedule_start, _ = hypothetical_times[schedule.id]
+            schedule_day = timezone.localtime(schedule_start).date()
+            key = (schedule.group_id, schedule_day)
+            day_count_by_group[key] = day_count_by_group.get(key, 0) + 1
+
+        for (group_id, _), count in day_count_by_group.items():
+            group = group_by_id.get(group_id)
+            if group is None:
+                continue
+            if count > group_daily_limit(group):
+                return Response(
+                    {
+                        "detail": (
+                            f"Group '{group.name}' exceeds daily slot limit for "
+                            "its stage."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        return None
+
+    def _validate_group_intraday_gaps(
+        self,
+        *,
+        scope_schedules,
+        hypothetical_times,
+        changed_group_ids,
+    ):
+        schedules_by_group = self._group_schedules_by_id(
+            scope_schedules=scope_schedules,
+            changed_group_ids=changed_group_ids,
+        )
+
+        for group_schedules in schedules_by_group.values():
+            if not group_schedules:
+                continue
+
+            reference_group = group_schedules[0].group
+            window_to_index = self._window_index_by_stage(reference_group)
+            if not window_to_index:
+                continue
+
+            by_day_indices = self._collect_group_day_window_indices(
+                group_schedules=group_schedules,
+                hypothetical_times=hypothetical_times,
+                window_to_index=window_to_index,
+            )
+            if by_day_indices is None:
+                continue
+
+            for occupied_indices in by_day_indices.values():
+                if self._has_intraday_gap(occupied_indices):
+                    return Response(
+                        {
+                            "detail": (
+                                f"Group '{reference_group.name}' would have intraday "
+                                "gaps with that move."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+        return None
+
+    @staticmethod
+    def _group_schedules_by_id(*, scope_schedules, changed_group_ids):
+        grouped = {}
+        for schedule in scope_schedules:
+            if schedule.group_id in changed_group_ids:
+                grouped.setdefault(schedule.group_id, []).append(schedule)
+        return grouped
+
+    def _window_index_by_stage(self, group):
+        stage_code = session_stage_code(session={"group": group, "subject": None})
+        allowed_windows = STAGE_SLOT_WINDOWS.get(stage_code, [])
+        return {
+            (self._normalize_clock(left), self._normalize_clock(right)): index
+            for index, (left, right) in enumerate(allowed_windows)
+        }
+
+    def _collect_group_day_window_indices(
+        self,
+        *,
+        group_schedules,
+        hypothetical_times,
+        window_to_index,
+    ):
+        by_day = {}
+        for schedule in group_schedules:
+            start_dt, end_dt = hypothetical_times[schedule.id]
+            day_key = timezone.localtime(start_dt).date()
+            by_day.setdefault(day_key, []).append((start_dt, end_dt))
+
+        by_day_indices = {}
+        for day_key, day_items in by_day.items():
+            occupied_indices = []
+            for start_dt, end_dt in day_items:
+                local_start = timezone.localtime(start_dt)
+                local_end = timezone.localtime(end_dt)
+                window_key = (
+                    self._normalize_clock(local_start.time()),
+                    self._normalize_clock(local_end.time()),
+                )
+                index = window_to_index.get(window_key)
+                if index is None:
+                    return None
+                occupied_indices.append(index)
+            if occupied_indices:
+                by_day_indices[day_key] = occupied_indices
+        return by_day_indices
+
+    @staticmethod
+    def _has_intraday_gap(occupied_indices):
+        first_idx = min(occupied_indices)
+        last_idx = max(occupied_indices)
+        occupied_set = set(occupied_indices)
+        return any(index not in occupied_set for index in range(first_idx, last_idx + 1))
+
+    def _validate_minimal_move_constraints(
+        self,
+        *,
+        scope_schedules,
+        assignments,
+        changed_ids,
+    ):
+        hypothetical_times = self._build_hypothetical_times(
+            scope_schedules=scope_schedules,
+            assignments=assignments,
+        )
+        schedule_by_id = {schedule.id: schedule for schedule in scope_schedules}
+
+        for changed_id in changed_ids:
+            schedule = schedule_by_id[changed_id]
+            start_dt, end_dt = hypothetical_times[changed_id]
+
+            if end_dt <= start_dt:
+                return Response(
+                    {"detail": "Target slot must end after it starts."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not self._is_stage_window_allowed(
+                schedule=schedule,
+                start_dt=start_dt,
+                end_dt=end_dt,
+            ):
+                return Response(
+                    {
+                        "detail": (
+                            "Target slot is not allowed for the session stage "
+                            f"({schedule.group.stage})."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            preference_error = self._validate_target_preferences(
+                schedule=schedule,
+                start_dt=start_dt,
+            )
+            if preference_error is not None:
+                return Response(
+                    {"detail": preference_error},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        overlap_error = self._validate_resource_overlaps_for_changes(
+            scope_schedules=scope_schedules,
+            hypothetical_times=hypothetical_times,
+            changed_ids=changed_ids,
+        )
+        if overlap_error is not None:
+            return overlap_error
+
+        changed_group_ids = {
+            schedule_by_id[schedule_id].group_id
+            for schedule_id in changed_ids
+            if schedule_by_id[schedule_id].group_id is not None
+        }
+
+        daily_limit_error = self._validate_group_daily_limits(
+            scope_schedules=scope_schedules,
+            hypothetical_times=hypothetical_times,
+            changed_group_ids=changed_group_ids,
+        )
+        if daily_limit_error is not None:
+            return daily_limit_error
+
+        gap_error = self._validate_group_intraday_gaps(
+            scope_schedules=scope_schedules,
+            hypothetical_times=hypothetical_times,
+            changed_group_ids=changed_group_ids,
+        )
+        if gap_error is not None:
+            return gap_error
+
+        return None
+
+    def _fetch_source_schedule_for_move(self, *, request_user, active_team, source_slot):
+        source_schedule = (
+            self.get_queryset()
+            .filter(
+                id=source_slot["schedule_id"],
+                users=request_user,
+                team=active_team,
+            )
+            .first()
+        )
+        if source_schedule is None:
+            return None, Response(
+                {"detail": "Source schedule not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        source_local_start = timezone.localtime(source_schedule.start_time)
+        source_local_end = timezone.localtime(source_schedule.end_time)
+        actual_source_day = self.WEEKDAY_TO_DAY_NAME.get(source_local_start.weekday())
+        source_outdated = (
+            actual_source_day != source_slot["day"]
+            or source_local_start.strftime("%H:%M") != source_slot["start"]
+            or source_local_end.strftime("%H:%M") != source_slot["end"]
+        )
+        if source_outdated:
+            return None, Response(
+                {
+                    "detail": (
+                        "The source slot no longer matches current data. "
+                        "Refresh and try again."
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return source_schedule, None
+
+    @staticmethod
+    def _move_no_changes_response(mode):
+        return Response(
+            {
+                "detail": "No changes were applied.",
+                "mode": mode,
+                "no_changes": True,
+                "affected_schedules": [],
+                "affected_slots": [],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def _resolve_move_scope(self, *, request_user, source_schedule, active_team):
+        scope_queryset = self._resolve_timetable_scope_queryset(
+            request_user=request_user,
+            source_schedule=source_schedule,
+            active_team=active_team,
+        )
+        scope_schedules = list(scope_queryset.order_by("id"))
+        scope_by_id = {schedule.id: schedule for schedule in scope_schedules}
+        if source_schedule.id not in scope_by_id:
+            return None, None, None, Response(
+                {"detail": "Source schedule is outside editable timetable scope."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return scope_queryset, scope_schedules, scope_by_id, None
+
+    def _resolve_swap_target_for_move(
+        self,
+        *,
+        scope_queryset,
+        scope_by_id,
+        source_schedule,
+        target_slot,
+        target_start_dt,
+        target_end_dt,
+    ):
+        target_schedule_id = target_slot["schedule_id"]
+        if target_schedule_id is not None:
+            target_schedule = scope_by_id.get(target_schedule_id)
+            if target_schedule is None:
+                return None, Response(
+                    {
+                        "detail": (
+                            "target_slot.schedule_id must belong to the same "
+                            "timetable scope as source_slot.schedule_id."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if (
+                target_schedule.start_time != target_start_dt
+                or target_schedule.end_time != target_end_dt
+            ):
+                return None, Response(
+                    {
+                        "detail": (
+                            "Target schedule no longer matches target slot. "
+                            "Refresh and try again."
+                        )
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            return target_schedule, None
+
+        target_schedule = (
+            scope_queryset.filter(start_time=target_start_dt, end_time=target_end_dt)
+            .exclude(id=source_schedule.id)
+            .order_by("id")
+            .first()
+        )
+        if target_schedule is None:
+            return None, Response(
+                {"detail": "Swap requires a target schedule in destination slot."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return target_schedule, None
+
+    @staticmethod
+    def _apply_move_assignments(
+        *,
+        source_schedule,
+        target_schedule,
+        target_start_dt,
+        target_end_dt,
+        original_source_times,
+        actor,
+    ):
+        affected_schedules = []
+        with transaction.atomic():
+            source_schedule.start_time = target_start_dt
+            source_schedule.end_time = target_end_dt
+            source_schedule.updated_by = actor
+            source_schedule.save(
+                update_fields=["start_time", "end_time", "updated_by", "updated_at"]
+            )
+            affected_schedules.append(source_schedule)
+
+            if target_schedule is not None:
+                target_schedule.start_time = original_source_times[0]
+                target_schedule.end_time = original_source_times[1]
+                target_schedule.updated_by = actor
+                target_schedule.save(
+                    update_fields=[
+                        "start_time",
+                        "end_time",
+                        "updated_by",
+                        "updated_at",
+                    ]
+                )
+                affected_schedules.append(target_schedule)
+        return affected_schedules
+
+    def _build_affected_slot_descriptors(
+        self,
+        *,
+        original_source_times,
+        target_start_dt,
+        target_end_dt,
+        original_target_times,
+    ):
+        affected_slots = [
+            self._slot_descriptor_from_datetimes(
+                original_source_times[0],
+                original_source_times[1],
+            ),
+            self._slot_descriptor_from_datetimes(target_start_dt, target_end_dt),
+        ]
+        if original_target_times is not None:
+            affected_slots.append(
+                self._slot_descriptor_from_datetimes(
+                    original_target_times[0],
+                    original_target_times[1],
+                )
+            )
+
+        unique_affected_slots = []
+        seen_slots = set()
+        for slot in affected_slots:
+            key = (slot["day"], slot["start"], slot["end"])
+            if key in seen_slots:
+                continue
+            seen_slots.add(key)
+            unique_affected_slots.append(slot)
+        return unique_affected_slots
+
+    def _parse_move_request_payload(self, payload):
+        mode, mode_error = self._normalize_move_mode(payload.get("mode"))
+        if mode_error is not None:
+            return None, mode_error
+
+        source_slot, source_error = self._parse_move_slot(
+            payload.get("source_slot"),
+            "source_slot",
+            require_schedule_id=True,
+        )
+        if source_error is not None:
+            return None, source_error
+
+        target_slot, target_error = self._parse_move_slot(
+            payload.get("target_slot"),
+            "target_slot",
+            require_schedule_id=False,
+        )
+        if target_error is not None:
+            return None, target_error
+
+        return {
+            "mode": mode,
+            "source_slot": source_slot,
+            "target_slot": target_slot,
+        }, None
+
+    def _resolve_target_schedule_for_mode(
+        self,
+        *,
+        mode,
+        scope_queryset,
+        scope_by_id,
+        source_schedule,
+        target_slot,
+        target_start_dt,
+        target_end_dt,
+    ):
+        if mode != "swap":
+            return None, None
+
+        return self._resolve_swap_target_for_move(
+            scope_queryset=scope_queryset,
+            scope_by_id=scope_by_id,
+            source_schedule=source_schedule,
+            target_slot=target_slot,
+            target_start_dt=target_start_dt,
+            target_end_dt=target_end_dt,
+        )
+
+    @staticmethod
+    def _is_no_changes_move(
+        *,
+        mode,
+        source_schedule,
+        target_schedule,
+        target_start_dt,
+        target_end_dt,
+    ):
+        if target_schedule is not None and target_schedule.id == source_schedule.id:
+            return True
+
+        return (
+            mode == "move"
+            and source_schedule.start_time == target_start_dt
+            and source_schedule.end_time == target_end_dt
+        )
+
+    @staticmethod
+    def _build_move_assignments(
+        *,
+        source_schedule,
+        target_schedule,
+        target_start_dt,
+        target_end_dt,
+    ):
+        original_source_times = (source_schedule.start_time, source_schedule.end_time)
+        assignments = {source_schedule.id: (target_start_dt, target_end_dt)}
+        changed_ids = {source_schedule.id}
+        original_target_times = None
+
+        if target_schedule is not None:
+            original_target_times = (target_schedule.start_time, target_schedule.end_time)
+            assignments[target_schedule.id] = original_source_times
+            changed_ids.add(target_schedule.id)
+
+        return assignments, changed_ids, original_source_times, original_target_times
+
+    def move(self, request):
+        actor = getattr(request.user, "email", "")
+        active_team = self.get_active_team()
+
+        parsed_request, parsed_request_error = self._parse_move_request_payload(
+            request.data
+        )
+        if parsed_request_error is not None:
+            return parsed_request_error
+
+        mode = parsed_request["mode"]
+        source_slot = parsed_request["source_slot"]
+        target_slot = parsed_request["target_slot"]
+
+        source_schedule, source_schedule_error = self._fetch_source_schedule_for_move(
+            request_user=request.user,
+            active_team=active_team,
+            source_slot=source_slot,
+        )
+        if source_schedule_error is not None:
+            return source_schedule_error
+
+        target_start_dt, target_end_dt = self._resolve_slot_datetimes_for_source_week(
+            source_start=source_schedule.start_time,
+            day_name=target_slot["day"],
+            start_time=target_slot["start_time"],
+            end_time=target_slot["end_time"],
+        )
+
+        (
+            scope_queryset,
+            scope_schedules,
+            scope_by_id,
+            scope_error,
+        ) = self._resolve_move_scope(
+            request_user=request.user,
+            source_schedule=source_schedule,
+            active_team=active_team,
+        )
+        if scope_error is not None:
+            return scope_error
+
+        target_schedule, target_schedule_error = self._resolve_target_schedule_for_mode(
+            mode=mode,
+            scope_queryset=scope_queryset,
+            scope_by_id=scope_by_id,
+            source_schedule=source_schedule,
+            target_slot=target_slot,
+            target_start_dt=target_start_dt,
+            target_end_dt=target_end_dt,
+        )
+        if target_schedule_error is not None:
+            return target_schedule_error
+
+        if self._is_no_changes_move(
+            mode=mode,
+            source_schedule=source_schedule,
+            target_schedule=target_schedule,
+            target_start_dt=target_start_dt,
+            target_end_dt=target_end_dt,
+        ):
+            return self._move_no_changes_response(mode)
+
+        (
+            assignments,
+            changed_ids,
+            original_source_times,
+            original_target_times,
+        ) = self._build_move_assignments(
+            source_schedule=source_schedule,
+            target_schedule=target_schedule,
+            target_start_dt=target_start_dt,
+            target_end_dt=target_end_dt,
+        )
+
+        validation_error = self._validate_minimal_move_constraints(
+            scope_schedules=scope_schedules,
+            assignments=assignments,
+            changed_ids=changed_ids,
+        )
+        if validation_error is not None:
+            return validation_error
+
+        affected_schedules = self._apply_move_assignments(
+            source_schedule=source_schedule,
+            target_schedule=target_schedule,
+            target_start_dt=target_start_dt,
+            target_end_dt=target_end_dt,
+            original_source_times=original_source_times,
+            actor=actor,
+        )
+
+        unique_affected_slots = self._build_affected_slot_descriptors(
+            original_source_times=original_source_times,
+            target_start_dt=target_start_dt,
+            target_end_dt=target_end_dt,
+            original_target_times=original_target_times,
+        )
+
+        serialized = self.get_serializer(affected_schedules, many=True)
+        return Response(
+            {
+                "detail": "Schedule change applied successfully.",
+                "mode": "swap" if target_schedule is not None else "move",
+                "no_changes": False,
+                "affected_schedules": serialized.data,
+                "affected_slots": unique_affected_slots,
             },
             status=status.HTTP_200_OK,
         )

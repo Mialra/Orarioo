@@ -19,6 +19,7 @@ class ScheduleSerializer(NamedEntityNameValidationMixin, serializers.ModelSerial
     group_name = serializers.CharField(source="group.name", read_only=True)
     group_stage = serializers.CharField(source="group.stage", read_only=True)
     subject_name = serializers.CharField(source="subject.name", read_only=True)
+    subject_type = serializers.CharField(source="subject.type", read_only=True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -54,6 +55,7 @@ class ScheduleSerializer(NamedEntityNameValidationMixin, serializers.ModelSerial
             "group_stage",
             "subject",
             "subject_name",
+            "subject_type",
             "users",
             *AUDIT_FIELD_NAMES,
         ]
@@ -64,6 +66,7 @@ class ScheduleSerializer(NamedEntityNameValidationMixin, serializers.ModelSerial
             "group_name",
             "group_stage",
             "subject_name",
+            "subject_type",
             *AUDIT_FIELD_NAMES,
         ]
 

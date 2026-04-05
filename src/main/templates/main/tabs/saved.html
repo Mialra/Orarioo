@@ -1,6 +1,112 @@
-<section class="dash-panel">
-    <div class="dash-empty-panel">
-        <h2 class="dash-empty-title">{{ dashboard_section_title }}</h2>
-        <p class="dash-empty-copy">Esta sección se construirá en la siguiente iteración del frontend.</p>
+<section
+    id="savedSection"
+    class="dash-panel dash-generator-card"
+    data-saved-list-url="{% url 'dashboard-saved' %}"
+    data-saved-detail-url-template="{% url 'dashboard-saved-detail' timetable_name='__SAVED_NAME__' %}"
+    data-open-saved-name="{{ dashboard_saved_timetable_name|default:''|escape }}"
+>
+    <div class="dash-panel-body schedule-flow">
+        <div id="scheduleAlert" class="alert d-none" role="alert"></div>
+
+        <section id="savedPickerSection" class="schedule-saved-picker">
+            <div class="dash-panel-header">
+                <div>
+                    <h2 class="dash-panel-title">Horarios Guardados</h2>
+                    <p class="dash-panel-copy">Selecciona un horario para verlo en detalle, filtrarlo y exportarlo.</p>
+                </div>
+            </div>
+
+            <div id="savedScheduleCards" class="saved-cards-grid">
+                <article class="saved-card-placeholder">
+                    <p class="text-secondary mb-0">Cargando horarios guardados...</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="savedWorkspaceSection" class="schedule-workspace d-none">
+            <div class="schedule-workspace-head">
+                <div class="schedule-workspace-brand">
+                    <div class="schedule-workspace-brand-icon" aria-hidden="true">
+                        <i data-lucide="folder-open" class="workspace-icon"></i>
+                    </div>
+                    <div>
+                        <h3 id="savedWorkspaceTitle" class="schedule-workspace-title mb-1">Horario Guardado</h3>
+                        <div class="schedule-workspace-meta">
+                            <span id="savedWorkspaceStateBadge" class="schedule-pill schedule-pill-saved">Guardado</span>
+                            <span id="savedWorkspaceCount" class="text-secondary">0 sesiones programadas</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="schedule-workspace-actions">
+                    <div class="schedule-toolbar-filters">
+                        <select id="savedWorkspaceCourseFilter" class="form-select schedule-toolbar-select" aria-label="Filtrar por curso">
+                            <option value="">Todos los cursos</option>
+                        </select>
+                        <select id="savedWorkspaceTeacherFilter" class="form-select schedule-toolbar-select" aria-label="Filtrar por profesor">
+                            <option value="">Todos los profesores</option>
+                        </select>
+                        <select id="savedWorkspaceSubjectFilter" class="form-select schedule-toolbar-select" aria-label="Filtrar por asignatura">
+                            <option value="">Todas las asignaturas</option>
+                        </select>
+                    </div>
+                    <div class="schedule-toolbar-buttons">
+                        <button type="button" id="savedWorkspacePdfBtn" class="btn btn-outline-secondary schedule-toolbar-btn">
+                            <i data-lucide="download" class="btn-icon" aria-hidden="true"></i>
+                            PDF
+                        </button>
+                        <button type="button" id="savedWorkspaceCsvBtn" class="btn btn-outline-secondary schedule-toolbar-btn">
+                            <i data-lucide="download" class="btn-icon" aria-hidden="true"></i>
+                            CSV
+                        </button>
+                        <button type="button" id="savedWorkspaceBackBtn" class="btn btn-outline-dark schedule-toolbar-btn">
+                            <i data-lucide="arrow-left" class="btn-icon" aria-hidden="true"></i>
+                            Volver
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="savedWorkspaceOutput" class="schedule-board-shell" style="display:none;"></div>
+        </section>
     </div>
 </section>
+
+<div id="exportModal" class="schedule-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+    <div class="schedule-modal-card">
+        <h3 id="exportModalTitle" class="h5 mb-1">Exportar horario</h3>
+        <p id="exportContextText" class="text-secondary small mb-3">Marca las entidades que quieres incluir o selecciona objetos concretos.</p>
+
+        <div class="mb-3">
+            <label for="exportFormat" class="form-label">Formato</label>
+            <select id="exportFormat" class="form-select">
+                <option value="csv">CSV</option>
+                <option value="pdf">PDF</option>
+            </select>
+        </div>
+
+        <div class="export-card-grid mb-2">
+            <button type="button" class="btn btn-outline-secondary export-entity-card" data-export-entity="group" aria-pressed="false">Todos los cursos</button>
+            <button type="button" class="btn btn-outline-secondary export-entity-card" data-export-entity="teacher" aria-pressed="false">Todos los profesores</button>
+            <button type="button" class="btn btn-outline-secondary export-entity-card" data-export-entity="classroom" aria-pressed="false">Todas las aulas</button>
+        </div>
+
+        <div class="row g-2">
+            <div class="col-12 col-md-4">
+                <label class="form-label">Cursos concretos</label>
+                <div id="exportGroupSelect" class="checkbox-list"></div>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label">Profesores concretos</label>
+                <div id="exportTeacherSelect" class="checkbox-list"></div>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label">Aulas concretas</label>
+                <div id="exportClassroomSelect" class="checkbox-list"></div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 mt-3">
+            <button type="button" id="cancelExportBtn" class="btn btn-outline-secondary">Cancelar</button>
+            <button type="button" id="confirmExportBtn" class="btn btn-primary">Exportar</button>
+        </div>
+    </div>
+</div>

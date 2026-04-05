@@ -18,14 +18,16 @@ django.setup()
 from django.contrib.auth import get_user_model  # noqa: E402
 
 from schedule.algorithm.generator import BasicScheduleGenerator  # noqa: E402
+from schedule.algorithm.slots import build_weekly_slots  # noqa: E402
 
 User = get_user_model()
 
 
 def test_schedule_generation():
-    """Generate schedule with all loaded data (345 sessions)"""
+    """Generate schedule with all loaded data."""
+    total_slots = len(build_weekly_slots())
     print("\n" + "=" * 70)
-    print("🚀 TESTING SCHEDULE GENERATION WITH 345 SESSIONS")
+    print("🚀 TESTING SCHEDULE GENERATION WITH CURRENT DATASET")
     print("=" * 70)
 
     admin = User.objects.filter(email="admin@test.com").first()
@@ -72,10 +74,10 @@ def test_schedule_generation():
             print(f"   • {row['group__name']}: {row['count']} assignments")
 
         print("\n📈 Performance Metrics:")
-        print("   • Total sessions: 345")
-        print("   • Total slots: 30")
+        print(f"   • Total sessions: {len(schedules)}")
+        print(f"   • Total slots: {total_slots}")
         print(f"   • Time elapsed: {elapsed:.2f}s")
-        print(f"   • Speed: {345 / elapsed:.1f} sessions/second")
+        print(f"   • Speed: {len(schedules) / elapsed:.1f} sessions/second")
         print(f"\n✨ Optimization achieved {60 / elapsed:.1f}x speedup vs 60s timeout!")
 
     except Exception as e:
