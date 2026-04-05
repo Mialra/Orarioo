@@ -9,7 +9,11 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 {% endif %}
 {% for stylesheet in dashboard_extra_css %}
+{% if stylesheet == 'css/schedules.css' %}
+<link rel="stylesheet" href="{% static stylesheet %}?v=20260405_saved_dragdrop_3">
+{% else %}
 <link rel="stylesheet" href="{% static stylesheet %}">
+{% endif %}
 {% endfor %}
 {% endblock %}
 
@@ -180,6 +184,10 @@
 {% endif %}
 <script src="{% static 'js/dashboard.js' %}"></script>
 {% for script in dashboard_extra_scripts %}
+{% if script == 'js/schedules.js' %}
+<script src="{% static script %}?v=20260405_saved_dragdrop_3"></script>
+{% else %}
 <script src="{% static script %}"></script>
+{% endif %}
 {% endfor %}
 {% endblock %}

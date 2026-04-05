@@ -1,7 +1,10 @@
 import random
 
 from django.db import transaction
+from django.utils import timezone
 
+from auditableEntity.audit import create_audit_entry, suppress_audit_events
+from auditableEntity.models import AuditActionType
 from classroom.models import Classroom
 from group.models import EducationalStage, Group
 from schedule.algorithm.assignment import solve_session_assignment
@@ -14,7 +17,7 @@ from schedule.algorithm.slots import (
 )
 from schedule.constants import AUTO_GENERATED_OBSERVATION
 from schedule.models import Schedule
-from subject.models import Subject
+from subject.models import Subject, SubjectType
 from teacher.models import Teacher
 
 
@@ -31,6 +34,7 @@ class BasicScheduleGenerator:
         random_seed: int | None = None,
         generation_options=None,
     ):
+        generation_options = generation_options or {}
         cls._clear_previous_generated_schedules(
             actor_email=actor_email,
             user=user,
@@ -43,19 +47,27 @@ class BasicScheduleGenerator:
                 "At least one teacher is required before generating a schedule."
             )
 
-        fallback_classroom = cls._get_or_create_classroom(actor_email, team)
-        group = cls._get_or_create_group(actor_email, team)
         subjects = list(
             Subject.objects.filter(team=team)
             .select_related("teacher", "group")
             .prefetch_related("allowed_classrooms")
             .order_by("id")
         )
+        include_tc = bool(generation_options.get("include_tc", True))
+        sessions = cls._build_sessions(
+            subjects=subjects,
+            fallback_teacher=teacher,
+            include_tc=include_tc,
+        )
+        if not sessions:
+            return []
+
+        fallback_classroom = cls._get_or_create_classroom(actor_email, team)
+        group = cls._get_or_create_group(actor_email, team)
         classrooms = cls._build_classroom_pool(
             fallback_classroom=fallback_classroom,
             team=team,
         )
-        sessions = cls._build_sessions(subjects=subjects, fallback_teacher=teacher)
         slots = build_weekly_slots()
 
         rng = random.Random(random_seed)
@@ -77,44 +89,57 @@ class BasicScheduleGenerator:
             slots=slots,
             classrooms=classrooms,
             random_seed=random_seed,
+            generation_options=generation_options,
         )
 
         created = []
+        timestamp = timezone.now()
         for session_index, slot_index in enumerate(slot_by_session):
             start_time = slots[slot_index]["start"]
             end_time = slots[slot_index]["end"]
             session = sessions[session_index]
 
-            schedule = Schedule.objects.create(
-                name=f"Auto {session['name']} {start_time:%Y-%m-%d %H:%M}",
-                start_time=start_time,
-                end_time=end_time,
-                observations=AUTO_GENERATED_OBSERVATION,
-                team=team,
-                teacher=session["teacher"],
-                classroom=classroom_by_session[session_index],
-                group=session.get("group") or group,
-                subject=session["subject"],
-                created_by=actor_email,
-                updated_by=actor_email,
+            created.append(
+                Schedule(
+                    name=f"Auto {session['name']} {start_time:%Y-%m-%d %H:%M}",
+                    start_time=start_time,
+                    end_time=end_time,
+                    observations=AUTO_GENERATED_OBSERVATION,
+                    team=team,
+                    teacher=session["teacher"],
+                    classroom=classroom_by_session[session_index],
+                    group=session.get("group") or group,
+                    subject=session["subject"],
+                    created_by=actor_email,
+                    updated_by=actor_email,
+                    created_at=timestamp,
+                    updated_at=timestamp,
+                )
             )
-            schedule.users.add(user)
-            created.append(schedule)
 
+        created = cls._bulk_create_generated_schedules(
+            schedules=created,
+            user=user,
+        )
+        cls._create_generation_audit_entry(
+            schedules=created,
+            team=team,
+        )
         return created
 
     @staticmethod
     def _clear_previous_generated_schedules(*, actor_email: str, user, team):
         """Clean previous generated schedules to keep a single timetable view per run."""
-        Schedule.objects.filter(
-            users=user,
-            created_by=actor_email,
-            observations=AUTO_GENERATED_OBSERVATION,
-            team=team,
-        ).delete()
+        with suppress_audit_events(("schedule", AuditActionType.DELETE)):
+            Schedule.objects.filter(
+                users=user,
+                created_by=actor_email,
+                observations=AUTO_GENERATED_OBSERVATION,
+                team=team,
+            ).delete()
 
     @staticmethod
-    def _build_sessions(*, subjects, fallback_teacher):
+    def _build_sessions(*, subjects, fallback_teacher, include_tc=True):
         sessions = []
         if not subjects:
             return [
@@ -126,7 +151,18 @@ class BasicScheduleGenerator:
                 }
             ]
 
-        for subject in subjects:
+        eligible_subjects = list(subjects)
+        if not include_tc:
+            eligible_subjects = [
+                subject
+                for subject in eligible_subjects
+                if getattr(subject, "type", None) != SubjectType.TC
+            ]
+
+        if not eligible_subjects:
+            return []
+
+        for subject in eligible_subjects:
             session_count = max(1, int(subject.weekly_hours))
             for _ in range(session_count):
                 sessions.append(
@@ -179,6 +215,42 @@ class BasicScheduleGenerator:
     def _randomize_generation_inputs(*, sessions, slots, classrooms, rng):
         rng.shuffle(sessions)
         rng.shuffle(classrooms)
+
+    @staticmethod
+    def _bulk_create_generated_schedules(*, schedules, user):
+        if not schedules:
+            return []
+
+        created = Schedule.objects.bulk_create(schedules, batch_size=500)
+        schedule_user_through = Schedule.users.through
+        schedule_user_through.objects.bulk_create(
+            [
+                schedule_user_through(schedule_id=schedule.id, user_id=user.id)
+                for schedule in created
+            ],
+            batch_size=1000,
+        )
+        return created
+
+    @staticmethod
+    def _create_generation_audit_entry(*, schedules, team):
+        if not schedules:
+            return
+
+        create_audit_entry(
+            model=Schedule,
+            entity_id=schedules[0].id,
+            entity_name="Generacion automatica",
+            action_type=AuditActionType.CREATE,
+            detail=(f"Se genero un horario automatico con {len(schedules)} sesiones."),
+            changed_fields=[
+                {
+                    "campo": "Sesiones generadas",
+                    "valor_nuevo": len(schedules),
+                }
+            ],
+            team=team,
+        )
 
 
 class ScheduleReplanner:

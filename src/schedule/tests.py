@@ -132,6 +132,23 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             schedule.users.add(user)
         return schedule
 
+    @staticmethod
+    def slot_descriptor_from_datetimes(start_time, end_time):
+        weekday_to_name = {
+            0: "Lunes",
+            1: "Martes",
+            2: "Miércoles",
+            3: "Jueves",
+            4: "Viernes",
+        }
+        local_start = timezone.localtime(start_time)
+        local_end = timezone.localtime(end_time)
+        return {
+            "day": weekday_to_name[local_start.weekday()],
+            "start": local_start.strftime("%H:%M"),
+            "end": local_end.strftime("%H:%M"),
+        }
+
     def test_create_schedule(self):
         response = self.client.post(
             reverse("schedule-list"),
@@ -155,7 +172,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(detail_response.data["name"], "Science")
 
     def test_export_csv_includes_global_schedules(self):
-        self.create_schedule(
+        created_schedule = self.create_schedule(
             name="Horario Usuario 1",
             observations=AUTO_GENERATED_OBSERVATION,
             created_by=self.user.email,
@@ -178,11 +195,33 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
         csv_text = response.content.decode("utf-8-sig")
-        self.assertIn("Asignatura,Profesor,Curso,Aula", csv_text)
+        self.assertIn("Día,Inicio,Fin,Asignatura,Profesor,Curso,Aula", csv_text)
         self.assertIn("Mathematics", csv_text)
         self.assertIn("Ana Perez", csv_text)
         self.assertIn("1A", csv_text)
         self.assertIn("Aula 1A", csv_text)
+        self.assertIn(
+            timezone.localtime(created_schedule.start_time).strftime("%H:%M"),
+            csv_text,
+        )
+        self.assertIn(
+            timezone.localtime(created_schedule.end_time).strftime("%H:%M"),
+            csv_text,
+        )
+        self.assertTrue(
+            any(
+                day_name in csv_text
+                for day_name in [
+                    "Lunes",
+                    "Martes",
+                    "Miércoles",
+                    "Jueves",
+                    "Viernes",
+                    "Sábado",
+                    "Domingo",
+                ]
+            )
+        )
         self.assertIn("orarioo_generated_schedule_", response["Content-Disposition"])
 
     def test_export_csv_by_group_entity_filter(self):
@@ -449,12 +488,17 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(schedule.users.first().id, self.user.id)
         self.assertIsNotNone(schedule.classroom_id)
         self.assertIsNotNone(schedule.group_id)
-        self.assertEqual(
+        entries = list(
             AuditEntry.objects.filter(
                 entity_type="schedule",
                 action_type=AuditActionType.CREATE,
-            ).count(),
-            self.subject.weekly_hours,
+            )
+        )
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].entity_name, "Generacion automatica")
+        self.assertEqual(
+            entries[0].changed_fields,
+            [{"campo": "Sesiones generadas", "valor_nuevo": self.subject.weekly_hours}],
         )
 
     def test_generate_basic_schedule_avoids_teacher_overlap(self):
@@ -486,6 +530,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             stage=EducationalStage.PRIMARY,
             team=self.team,
         )
+        Classroom.objects.create(name="Aula 2A", team=self.team)
         Subject.objects.create(
             team=self.team,
             name="Mathematics 2A",
@@ -664,6 +709,276 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             1,
         )
 
+    def test_move_endpoint_moves_single_generated_session(self):
+        slots = build_weekly_slots()
+        primary_slots = [slot for slot in slots if slot.get("stage") == "PRIMARY"]
+        self.assertGreaterEqual(len(primary_slots), 3)
+
+        source_schedule = self.create_schedule(
+            name="Auto Move",
+            start_time=primary_slots[0]["start"],
+            end_time=primary_slots[0]["end"],
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+
+        source_slot = self.slot_descriptor_from_datetimes(
+            source_schedule.start_time,
+            source_schedule.end_time,
+        )
+        target_slot = self.slot_descriptor_from_datetimes(
+            primary_slots[2]["start"],
+            primary_slots[2]["end"],
+        )
+
+        response = self.client.post(
+            reverse("schedule-move"),
+            {
+                "mode": "move",
+                "source_slot": {
+                    "schedule_id": source_schedule.id,
+                    **source_slot,
+                },
+                "target_slot": target_slot,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["mode"], "move")
+        self.assertFalse(response.data["no_changes"])
+
+        source_schedule.refresh_from_db()
+        self.assertEqual(source_schedule.start_time, primary_slots[2]["start"])
+        self.assertEqual(source_schedule.end_time, primary_slots[2]["end"])
+
+    def test_move_endpoint_swaps_sessions_when_target_provided(self):
+        slots = build_weekly_slots()
+        primary_slots = [slot for slot in slots if slot.get("stage") == "PRIMARY"]
+        self.assertGreaterEqual(len(primary_slots), 2)
+
+        other_teacher = Teacher.objects.create(
+            team=self.team,
+            name="Lucia Martin",
+            max_weekly_hours=20,
+            working_hours=12,
+        )
+        other_classroom = Classroom.objects.create(name="Aula 2A", team=self.team)
+        other_group = Group.objects.create(
+            name="2A",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
+        other_subject = Subject.objects.create(
+            team=self.team,
+            name="Lengua 2A",
+            weekly_hours=2,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=other_teacher,
+            group=other_group,
+        )
+
+        source_schedule = self.create_schedule(
+            name="Auto Source",
+            start_time=primary_slots[0]["start"],
+            end_time=primary_slots[0]["end"],
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+        target_schedule = self.create_schedule(
+            name="Auto Target",
+            start_time=primary_slots[1]["start"],
+            end_time=primary_slots[1]["end"],
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            teacher=other_teacher,
+            classroom=other_classroom,
+            group=other_group,
+            subject=other_subject,
+            users=[self.user],
+        )
+
+        source_slot = self.slot_descriptor_from_datetimes(
+            source_schedule.start_time,
+            source_schedule.end_time,
+        )
+        target_slot = self.slot_descriptor_from_datetimes(
+            target_schedule.start_time,
+            target_schedule.end_time,
+        )
+
+        response = self.client.post(
+            reverse("schedule-move"),
+            {
+                "mode": "swap",
+                "source_slot": {
+                    "schedule_id": source_schedule.id,
+                    **source_slot,
+                },
+                "target_slot": {
+                    "schedule_id": target_schedule.id,
+                    **target_slot,
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["mode"], "swap")
+
+        source_schedule.refresh_from_db()
+        target_schedule.refresh_from_db()
+        self.assertEqual(source_schedule.start_time, primary_slots[1]["start"])
+        self.assertEqual(source_schedule.end_time, primary_slots[1]["end"])
+        self.assertEqual(target_schedule.start_time, primary_slots[0]["start"])
+        self.assertEqual(target_schedule.end_time, primary_slots[0]["end"])
+
+    def test_move_endpoint_rejects_teacher_overlap_conflict(self):
+        slots = build_weekly_slots()
+        primary_slots = [slot for slot in slots if slot.get("stage") == "PRIMARY"]
+        self.assertGreaterEqual(len(primary_slots), 3)
+
+        other_group = Group.objects.create(
+            name="3A",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
+        other_subject = Subject.objects.create(
+            team=self.team,
+            name="Ciencias 3A",
+            weekly_hours=2,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=other_group,
+        )
+
+        source_schedule = self.create_schedule(
+            name="Auto Source Conflict",
+            start_time=primary_slots[0]["start"],
+            end_time=primary_slots[0]["end"],
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+        blocker_schedule = self.create_schedule(
+            name="Auto Blocker",
+            start_time=primary_slots[2]["start"],
+            end_time=primary_slots[2]["end"],
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            group=other_group,
+            subject=other_subject,
+            users=[self.user],
+        )
+
+        source_slot = self.slot_descriptor_from_datetimes(
+            source_schedule.start_time,
+            source_schedule.end_time,
+        )
+        target_slot = self.slot_descriptor_from_datetimes(
+            blocker_schedule.start_time,
+            blocker_schedule.end_time,
+        )
+
+        response = self.client.post(
+            reverse("schedule-move"),
+            {
+                "mode": "move",
+                "source_slot": {
+                    "schedule_id": source_schedule.id,
+                    **source_slot,
+                },
+                "target_slot": target_slot,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+        self.assertIn("Teacher conflict", response.data["detail"])
+
+        source_schedule.refresh_from_db()
+        self.assertEqual(source_schedule.start_time, primary_slots[0]["start"])
+        self.assertEqual(source_schedule.end_time, primary_slots[0]["end"])
+
+    def test_move_endpoint_allows_saved_move_with_conflicts_in_other_timetables(self):
+        slots = build_weekly_slots()
+        primary_slots = [slot for slot in slots if slot.get("stage") == "PRIMARY"]
+        self.assertGreaterEqual(len(primary_slots), 3)
+
+        saved_name = "Horario Guardado Scope"
+        saved_observation = f"Saved timetable: {saved_name}"
+        source_schedule = self.create_schedule(
+            name=saved_name,
+            start_time=primary_slots[0]["start"],
+            end_time=primary_slots[0]["end"],
+            observations=saved_observation,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+
+        # Same resources in another saved timetable should not block this move.
+        other_saved_observation = "Saved timetable: Horario Distinto"
+        blocker_other_timetable = self.create_schedule(
+            name="Horario Distinto",
+            start_time=primary_slots[2]["start"],
+            end_time=primary_slots[2]["end"],
+            observations=other_saved_observation,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=self.group,
+            subject=self.subject,
+            users=[self.user],
+        )
+
+        source_slot = self.slot_descriptor_from_datetimes(
+            source_schedule.start_time,
+            source_schedule.end_time,
+        )
+        target_slot = self.slot_descriptor_from_datetimes(
+            blocker_other_timetable.start_time,
+            blocker_other_timetable.end_time,
+        )
+
+        response = self.client.post(
+            reverse("schedule-move"),
+            {
+                "mode": "move",
+                "source_slot": {
+                    "schedule_id": source_schedule.id,
+                    **source_slot,
+                },
+                "target_slot": target_slot,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["mode"], "move")
+
+        source_schedule.refresh_from_db()
+        blocker_other_timetable.refresh_from_db()
+        self.assertEqual(source_schedule.start_time, primary_slots[2]["start"])
+        self.assertEqual(source_schedule.end_time, primary_slots[2]["end"])
+        self.assertEqual(blocker_other_timetable.start_time, primary_slots[2]["start"])
+        self.assertEqual(blocker_other_timetable.end_time, primary_slots[2]["end"])
+
     def test_save_generated_rejects_non_auto_generated_sessions(self):
         schedule = self.create_schedule()
         schedule.created_by = self.user.email
@@ -732,6 +1047,44 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("schedule_ids", response.data)
 
+    def test_save_generated_rejects_existing_timetable_name(self):
+        start_time = timezone.now() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+
+        self.create_schedule(
+            name="Horario Repetido",
+            start_time=start_time,
+            end_time=end_time,
+            observations="Saved timetable: Horario Repetido",
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+
+        auto_schedule = self.create_schedule(
+            name="Auto Session 1",
+            start_time=start_time + timedelta(hours=1),
+            end_time=end_time + timedelta(hours=1),
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+
+        response = self.client.post(
+            reverse("schedule-save-generated"),
+            {
+                "timetable_name": "Horario Repetido",
+                "schedule_ids": [auto_schedule.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("timetable_name", response.data)
+        auto_schedule.refresh_from_db()
+        self.assertEqual(auto_schedule.observations, AUTO_GENERATED_OBSERVATION)
+
     def test_saved_endpoint_returns_only_saved_schedules_for_current_user(self):
         start_time = timezone.now() + timedelta(days=1)
         end_time = start_time + timedelta(hours=1)
@@ -771,6 +1124,86 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["id"], saved_schedule.id)
+
+    def test_saved_summary_endpoint_returns_lightweight_items(self):
+        start_time = timezone.now() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        self.create_schedule(
+            name="Horario Ligero",
+            start_time=start_time,
+            end_time=end_time,
+            observations="Saved timetable: Horario Ligero",
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+        self.create_schedule(
+            name="Horario Ligero",
+            start_time=start_time + timedelta(hours=1),
+            end_time=end_time + timedelta(hours=1),
+            observations="Saved timetable: Horario Ligero",
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+
+        response = self.client.get(reverse("schedule-saved-summary"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
+        first_item = response.data["results"][0]
+        self.assertEqual(first_item["name"], "Horario Ligero")
+        self.assertEqual(set(first_item.keys()), {"name", "updated_at"})
+
+    def test_saved_detail_endpoint_requires_timetable_name(self):
+        response = self.client.get(reverse("schedule-saved-detail"))
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+
+    def test_saved_detail_endpoint_returns_selected_timetable(self):
+        start_time = timezone.now() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        self.create_schedule(
+            name="Horario A",
+            start_time=start_time,
+            end_time=end_time,
+            observations="Saved timetable: Horario A",
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+        self.create_schedule(
+            name="Horario A",
+            start_time=start_time + timedelta(hours=1),
+            end_time=end_time + timedelta(hours=1),
+            observations="Saved timetable: Horario A",
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+        self.create_schedule(
+            name="Horario B",
+            start_time=start_time + timedelta(hours=2),
+            end_time=end_time + timedelta(hours=2),
+            observations="Saved timetable: Horario B",
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+
+        response = self.client.get(
+            reverse("schedule-saved-detail"),
+            {"timetable_name": "Horario A"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertTrue(
+            all(item["name"] == "Horario A" for item in response.data["results"])
+        )
 
     def test_delete_saved_timetable_creates_single_audit_entry(self):
         start_time = timezone.now() + timedelta(days=1)
@@ -962,6 +1395,186 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "exceeds max weekly hours",
         )
 
+    def test_generate_excludes_tc_subjects_when_include_tc_is_false(self):
+        Subject.objects.create(
+            team=self.team,
+            name="TC 1A",
+            weekly_hours=2,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.TC,
+            teacher=self.teacher,
+            group=self.group,
+        )
+
+        response = self.generate_schedule({"include_tc": False})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(
+            Schedule.objects.filter(
+                subject__type=SubjectType.TC,
+                observations=AUTO_GENERATED_OBSERVATION,
+            ).exists()
+        )
+
+    def test_generate_include_tc_false_ignores_tc_hours_for_teacher_capacity(self):
+        self.teacher.max_weekly_hours = 5
+        self.teacher.save(update_fields=["max_weekly_hours"])
+
+        Subject.objects.create(
+            team=self.team,
+            name="TC 1A",
+            weekly_hours=2,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.TC,
+            teacher=self.teacher,
+            group=self.group,
+        )
+
+        response_with_tc = self.generate_schedule({"include_tc": True})
+        self.assert_generate_bad_request_with_detail(
+            response_with_tc,
+            "exceeds max weekly hours",
+        )
+
+        response_without_tc = self.generate_schedule({"include_tc": False})
+        self.assertEqual(response_without_tc.status_code, status.HTTP_201_CREATED)
+
+    def test_generate_rejects_invalid_include_tc_value(self):
+        response = self.generate_schedule({"include_tc": "invalid"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+        self.assertIn("include_tc must be a boolean value", response.data["detail"])
+
+    def test_generate_ignores_tc_capacity_when_include_tc_is_false(self):
+        response = self.generate_schedule({"include_tc": False, "tc_capacity": 0})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_generate_rejects_invalid_tc_capacity_when_include_tc_is_true(self):
+        response = self.generate_schedule(
+            {"include_tc": True, "tc_capacity": "invalid"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+        self.assertIn("tc_capacity must be an integer value", response.data["detail"])
+
+    def test_generate_response_includes_subject_type_for_generated_sessions(self):
+        tc_subject = Subject.objects.create(
+            team=self.team,
+            name="TC 1A",
+            weekly_hours=2,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.TC,
+            teacher=self.teacher,
+            group=self.group,
+        )
+
+        response = self.generate_schedule({"include_tc": True})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        generated_sessions = response.data["schedules"]
+        self.assertTrue(generated_sessions)
+        self.assertTrue(
+            all("subject_type" in session for session in generated_sessions)
+        )
+
+        tc_sessions = [
+            session
+            for session in generated_sessions
+            if session["subject"] == tc_subject.id
+        ]
+        self.assertTrue(tc_sessions)
+        self.assertTrue(
+            all(session["subject_type"] == SubjectType.TC for session in tc_sessions)
+        )
+        self.assertTrue(
+            any(
+                session["subject_type"] == SubjectType.NORMAL
+                for session in generated_sessions
+            )
+        )
+
+    @skipIf(
+        schedule_assignment.cp_model is None,
+        "Requires OR-Tools CP-SAT to validate tc_capacity constraints.",
+    )
+    def test_generate_enforces_tc_capacity_per_slot(self):
+        teacher_regular = Teacher.objects.create(
+            team=self.team,
+            name="Profesor Regular",
+            max_weekly_hours=20,
+            working_hours=12,
+        )
+        self.subject.weekly_hours = 1
+        self.subject.teacher = teacher_regular
+        self.subject.save(update_fields=["weekly_hours", "teacher"])
+
+        teacher_2 = Teacher.objects.create(
+            team=self.team,
+            name="Lucia Martin",
+            max_weekly_hours=20,
+            working_hours=12,
+        )
+        group_2 = Group.objects.create(
+            name="2A",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
+
+        Subject.objects.create(
+            team=self.team,
+            name="TC 1A",
+            weekly_hours=2,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.TC,
+            teacher=self.teacher,
+            group=self.group,
+            time_preferences={},
+        )
+        Subject.objects.create(
+            team=self.team,
+            name="TC 2A",
+            weekly_hours=2,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.TC,
+            teacher=teacher_2,
+            group=group_2,
+            time_preferences={},
+        )
+
+        response_relaxed_capacity = self.generate_schedule(
+            {"include_tc": True, "tc_capacity": 2}
+        )
+        self.assertEqual(response_relaxed_capacity.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            response_relaxed_capacity.data["generation_options"]["tc_capacity"], 2
+        )
+
+        tc_schedules = list(
+            Schedule.objects.filter(
+                subject__type=SubjectType.TC,
+                observations=AUTO_GENERATED_OBSERVATION,
+            ).order_by("start_time")
+        )
+        self.assertEqual(len(tc_schedules), 4)
+
+        slot_counts = {}
+        for item in tc_schedules:
+            slot_counts[item.start_time] = slot_counts.get(item.start_time, 0) + 1
+
+        self.assertTrue(all(count <= 2 for count in slot_counts.values()))
+
     @skipIf(
         schedule_assignment.cp_model is None,
         "Requires OR-Tools CP-SAT to validate soft constraints.",
@@ -1015,6 +1628,81 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(len(tc_schedules), 4)
         self.assertEqual(len(unique_tc_starts), 4)
+
+    @skipIf(
+        schedule_assignment.cp_model is None,
+        "Requires OR-Tools CP-SAT to validate soft constraints.",
+    )
+    def test_generate_tc_prefers_covering_more_real_time_over_preferred_overlap(self):
+        self.subject.delete()
+
+        teacher_2 = Teacher.objects.create(
+            team=self.team,
+            name="Lucia Martin",
+            max_weekly_hours=20,
+            working_hours=12,
+        )
+        group_2 = Group.objects.create(
+            name="1ESO",
+            stage=EducationalStage.SECONDARY,
+            team=self.team,
+        )
+        Classroom.objects.create(name="Aula 1ESO", team=self.team)
+
+        all_slot_keys = set(
+            build_slot_preference_index(slots=build_weekly_slots()).values()
+        )
+        primary_preferences = {
+            key: SubjectTimePreferenceState.UNAVAILABLE for key in all_slot_keys
+        }
+        secondary_preferences = {
+            key: SubjectTimePreferenceState.UNAVAILABLE for key in all_slot_keys
+        }
+        primary_preferences["MON_12:00"] = SubjectTimePreferenceState.PREFER_YES
+        primary_preferences["MON_13:00"] = SubjectTimePreferenceState.AVAILABLE
+        secondary_preferences["MON_11:30"] = SubjectTimePreferenceState.AVAILABLE
+        secondary_preferences["MON_12:30"] = SubjectTimePreferenceState.PREFER_YES
+
+        primary_tc = Subject.objects.create(
+            team=self.team,
+            name="TC Primaria",
+            weekly_hours=1,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.TC,
+            teacher=self.teacher,
+            group=self.group,
+            time_preferences=primary_preferences,
+        )
+        secondary_tc = Subject.objects.create(
+            team=self.team,
+            name="TC Secundaria",
+            weekly_hours=1,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.SECONDARY,
+            type=SubjectType.TC,
+            teacher=teacher_2,
+            group=group_2,
+            time_preferences=secondary_preferences,
+        )
+
+        response = self.generate_schedule({"include_tc": True, "tc_capacity": 2})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        tc_schedules = list(
+            Schedule.objects.filter(subject__in=[primary_tc, secondary_tc]).order_by(
+                "start_time"
+            )
+        )
+        self.assertEqual(len(tc_schedules), 2)
+
+        assigned_keys = {
+            slot_preference_key_from_datetime(slot=item.start_time)
+            for item in tc_schedules
+        }
+        self.assertEqual(assigned_keys, {"MON_11:30", "MON_13:00"})
 
     def test_generate_assigns_only_subject_allowed_classrooms(self):
         self.classroom.is_shared = True

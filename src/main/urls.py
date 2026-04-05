@@ -19,6 +19,12 @@ urlpatterns = [
         name="dashboard-schedules",
     ),
     path("dashboard/saved/", dashboard, {"section": "saved"}, name="dashboard-saved"),
+    path(
+        "dashboard/saved/<path:timetable_name>/",
+        dashboard,
+        {"section": "saved"},
+        name="dashboard-saved-detail",
+    ),
     path("dashboard/administration/", admin_users, name="dashboard-administration"),
     path(
         "dashboard/administration/users/",

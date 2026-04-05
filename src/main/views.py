@@ -1,17 +1,19 @@
+from urllib.parse import unquote
+
 from django.shortcuts import redirect, render
 
 SECTION_CONFIG = {
     "schedules": {
         "title": "Horarios",
         "template": "main/tabs/schedules.html",
-        "extra_css": [],
-        "extra_scripts": [],
+        "extra_css": ["css/schedules.css"],
+        "extra_scripts": ["js/schedules.js"],
     },
     "saved": {
         "title": "Guardados",
         "template": "main/tabs/saved.html",
-        "extra_css": [],
-        "extra_scripts": [],
+        "extra_css": ["css/schedules.css"],
+        "extra_scripts": ["js/schedules.js"],
     },
     "audit": {
         "title": "Registro de cambios",
@@ -179,9 +181,13 @@ def render_admin_dashboard(request, admin_tab, extra_context=None):
     )
 
 
-def dashboard(request, section="schedules"):
+def dashboard(request, section="schedules", timetable_name=""):
     current_section = section if section in SECTION_CONFIG else "schedules"
     route_config = SECTION_CONFIG[current_section]
+    selected_saved_timetable = ""
+
+    if current_section == "saved" and timetable_name:
+        selected_saved_timetable = unquote(str(timetable_name)).strip()
 
     return render(
         request,
@@ -192,5 +198,6 @@ def dashboard(request, section="schedules"):
             "dashboard_route_template": route_config["template"],
             "dashboard_extra_css": route_config.get("extra_css", []),
             "dashboard_extra_scripts": route_config.get("extra_scripts", []),
+            "dashboard_saved_timetable_name": selected_saved_timetable,
         },
     )

@@ -175,6 +175,53 @@ def build_stage_allowed_slot_index(*, slots):
     return allowed
 
 
+def build_real_time_intervals(*, slots, slot_indices=None):
+    """Split each day into atomic real-time intervals and map overlapping slots."""
+    day_index_by_slot = build_slot_day_index(slots=slots)
+    relevant_slot_indices = (
+        list(range(len(slots))) if slot_indices is None else list(slot_indices)
+    )
+    slot_indices_by_day = {}
+
+    for slot_idx in relevant_slot_indices:
+        day_idx = day_index_by_slot.get(slot_idx)
+        if day_idx is None:
+            continue
+        slot_indices_by_day.setdefault(day_idx, []).append(slot_idx)
+
+    intervals = []
+    for day_idx, day_slot_indices in slot_indices_by_day.items():
+        boundaries = set()
+        for slot_idx in day_slot_indices:
+            start_time, end_time = slot_time_bounds(slot=slots[slot_idx])
+            boundaries.add(start_time)
+            boundaries.add(end_time)
+
+        ordered_boundaries = sorted(boundaries)
+        for start_time, end_time in zip(ordered_boundaries, ordered_boundaries[1:]):
+            interval_slot = {"start": start_time, "end": end_time}
+            overlapping_slot_indices = [
+                slot_idx
+                for slot_idx in day_slot_indices
+                if slot_overlaps(
+                    left_slot=slots[slot_idx],
+                    right_slot=interval_slot,
+                )
+            ]
+            if not overlapping_slot_indices:
+                continue
+            intervals.append(
+                {
+                    "day_idx": day_idx,
+                    "start": start_time,
+                    "end": end_time,
+                    "slot_indices": overlapping_slot_indices,
+                }
+            )
+
+    return intervals
+
+
 def slot_overlaps(*, left_slot, right_slot):
     left_start = _slot_start(left_slot)
     left_end = _slot_end(left_slot)
