@@ -26,6 +26,9 @@ _unused_SIGNALS_REGISTERED = False
 
 
 def _handle_pre_save(sender, instance, **kwargs):
+    if is_audit_suppressed(model=sender, action_type=AuditActionType.UPDATE):
+        return
+
     if not instance.pk:
         return
 
@@ -85,6 +88,9 @@ def _handle_post_save(sender, instance, created, **kwargs):
 
 
 def _handle_pre_delete(sender, instance, **kwargs):
+    if is_audit_suppressed(model=sender, action_type=AuditActionType.DELETE):
+        return
+
     instance._audit_before_delete_snapshot = snapshot_instance(instance)
     instance._audit_before_delete_name = get_instance_name(instance)
 

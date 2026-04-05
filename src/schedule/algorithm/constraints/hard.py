@@ -7,7 +7,7 @@ from schedule.algorithm.slots import (
     session_stage_code,
     slot_time_bounds,
 )
-from subject.models import SubjectTimePreferenceState
+from subject.models import SubjectTimePreferenceState, SubjectType
 from teacher.models import TeacherTimePreferenceState
 
 PRESCHOOL_AND_PRIMARY_STAGES = {
@@ -229,9 +229,37 @@ def add_stage_slot_hard_constraints(*, model, x, sessions, slots):
                 model.Add(x[(s_idx, p_idx)] == 0)
 
 
+def add_tc_slot_capacity_constraints(*, model, x, sessions, slots, generation_options):
+    if not generation_options:
+        return
+
+    if not bool(generation_options.get("include_tc", True)):
+        return
+
+    try:
+        tc_capacity = int(generation_options.get("tc_capacity", 1) or 1)
+    except (TypeError, ValueError):
+        tc_capacity = 1
+    tc_capacity = max(1, tc_capacity)
+
+    tc_session_indices = []
+    for s_idx, session in enumerate(sessions):
+        subject = session.get("subject")
+        if getattr(subject, "type", None) == SubjectType.TC:
+            tc_session_indices.append(s_idx)
+
+    if not tc_session_indices:
+        return
+
+    for p_idx in range(len(slots)):
+        model.Add(sum(x[(s_idx, p_idx)] for s_idx in tc_session_indices) <= tc_capacity)
+
+
 def add_group_daily_capacity_constraints(*, model, x, sessions, slots):
     day_index_by_slot = build_slot_day_index(slots=slots)
-    day_indices = set(day_index_by_slot.values())
+    day_slots_by_index = {}
+    for slot_idx, day_idx in day_index_by_slot.items():
+        day_slots_by_index.setdefault(day_idx, []).append(slot_idx)
     group_to_sessions = {}
 
     for s_idx, session in enumerate(sessions):
@@ -247,12 +275,7 @@ def add_group_daily_capacity_constraints(*, model, x, sessions, slots):
         resource_sessions = group_state["sessions"]
         daily_limit = group_daily_limit(group)
 
-        for day_idx in day_indices:
-            day_slots = [
-                p_idx
-                for p_idx, p_day_idx in day_index_by_slot.items()
-                if p_day_idx == day_idx
-            ]
+        for day_slots in day_slots_by_index.values():
             model.Add(
                 sum(
                     x[(s_idx, p_idx)]
@@ -267,12 +290,11 @@ def add_group_no_intraday_gap_constraints(*, model, x, sessions, slots):
     """Forbid intra-day gaps inside each group's timetable block (F-30)."""
     slots_by_day = _build_slots_by_day(slots=slots)
     group_to_sessions = _build_group_session_index(sessions=sessions)
+    allowed_slots_by_stage = build_stage_allowed_slot_index(slots=slots)
 
     for group_id, group_sessions in group_to_sessions.items():
         group_stage = session_stage_code(session=sessions[group_sessions[0]])
-        stage_allowed_slots = build_stage_allowed_slot_index(slots=slots).get(
-            group_stage, set()
-        )
+        stage_allowed_slots = allowed_slots_by_stage.get(group_stage, set())
         for day_idx, day_slot_list in slots_by_day.items():
             filtered_day_slots = [
                 slot_idx
