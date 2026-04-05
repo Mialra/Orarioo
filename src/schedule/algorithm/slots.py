@@ -198,9 +198,7 @@ def build_real_time_intervals(*, slots, slot_indices=None):
             boundaries.add(end_time)
 
         ordered_boundaries = sorted(boundaries)
-        for start_time, end_time in zip(
-            ordered_boundaries, ordered_boundaries[1:]
-        ):
+        for start_time, end_time in zip(ordered_boundaries, ordered_boundaries[1:]):
             interval_slot = {"start": start_time, "end": end_time}
             overlapping_slot_indices = [
                 slot_idx

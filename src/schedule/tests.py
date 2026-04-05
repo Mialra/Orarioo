@@ -1455,7 +1455,9 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_generate_rejects_invalid_tc_capacity_when_include_tc_is_true(self):
-        response = self.generate_schedule({"include_tc": True, "tc_capacity": "invalid"})
+        response = self.generate_schedule(
+            {"include_tc": True, "tc_capacity": "invalid"}
+        )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
@@ -1647,7 +1649,9 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         Classroom.objects.create(name="Aula 1ESO", team=self.team)
 
-        all_slot_keys = set(build_slot_preference_index(slots=build_weekly_slots()).values())
+        all_slot_keys = set(
+            build_slot_preference_index(slots=build_weekly_slots()).values()
+        )
         primary_preferences = {
             key: SubjectTimePreferenceState.UNAVAILABLE for key in all_slot_keys
         }

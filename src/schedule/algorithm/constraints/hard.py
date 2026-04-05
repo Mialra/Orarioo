@@ -252,9 +252,7 @@ def add_tc_slot_capacity_constraints(*, model, x, sessions, slots, generation_op
         return
 
     for p_idx in range(len(slots)):
-        model.Add(
-            sum(x[(s_idx, p_idx)] for s_idx in tc_session_indices) <= tc_capacity
-        )
+        model.Add(sum(x[(s_idx, p_idx)] for s_idx in tc_session_indices) <= tc_capacity)
 
 
 def add_group_daily_capacity_constraints(*, model, x, sessions, slots):

@@ -34,8 +34,7 @@ from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFI
 from schedule.models import Schedule
 from schedule.serializers import ScheduleSerializer
 from subject.models import SubjectTimePreferenceState
-from teacher.models import Teacher
-from teacher.models import TeacherTimePreferenceState
+from teacher.models import Teacher, TeacherTimePreferenceState
 from user.models import User
 
 logger = logging.getLogger(__name__)
@@ -381,14 +380,10 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         rows = []
         for schedule in schedules:
             local_start = (
-                timezone.localtime(schedule.start_time)
-                if schedule.start_time
-                else None
+                timezone.localtime(schedule.start_time) if schedule.start_time else None
             )
             local_end = (
-                timezone.localtime(schedule.end_time)
-                if schedule.end_time
-                else None
+                timezone.localtime(schedule.end_time) if schedule.end_time else None
             )
             rows.append(
                 {
@@ -1330,7 +1325,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             return None, end_error
         if end_time <= start_time:
             return None, Response(
-                {"detail": f"{slot_label}.end must be greater than {slot_label}.start."},
+                {
+                    "detail": f"{slot_label}.end must be greater than {slot_label}.start."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1456,18 +1453,14 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             slot_preference_key=slot_key,
         )
         if subject_state == SubjectTimePreferenceState.UNAVAILABLE:
-            return (
-                f"Subject '{schedule.subject.name}' is unavailable at {slot_key}."
-            )
+            return f"Subject '{schedule.subject.name}' is unavailable at {slot_key}."
 
         teacher_state = teacher_preference_state(
             session=session_ctx,
             slot_preference_key=slot_key,
         )
         if teacher_state == TeacherTimePreferenceState.UNAVAILABLE:
-            return (
-                f"Teacher '{schedule.teacher.name}' is unavailable at {slot_key}."
-            )
+            return f"Teacher '{schedule.teacher.name}' is unavailable at {slot_key}."
         return None
 
     @staticmethod
@@ -1677,7 +1670,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         first_idx = min(occupied_indices)
         last_idx = max(occupied_indices)
         occupied_set = set(occupied_indices)
-        return any(index not in occupied_set for index in range(first_idx, last_idx + 1))
+        return any(
+            index not in occupied_set for index in range(first_idx, last_idx + 1)
+        )
 
     def _validate_minimal_move_constraints(
         self,
@@ -1759,7 +1754,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
 
         return None
 
-    def _fetch_source_schedule_for_move(self, *, request_user, active_team, source_slot):
+    def _fetch_source_schedule_for_move(
+        self, *, request_user, active_team, source_slot
+    ):
         source_schedule = (
             self.get_queryset()
             .filter(
@@ -1818,9 +1815,14 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         scope_schedules = list(scope_queryset.order_by("id"))
         scope_by_id = {schedule.id: schedule for schedule in scope_schedules}
         if source_schedule.id not in scope_by_id:
-            return None, None, None, Response(
-                {"detail": "Source schedule is outside editable timetable scope."},
-                status=status.HTTP_400_BAD_REQUEST,
+            return (
+                None,
+                None,
+                None,
+                Response(
+                    {"detail": "Source schedule is outside editable timetable scope."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                ),
             )
         return scope_queryset, scope_schedules, scope_by_id, None
 
@@ -2025,7 +2027,10 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         original_target_times = None
 
         if target_schedule is not None:
-            original_target_times = (target_schedule.start_time, target_schedule.end_time)
+            original_target_times = (
+                target_schedule.start_time,
+                target_schedule.end_time,
+            )
             assignments[target_schedule.id] = original_source_times
             changed_ids.add(target_schedule.id)
 

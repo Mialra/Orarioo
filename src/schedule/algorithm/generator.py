@@ -242,9 +242,7 @@ class BasicScheduleGenerator:
             entity_id=schedules[0].id,
             entity_name="Generacion automatica",
             action_type=AuditActionType.CREATE,
-            detail=(
-                f"Se genero un horario automatico con {len(schedules)} sesiones."
-            ),
+            detail=(f"Se genero un horario automatico con {len(schedules)} sesiones."),
             changed_fields=[
                 {
                     "campo": "Sesiones generadas",

@@ -8,8 +8,8 @@ from schedule.algorithm.constraints import (
     add_group_no_intraday_gap_constraints,
     add_stage_slot_hard_constraints,
     add_subject_time_hard_constraints,
-    add_teacher_time_hard_constraints,
     add_tc_slot_capacity_constraints,
+    add_teacher_time_hard_constraints,
     apply_soft_constraints,
 )
 from schedule.algorithm.errors import ScheduleGenerationError

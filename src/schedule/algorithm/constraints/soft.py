@@ -3,9 +3,9 @@ from schedule.algorithm.constraints.hard import (
     teacher_preference_state,
 )
 from schedule.algorithm.slots import (
+    build_real_time_intervals,
     build_slot_day_index,
     build_slot_preference_index,
-    build_real_time_intervals,
     build_stage_allowed_slot_index,
     session_stage_code,
     slot_time_bounds,
@@ -132,9 +132,7 @@ def _tc_real_interval_coverage_terms(
         model.Add(overflow == interval_expr - has_tc_in_interval)
 
         weighted_terms.append(TC_REAL_INTERVAL_COVERAGE_WEIGHT * has_tc_in_interval)
-        weighted_terms.append(
-            -TC_REAL_INTERVAL_OVERLOAD_PENALTY_WEIGHT * overflow
-        )
+        weighted_terms.append(-TC_REAL_INTERVAL_OVERLOAD_PENALTY_WEIGHT * overflow)
 
     return weighted_terms
 
