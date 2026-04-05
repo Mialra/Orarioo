@@ -25,24 +25,24 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: don't run with debug turned on in production!
 def parse_debug():
     """Parse DEBUG setting, handling system environment variables gracefully.
-    
+
     Valid values: 'true', 'false', '0', '1', 'yes', 'no', etc.
     Invalid values (like 'release' from build systems) default to development mode (True).
     """
     debug_str = config("DEBUG", default="true").lower().strip()
-    
+
     # Handle actual boolean values
     if isinstance(debug_str, bool):
         return debug_str
-    
+
     # Explicitly true values
     if debug_str in ("true", "1", "yes", "on", "enabled", "development", "dev"):
         return True
-    
-    # Explicitly false values  
+
+    # Explicitly false values
     if debug_str in ("false", "0", "no", "off", "disabled", "production", "prod"):
         return False
-    
+
     # For any unrecognized value (like 'release' from build systems),
     # default to development mode for safety
     return True
