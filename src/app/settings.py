@@ -23,13 +23,47 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config("DEBUG", default=True, cast=bool)
+def parse_debug():
+    """Parse DEBUG setting, handling system environment variables gracefully.
+    
+    Valid values: 'true', 'false', '0', '1', 'yes', 'no', etc.
+    Invalid values (like 'release' from build systems) default to development mode (True).
+    """
+    debug_str = config("DEBUG", default="true").lower().strip()
+    
+    # Handle actual boolean values
+    if isinstance(debug_str, bool):
+        return debug_str
+    
+    # Explicitly true values
+    if debug_str in ("true", "1", "yes", "on", "enabled", "development", "dev"):
+        return True
+    
+    # Explicitly false values  
+    if debug_str in ("false", "0", "no", "off", "disabled", "production", "prod"):
+        return False
+    
+    # For any unrecognized value (like 'release' from build systems),
+    # default to development mode for safety
+    return True
 
-ALLOWED_HOSTS = [
+
+DEBUG = parse_debug()
+
+# Configure ALLOWED_HOSTS
+# Always include localhost and testserver for development/testing
+# In production (DEBUG=False), this can be overridden via ALLOWED_HOSTS env var
+_allowed_hosts_env = [
     host.strip()
     for host in config("ALLOWED_HOSTS", default="").split(",")
     if host.strip()
 ]
+
+# Start with localhost, 127.0.0.1, and testserver (always needed for testing)
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
+
+# Add environment-configured hosts (for production domains)
+ALLOWED_HOSTS.extend(_allowed_hosts_env)
 
 # Application definition
 
