@@ -1,267 +1,169 @@
 (function () {
-    const admin = window.AdminBase || {};
-    const dom = admin.dom;
+  const listContainer = document.getElementById("admin-users-list");
+  const paginationContainer = document.getElementById("admin-users-pagination");
+  const alertBox = document.getElementById("admin-users-alert");
+  const emptyMessageNode = document.getElementById("admin-users-empty-message");
 
-    const formElement = document.getElementById("admin-user-form");
-    if (!formElement || !admin.createEntityManager || !dom) {
-        return;
+  if (!listContainer || !window.orariooAuth || !window.orariooAuth.apiFetch) {
+    return;
+  }
+
+  const pageSize = 9;
+  let currentPage = 1;
+  let totalCount = 0;
+
+  function resolveUserName(user) {
+    const fullName = ((user.given_name || "") + (user.family_name ? " " + user.family_name : "")).trim();
+    return fullName || user.given_name || user.email || "Usuario";
+  }
+
+  function showAlert(message, variant) {
+    if (!alertBox) {
+      return;
+    }
+    alertBox.textContent = message;
+    alertBox.className = "alert mb-3";
+    alertBox.classList.add("alert-" + (variant || "danger"));
+  }
+
+  function clearAlert() {
+    if (!alertBox) {
+      return;
+    }
+    alertBox.textContent = "";
+    alertBox.classList.add("d-none");
+  }
+
+  function renderEmpty() {
+    listContainer.innerHTML = "";
+    if (emptyMessageNode) {
+      emptyMessageNode.classList.remove("d-none");
+    }
+  }
+
+  function createCardHtml(user) {
+    return (
+      '<div class="col">' +
+      '  <article class="card border-0 shadow-sm admin-card admin-user-card">' +
+      '    <div class="card-body admin-card-body">' +
+      '      <div class="admin-card-content admin-card-content-center">' +
+      '        <div class="admin-avatar variant-blue"><i data-lucide="user"></i></div>' +
+      '        <div class="admin-card-main">' +
+      '          <h3 class="h6 mb-1 text-truncate">' +
+      resolveUserName(user) +
+      "</h3>" +
+      '          <p class="admin-card-copy mb-1 text-truncate">' +
+      (user.email || "") +
+      "</p>" +
+      "        </div>" +
+      "      </div>" +
+      "    </div>" +
+      "  </article>" +
+      "</div>"
+    );
+  }
+
+  function renderUsers(users) {
+    if (!users.length) {
+      renderEmpty();
+      return;
     }
 
-    const elements = {
-        addButton: document.getElementById("admin-add-user-btn"),
-        alertBox: document.getElementById("admin-users-alert"),
-        listContainer: document.getElementById("admin-users-list"),
-        paginationContainer: document.getElementById("admin-users-pagination"),
-        emptyMessageNode: document.getElementById("admin-users-empty-message"),
-        formModal: document.getElementById("admin-user-modal"),
-        formTitle: document.getElementById("admin-user-modal-title"),
-        modeInput: document.getElementById("admin-user-mode"),
-        userIdInput: document.getElementById("admin-user-id"),
-        givenNameInput: document.getElementById("admin-user-given-name"),
-        familyNameInput: document.getElementById("admin-user-family-name"),
-        emailInput: document.getElementById("admin-user-email"),
-        roleInput: document.getElementById("admin-user-role"),
-        submitButton: document.getElementById("admin-user-submit-btn"),
-        submitText: document.getElementById("admin-user-submit-text"),
-        submitSpinner: document.getElementById("admin-user-submit-spinner"),
-        cancelButton: document.getElementById("admin-user-cancel-btn"),
-        deleteModal: document.getElementById("admin-user-delete-modal"),
-        deleteName: document.getElementById("admin-user-delete-name"),
-        deleteConfirmButton: document.getElementById("admin-user-delete-confirm-btn"),
-        deleteText: document.getElementById("admin-user-delete-text"),
-        deleteSpinner: document.getElementById("admin-user-delete-spinner"),
-        givenNameError: document.getElementById("admin-user-given-name-error"),
-        emailError: document.getElementById("admin-user-email-error"),
-        roleError: document.getElementById("admin-user-role-error"),
-    };
+    if (emptyMessageNode) {
+      emptyMessageNode.classList.add("d-none");
+    }
 
-    function resolveRoleLabel(user) {
-        if (user.role === "direccion") {
-            return "Dirección";
+    listContainer.innerHTML = users.map(createCardHtml).join("");
+    if (window.lucide && window.lucide.createIcons) {
+      window.lucide.createIcons({ attrs: { "stroke-width": 1.8 } });
+    }
+  }
+
+  function buildPagination() {
+    if (!paginationContainer) {
+      return;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    if (totalPages <= 1) {
+      paginationContainer.innerHTML = "";
+      return;
+    }
+
+    const prevDisabled = currentPage <= 1 ? "disabled" : "";
+    const nextDisabled = currentPage >= totalPages ? "disabled" : "";
+
+    paginationContainer.innerHTML =
+      '<div class="d-flex justify-content-center align-items-center gap-2">' +
+      '  <button class="btn btn-sm btn-outline-secondary" id="admin-users-prev" ' +
+      prevDisabled +
+      ">Anterior</button>" +
+      '  <span class="small text-secondary">Pagina ' +
+      currentPage +
+      " de " +
+      totalPages +
+      "</span>" +
+      '  <button class="btn btn-sm btn-outline-secondary" id="admin-users-next" ' +
+      nextDisabled +
+      ">Siguiente</button>" +
+      "</div>";
+
+    const prevButton = document.getElementById("admin-users-prev");
+    const nextButton = document.getElementById("admin-users-next");
+
+    if (prevButton) {
+      prevButton.addEventListener("click", function () {
+        if (currentPage > 1) {
+          loadUsers(currentPage - 1);
         }
-        if (user.role === "administrator") {
-            return "Administrador";
+      });
+    }
+
+    if (nextButton) {
+      nextButton.addEventListener("click", function () {
+        const total = Math.ceil(totalCount / pageSize);
+        if (currentPage < total) {
+          loadUsers(currentPage + 1);
         }
-        return user.role_display || "";
+      });
     }
+  }
 
-    function resolveUserName(user) {
-        const fullName = ((user.given_name || "") + (user.family_name ? " " + user.family_name : "")).trim();
-        return fullName || user.given_name || user.email || "Usuario";
+  async function loadUsers(page) {
+    currentPage = page || 1;
+    clearAlert();
+    listContainer.setAttribute("aria-busy", "true");
+
+    try {
+      const response = await window.orariooAuth.apiFetch("/api/users/?page=" + currentPage + "&page_size=" + pageSize, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json().catch(function () {
+        return {};
+      });
+
+      if (!response.ok) {
+        throw new Error((data && data.detail) || "No se pudieron cargar los usuarios del equipo.");
+      }
+
+      const results = Array.isArray(data.results) ? data.results : [];
+      totalCount = Number(data.count || results.length || 0);
+      renderUsers(results);
+      buildPagination();
+    } catch (error) {
+      renderEmpty();
+      showAlert(error.message || "No se pudieron cargar los usuarios del equipo.", "danger");
+      if (paginationContainer) {
+        paginationContainer.innerHTML = "";
+      }
+    } finally {
+      listContainer.setAttribute("aria-busy", "false");
     }
+  }
 
-    function createActionButton(className, title, icon) {
-        return dom.createElement("button", {
-            className: className,
-            attrs: {
-                type: "button",
-                title: title,
-                "aria-label": title,
-            },
-            children: [dom.createLucideIcon(icon)],
-        });
-    }
-
-    function renderUserItem(user) {
-        const isAdmin = user.role === "administrator";
-
-        return dom.createElement("div", {
-            className: "col",
-            children: [
-                dom.createElement("article", {
-                    className: "card border-0 shadow-sm admin-card admin-user-card",
-                    dataset: {
-                        userId: String(user.id),
-                    },
-                    children: [
-                        dom.createElement("div", {
-                            className: "card-body admin-card-body",
-                            children: [
-                                dom.createElement("div", {
-                                    className: "admin-card-content admin-card-content-center",
-                                    children: [
-                                        dom.createElement("div", {
-                                            className: "admin-avatar " + (isAdmin ? "variant-purple" : "variant-blue"),
-                                            children: [dom.createLucideIcon(isAdmin ? "shield" : "user")],
-                                        }),
-                                        dom.createElement("div", {
-                                            className: "admin-card-main",
-                                            children: [
-                                                dom.createElement("h3", {
-                                                    className: "h6 mb-1 text-truncate",
-                                                    text: resolveUserName(user),
-                                                }),
-                                                dom.createElement("p", {
-                                                    className: "admin-card-copy mb-1 text-truncate",
-                                                    text: user.email || "",
-                                                }),
-                                                dom.createElement("span", {
-                                                    className: "admin-pill " + (isAdmin ? "variant-purple" : "variant-blue"),
-                                                    text: resolveRoleLabel(user),
-                                                }),
-                                            ],
-                                        }),
-                                        dom.createElement("div", {
-                                            className: "admin-actions",
-                                            children: [
-                                                createActionButton(
-                                                    "btn btn-link text-primary p-0 admin-action-btn admin-action-btn--edit admin-user-edit-btn",
-                                                    "Editar usuario",
-                                                    "pencil"
-                                                ),
-                                                createActionButton(
-                                                    "btn btn-link text-danger p-0 admin-action-btn admin-action-btn--delete admin-user-delete-btn",
-                                                    "Eliminar usuario",
-                                                    "trash-2"
-                                                ),
-                                            ],
-                                        }),
-                                    ],
-                                }),
-                            ],
-                        }),
-                    ],
-                }),
-            ],
-        });
-    }
-
-    admin.createEntityManager({
-        endpoint: "/api/users/",
-        createEndpoint: "/api/users/managed_create/",
-        getDetailEndpoint: function (id) {
-            return "/api/users/" + id + "/";
-        },
-        getItemId: function (item) {
-            return item.id;
-        },
-        getItemName: function (item) {
-            return resolveUserName(item);
-        },
-        parseList: function (data) {
-            if (Array.isArray(data)) {
-                return data;
-            }
-            return data && Array.isArray(data.results) ? data.results : [];
-        },
-        renderItem: renderUserItem,
-        addButton: elements.addButton,
-        alertElement: elements.alertBox,
-        messages: {
-            loadError: "No se pudieron cargar los usuarios.",
-            loadItemError: "No se pudo cargar el usuario.",
-            validationError: "Revisa los campos marcados en rojo.",
-            saveError: "No se pudo guardar el usuario.",
-            deleteError: "No se pudo eliminar el usuario.",
-            created: "Usuario creado correctamente.",
-            updated: "Usuario actualizado correctamente.",
-            deleted: "Usuario eliminado correctamente.",
-        },
-        list: {
-            container: elements.listContainer,
-            paginationContainer: elements.paginationContainer,
-            pageSize: 9,
-            loadingMessage: "Cargando usuarios...",
-            emptyIcon: "users",
-            emptyTitle: "No hay usuarios",
-            emptyMessage: elements.emptyMessageNode ? elements.emptyMessageNode.textContent.trim() : "No hay usuarios registrados.",
-            rowSelector: ".admin-user-card",
-            rowIdDataset: "userId",
-            editSelector: ".admin-user-edit-btn",
-            deleteSelector: ".admin-user-delete-btn",
-        },
-        form: {
-            formElement: formElement,
-            modalElement: elements.formModal,
-            modeInput: elements.modeInput,
-            titleElement: elements.formTitle,
-            submitButton: elements.submitButton,
-            submitTextElement: elements.submitText,
-            submitSpinner: elements.submitSpinner,
-            cancelButton: elements.cancelButton,
-            focusInput: elements.givenNameInput,
-            labels: {
-                createTitle: "Añadir usuario",
-                editTitle: "Editar usuario",
-                createSubmit: "Crear",
-                editSubmit: "Guardar",
-            },
-            messages: {
-                saving: "Guardando...",
-            },
-            fields: [
-                {
-                    name: "given_name",
-                    input: elements.givenNameInput,
-                    feedback: elements.givenNameError,
-                    required: true,
-                    requiredMessage: "El nombre es obligatorio.",
-                },
-                {
-                    name: "email",
-                    input: elements.emailInput,
-                    feedback: elements.emailError,
-                    required: true,
-                    requiredMessage: "El correo electrónico es obligatorio.",
-                    validator: function () {
-                        return elements.emailInput.checkValidity() ? "" : "Introduce un correo electrónico válido.";
-                    },
-                },
-                {
-                    name: "role",
-                    input: elements.roleInput,
-                    feedback: elements.roleError,
-                    required: true,
-                    requiredMessage: "Selecciona un rol.",
-                },
-            ],
-            clearValidationOnInput: [
-                { input: elements.givenNameInput, feedback: elements.givenNameError, event: "input" },
-                { input: elements.emailInput, feedback: elements.emailError, event: "input" },
-                { input: elements.roleInput, feedback: elements.roleError, event: "change" },
-            ],
-            resetValues: function () {
-                elements.userIdInput.value = "";
-                elements.givenNameInput.value = "";
-                elements.familyNameInput.value = "";
-                elements.emailInput.value = "";
-                elements.roleInput.value = "direccion";
-            },
-            setEditingId: function (id) {
-                elements.userIdInput.value = id || "";
-            },
-            getEditingId: function () {
-                return elements.userIdInput.value;
-            },
-            fillValues: function (item) {
-                elements.givenNameInput.value = item.given_name || "";
-                elements.familyNameInput.value = item.family_name || "";
-                elements.emailInput.value = item.email || "";
-                elements.roleInput.value = item.role || "direccion";
-            },
-            buildPayload: function () {
-                return {
-                    given_name: elements.givenNameInput.value.trim(),
-                    family_name: elements.familyNameInput.value.trim(),
-                    email: elements.emailInput.value.trim(),
-                    role: elements.roleInput.value,
-                    can_login: false,
-                };
-            },
-        },
-        deleteConfirm: {
-            modalElement: elements.deleteModal,
-            nameElement: elements.deleteName,
-            actionTextElement: elements.deleteText,
-            confirmButton: elements.deleteConfirmButton,
-            spinnerElement: elements.deleteSpinner,
-            labels: {
-                defaultName: "usuario seleccionado",
-                defaultAction: "Eliminar",
-                withName: function () {
-                    return "Eliminar";
-                },
-            },
-        },
-    });
+  loadUsers(1);
 })();

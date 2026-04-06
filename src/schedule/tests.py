@@ -23,7 +23,6 @@ from schedule.views import REPORTLAB_AVAILABLE
 from subject.models import EducationalStage as SubjectEducationalStage
 from subject.models import Subject, SubjectTimePreferenceState, SubjectType
 from teacher.models import Teacher, TeacherTimePreferenceState
-from user.models import RoleChoices
 
 try:
     from openpyxl import load_workbook
@@ -38,7 +37,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.authenticate_admin(email_prefix="schedule-api")
         self.other_user = self.create_user(
             email="schedule-api-2@test.com",
-            role=RoleChoices.DIRECCION,
             given_name="Api2",
             family_name="Tester2",
         )

@@ -28,15 +28,6 @@ ADMIN_ROUTE_CONFIG = {
         "template": "administration_users.html",
         "extra_css": [],
         "extra_scripts": [
-            "js/admin-core/dom-helpers.js",
-            "js/admin-core/api.js",
-            "js/admin-core/ui-state.js",
-            "js/admin-core/form-utils.js",
-            "js/admin-core/modal-utils.js",
-            "js/admin-core/list-renderer.js",
-            "js/admin-core/pagination.js",
-            "js/admin-core/crud-module.js",
-            "js/admin-base.js",
             "js/users.js",
         ],
     },
@@ -113,11 +104,10 @@ ADMIN_BASE_CSS = [
 
 ADMIN_TAB_CONFIG = {
     "users": {
-        "title": "Gestión de Usuarios",
-        "description": "Administra el personal del centro, sus accesos y sus roles.",
-        "count_label": "0 usuarios registrados",
-        "empty_message": "No hay usuarios registrados. Añade el primero para comenzar.",
-        "add_cta": "Añadir Usuario",
+        "title": "Usuarios del equipo",
+        "description": "Consulta los usuarios del equipo de colaboracion activo.",
+        "count_label": "0 usuarios en el equipo activo",
+        "empty_message": "No hay usuarios en el equipo activo.",
     },
     "teachers": {
         "title": "Gestión de Profesores",

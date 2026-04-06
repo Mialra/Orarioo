@@ -18,7 +18,7 @@ from schedule.models import Schedule
 from subject.models import EducationalStage as SubjectEducationalStage
 from subject.models import Subject, SubjectType
 from teacher.models import Teacher
-from user.models import CollaborationTeam, RoleChoices
+from user.models import CollaborationTeam
 
 
 class AuditableEntityTests(SimpleTestCase):
@@ -42,13 +42,11 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.authenticate_admin(email_prefix="audit-api")
         self.team_user = self.create_user(
             email="audit-direccion@test.com",
-            role=RoleChoices.DIRECCION,
             given_name="Direccion",
             family_name="Audit",
         )
         self.outside_user = self.create_user(
             email="audit-outsider@test.com",
-            role=RoleChoices.DIRECCION,
             given_name="Fuera",
             family_name="Equipo",
         )
@@ -341,56 +339,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("tipo_entidad", response.data)
-
-    def test_managed_create_user_generates_audit_entry(self):
-        response = self.client.post(
-            reverse("user-managed-create"),
-            {
-                "given_name": "Usuario",
-                "family_name": "Auditado",
-                "email": "nuevo-auditado@test.com",
-                "role": RoleChoices.DIRECCION,
-                "can_login": False,
-                "is_enabled": True,
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        entry = AuditEntry.objects.filter(entity_type="user").latest("id")
-        self.assertEqual(entry.action_type, AuditActionType.CREATE)
-        self.assertEqual(entry.entity_name, "Usuario Auditado")
-        self.assertEqual(entry.actor_name, self.user.get_full_name())
-
-    def test_update_user_generates_audit_entry(self):
-        managed_user = self.create_user(
-            email="user-update@test.com",
-            role=RoleChoices.DIRECCION,
-            given_name="Nombre",
-            family_name="Original",
-        )
-        self.team.members.add(managed_user)
-        AuditEntry.objects.all().delete()
-
-        response = self.client.patch(
-            reverse("user-detail", args=[managed_user.id]),
-            {"given_name": "Nombre Nuevo"},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        entry = AuditEntry.objects.filter(entity_type="user").latest("id")
-        self.assertEqual(entry.action_type, AuditActionType.UPDATE)
-        self.assertEqual(
-            entry.changed_fields,
-            [
-                {
-                    "campo": "Nombre",
-                    "valor_anterior": "Nombre",
-                    "valor_nuevo": "Nombre Nuevo",
-                }
-            ],
-        )
 
     def test_audit_entries_endpoint_rejects_invalid_date_filter(self):
         response = self.client.get(

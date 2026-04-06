@@ -5,11 +5,6 @@ from django.utils.translation import gettext_lazy as _
 from namedEntity.models import NamedEntity
 
 
-class RoleChoices(models.TextChoices):
-    ADMINISTRATOR = "administrator", _("Administrator")
-    DIRECCION = "direccion", _("Direccion")
-
-
 class CustomUserManager(BaseUserManager):
     """Custom manager for User model"""
 
@@ -21,6 +16,9 @@ class CustomUserManager(BaseUserManager):
         # Backward compatibility while moving from given_name to name.
         if "name" not in extra_fields and "given_name" in extra_fields:
             extra_fields["name"] = extra_fields.pop("given_name")
+
+        # Backward compatibility while removing role-based user management.
+        extra_fields.pop("role", None)
 
         if not extra_fields.get("name"):
             raise ValueError(_("Name is required"))
@@ -35,7 +33,6 @@ class CustomUserManager(BaseUserManager):
         """Creates and saves a superuser"""
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
-        extra_fields.setdefault("role", RoleChoices.ADMINISTRATOR)
 
         if extra_fields.get("is_staff") is not True:
             raise ValueError(_("Superuser must have is_staff=True"))
@@ -46,7 +43,7 @@ class CustomUserManager(BaseUserManager):
 
 
 class User(NamedEntity, AbstractUser):
-    """Custom User model with differentiated roles"""
+    """Custom User model."""
 
     username = None
     email = models.EmailField(
@@ -57,12 +54,6 @@ class User(NamedEntity, AbstractUser):
         blank=True,
         db_column="apellidos",
         help_text=_("User's family name"),
-    )
-    role = models.CharField(
-        max_length=20,
-        choices=RoleChoices.choices,
-        default=RoleChoices.DIRECCION,
-        help_text=_("User role in the system"),
     )
     active_team = models.ForeignKey(
         "user.CollaborationTeam",
@@ -93,7 +84,6 @@ class User(NamedEntity, AbstractUser):
         db_table = "user"
         indexes = [
             models.Index(fields=["email"]),
-            models.Index(fields=["role"]),
             models.Index(fields=["is_enabled"]),
         ]
 
@@ -111,14 +101,6 @@ class User(NamedEntity, AbstractUser):
     def get_full_name(self):
         """Returns the user's full name"""
         return f"{self.name} {self.family_name}".strip()
-
-    def is_administrator(self):
-        """Checks if the user is an administrator"""
-        return self.role == RoleChoices.ADMINISTRATOR
-
-    def is_direccion(self):
-        """Checks if the user is direccion"""
-        return self.role == RoleChoices.DIRECCION
 
 
 class CollaborationTeam(NamedEntity):

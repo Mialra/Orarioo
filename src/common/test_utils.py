@@ -1,4 +1,4 @@
-from user.models import CollaborationTeam, RoleChoices, User
+from user.models import CollaborationTeam, User
 
 
 class AuthenticatedAdminAPIMixin:
@@ -8,7 +8,6 @@ class AuthenticatedAdminAPIMixin:
     def create_user(
         *,
         email,
-        role,
         given_name="Api",
         family_name="Tester",
         password="StrongPassword123!",
@@ -18,13 +17,11 @@ class AuthenticatedAdminAPIMixin:
             password=password,
             given_name=given_name,
             family_name=family_name,
-            role=role,
         )
 
     def authenticate_admin(self, *, email_prefix="api"):
         self.user = self.create_user(
             email=f"{email_prefix}@test.com",
-            role=RoleChoices.ADMINISTRATOR,
         )
         self.team = CollaborationTeam.objects.create(name=f"{email_prefix} team")
         self.team.members.add(self.user)
