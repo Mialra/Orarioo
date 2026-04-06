@@ -44,7 +44,7 @@ def sign_up(request):
 def admin_users(request):
     state = {
         "title": "Usuarios del equipo",
-        "description": "Consulta los usuarios del equipo de colaboracion activo.",
+        "description": "Consulta los usuarios de tu equipo activo.",
         "empty_message": "No hay usuarios en el equipo activo.",
     }
 

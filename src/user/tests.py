@@ -263,7 +263,9 @@ class UserApiTests(APITestCase):
 
     def test_delete_is_not_allowed(self):
         self.client.force_authenticate(user=self.admin)
-        response = self.client.delete(reverse("user-detail", kwargs={"pk": self.direccion.pk}))
+        response = self.client.delete(
+            reverse("user-detail", kwargs={"pk": self.direccion.pk})
+        )
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def test_managed_create_user_without_login_password(self):
@@ -274,7 +276,9 @@ class UserApiTests(APITestCase):
             "email": "nuevo-direccion@test.com",
             "can_login": False,
         }
-        response = self.client.post(reverse("user-managed-create"), payload, format="json")
+        response = self.client.post(
+            reverse("user-managed-create"), payload, format="json"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         created_user = User.objects.get(email="nuevo-direccion@test.com")
@@ -288,11 +292,12 @@ class UserApiTests(APITestCase):
             "email": "nuevo-admin@test.com",
             "can_login": True,
         }
-        response = self.client.post(reverse("user-managed-create"), payload, format="json")
+        response = self.client.post(
+            reverse("user-managed-create"), payload, format="json"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("password", response.data)
-        )
 
     def test_change_password(self):
         self.client.force_authenticate(user=self.direccion)
@@ -576,14 +581,18 @@ class PermissionsTests(APITestCase):
     def test_same_team_user_can_view_other_profile(self):
         self.client.force_authenticate(user=self.user_1)
 
-        response = self.client.get(reverse("user-detail", kwargs={"pk": self.user_2.pk}))
+        response = self.client.get(
+            reverse("user-detail", kwargs={"pk": self.user_2.pk})
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_outside_team_user_cannot_view_profile(self):
         self.client.force_authenticate(user=self.user_1)
 
-        response = self.client.get(reverse("user-detail", kwargs={"pk": self.outside.pk}))
+        response = self.client.get(
+            reverse("user-detail", kwargs={"pk": self.outside.pk})
+        )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 

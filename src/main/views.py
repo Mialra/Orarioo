@@ -28,6 +28,15 @@ ADMIN_ROUTE_CONFIG = {
         "template": "administration_users.html",
         "extra_css": [],
         "extra_scripts": [
+            "js/admin-core/dom-helpers.js",
+            "js/admin-core/api.js",
+            "js/admin-core/ui-state.js",
+            "js/admin-core/form-utils.js",
+            "js/admin-core/modal-utils.js",
+            "js/admin-core/list-renderer.js",
+            "js/admin-core/pagination.js",
+            "js/admin-core/crud-module.js",
+            "js/admin-base.js",
             "js/users.js",
         ],
     },
@@ -105,7 +114,7 @@ ADMIN_BASE_CSS = [
 ADMIN_TAB_CONFIG = {
     "users": {
         "title": "Usuarios del equipo",
-        "description": "Consulta los usuarios del equipo de colaboracion activo.",
+        "description": "Consulta los usuarios de tu equipo activo.",
         "count_label": "0 usuarios en el equipo activo",
         "empty_message": "No hay usuarios en el equipo activo.",
     },
