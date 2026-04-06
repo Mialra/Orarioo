@@ -65,52 +65,57 @@
     function renderUserItem(user) {
         const isAdmin = user.role === "administrator";
 
-        return dom.createElement("article", {
-            className: "card border-0 shadow-sm admin-user-card",
-            dataset: {
-                userId: String(user.id),
-            },
+        return dom.createElement("div", {
+            className: "col",
             children: [
-                dom.createElement("div", {
-                    className: "card-body p-3 p-md-4",
+                dom.createElement("article", {
+                    className: "card border-0 shadow-sm admin-card admin-user-card",
+                    dataset: {
+                        userId: String(user.id),
+                    },
                     children: [
                         dom.createElement("div", {
-                            className: "d-flex align-items-center gap-3",
+                            className: "card-body admin-card-body",
                             children: [
                                 dom.createElement("div", {
-                                    className: "admin-user-avatar " + (isAdmin ? "avatar-purple" : "avatar-blue"),
-                                    children: [dom.createLucideIcon(isAdmin ? "shield" : "user")],
-                                }),
-                                dom.createElement("div", {
-                                    className: "flex-grow-1 min-w-0",
+                                    className: "admin-card-content admin-card-content-center",
                                     children: [
-                                        dom.createElement("h3", {
-                                            className: "h6 mb-1 text-truncate",
-                                            text: resolveUserName(user),
+                                        dom.createElement("div", {
+                                            className: "admin-avatar " + (isAdmin ? "variant-purple" : "variant-blue"),
+                                            children: [dom.createLucideIcon(isAdmin ? "shield" : "user")],
                                         }),
-                                        dom.createElement("p", {
-                                            className: "text-body-secondary mb-1 text-truncate",
-                                            text: user.email || "",
+                                        dom.createElement("div", {
+                                            className: "admin-card-main",
+                                            children: [
+                                                dom.createElement("h3", {
+                                                    className: "h6 mb-1 text-truncate",
+                                                    text: resolveUserName(user),
+                                                }),
+                                                dom.createElement("p", {
+                                                    className: "admin-card-copy mb-1 text-truncate",
+                                                    text: user.email || "",
+                                                }),
+                                                dom.createElement("span", {
+                                                    className: "admin-pill " + (isAdmin ? "variant-purple" : "variant-blue"),
+                                                    text: resolveRoleLabel(user),
+                                                }),
+                                            ],
                                         }),
-                                        dom.createElement("span", {
-                                            className: "badge rounded-pill admin-role-pill " + (isAdmin ? "role-purple" : "role-blue"),
-                                            text: resolveRoleLabel(user),
+                                        dom.createElement("div", {
+                                            className: "admin-actions",
+                                            children: [
+                                                createActionButton(
+                                                    "btn btn-link text-primary p-0 admin-action-btn admin-action-btn--edit admin-user-edit-btn",
+                                                    "Editar usuario",
+                                                    "pencil"
+                                                ),
+                                                createActionButton(
+                                                    "btn btn-link text-danger p-0 admin-action-btn admin-action-btn--delete admin-user-delete-btn",
+                                                    "Eliminar usuario",
+                                                    "trash-2"
+                                                ),
+                                            ],
                                         }),
-                                    ],
-                                }),
-                                dom.createElement("div", {
-                                    className: "d-flex align-items-center gap-2 ms-auto",
-                                    children: [
-                                        createActionButton(
-                                            "btn btn-link text-primary p-0 admin-icon-btn admin-user-edit-btn",
-                                            "Editar usuario",
-                                            "pencil"
-                                        ),
-                                        createActionButton(
-                                            "btn btn-link text-danger p-0 admin-icon-btn admin-user-delete-btn",
-                                            "Eliminar usuario",
-                                            "trash-2"
-                                        ),
                                     ],
                                 }),
                             ],

@@ -93,6 +93,25 @@
         return "NORMAL";
     }
 
+    function refreshCustomSelect(selectElement) {
+        if (
+            window.OrariooSelects &&
+            typeof window.OrariooSelects.refresh === "function" &&
+            selectElement
+        ) {
+            window.OrariooSelects.refresh(selectElement);
+        }
+    }
+
+    function refreshSubjectSelects() {
+        [
+            elements.stageInput,
+            elements.typeInput,
+            elements.teacherInput,
+            elements.groupInput,
+        ].forEach(refreshCustomSelect);
+    }
+
     function getStageMeta(stage) {
         const value = normalizeStage(stage);
         if (value === "PRESCHOOL") {
@@ -245,65 +264,70 @@
         const stageMeta = getStageMeta(subject.stage);
         const typeMeta = getTypeMeta(subject.type);
 
-        return dom.createElement("article", {
-            className: "card border-0 shadow-sm admin-card admin-subject-card",
-            dataset: {
-                subjectId: String(subject.id),
-            },
+        return dom.createElement("div", {
+            className: "col",
             children: [
-                dom.createElement("div", {
-                    className: "card-body p-3 p-md-4",
+                dom.createElement("article", {
+                    className: "card border-0 shadow-sm admin-card admin-subject-card",
+                    dataset: {
+                        subjectId: String(subject.id),
+                    },
                     children: [
                         dom.createElement("div", {
-                            className: "d-flex align-items-start justify-content-between gap-3",
+                            className: "card-body admin-card-body",
                             children: [
                                 dom.createElement("div", {
-                                    className: "flex-grow-1",
+                                    className: "admin-card-content",
                                     children: [
-                                        dom.createElement("h3", {
-                                            className: "h6 fw-semibold mb-2",
-                                            text: resolveSubjectName(subject),
-                                        }),
-                                        dom.createElement("p", {
-                                            className: "mb-1 text-body-secondary small",
-                                            text: (subject.weekly_hours || 0) + " h semanales",
-                                        }),
-                                        dom.createElement("p", {
-                                            className: "mb-1 text-body-secondary small",
-                                            text: "Profesor: " + (subject.teacher_name || "Sin asignar"),
-                                        }),
-                                        dom.createElement("p", {
-                                            className: "mb-2 text-body-secondary small",
-                                            text: "Curso: " + (subject.group_name || "Sin asignar"),
-                                        }),
                                         dom.createElement("div", {
-                                            className: "d-flex flex-wrap gap-2",
+                                            className: "admin-card-main",
                                             children: [
-                                                dom.createElement("span", {
-                                                    className: "admin-pill " + stageMeta.variant,
-                                                    text: stageMeta.label,
+                                                dom.createElement("h3", {
+                                                    className: "h6 fw-semibold mb-0",
+                                                    text: resolveSubjectName(subject),
                                                 }),
-                                                dom.createElement("span", {
-                                                    className: "admin-pill " + typeMeta.variant,
-                                                    text: typeMeta.label,
+                                                dom.createElement("p", {
+                                                    className: "admin-card-copy mb-1",
+                                                    text: (subject.weekly_hours || 0) + " h semanales",
+                                                }),
+                                                dom.createElement("p", {
+                                                    className: "admin-card-copy mb-1",
+                                                    text: "Profesor: " + (subject.teacher_name || "Sin asignar"),
+                                                }),
+                                                dom.createElement("p", {
+                                                    className: "admin-card-copy mb-0",
+                                                    text: "Curso: " + (subject.group_name || "Sin asignar"),
+                                                }),
+                                                dom.createElement("div", {
+                                                    className: "admin-card-meta",
+                                                    children: [
+                                                        dom.createElement("span", {
+                                                            className: "admin-pill " + stageMeta.variant,
+                                                            text: stageMeta.label,
+                                                        }),
+                                                        dom.createElement("span", {
+                                                            className: "admin-pill " + typeMeta.variant,
+                                                            text: typeMeta.label,
+                                                        }),
+                                                    ],
                                                 }),
                                             ],
                                         }),
-                                    ],
-                                }),
-                                dom.createElement("div", {
-                                    className: "admin-actions",
-                                    children: [
-                                        createActionButton(
-                                            "btn btn-link text-primary p-0 admin-action-btn admin-subject-edit-btn",
-                                            "Editar asignatura",
-                                            "pencil"
-                                        ),
-                                        createActionButton(
-                                            "btn btn-link text-danger p-0 admin-action-btn admin-subject-delete-btn",
-                                            "Eliminar asignatura",
-                                            "trash-2"
-                                        ),
+                                        dom.createElement("div", {
+                                            className: "admin-actions",
+                                            children: [
+                                                createActionButton(
+                                                    "btn btn-link text-primary p-0 admin-action-btn admin-action-btn--edit admin-subject-edit-btn",
+                                                    "Editar asignatura",
+                                                    "pencil"
+                                                ),
+                                                createActionButton(
+                                                    "btn btn-link text-danger p-0 admin-action-btn admin-action-btn--delete admin-subject-delete-btn",
+                                                    "Eliminar asignatura",
+                                                    "trash-2"
+                                                ),
+                                            ],
+                                        }),
                                     ],
                                 }),
                             ],
@@ -333,6 +357,7 @@
         if (currentValue && selectElement.querySelector('option[value="' + currentValue + '"]')) {
             selectElement.value = currentValue;
         }
+        refreshCustomSelect(selectElement);
     }
 
     function fillAllowedClassrooms(selectElement, items) {
@@ -563,6 +588,7 @@
                 elements.groupInput.value = "";
                 setMultiSelectValues(elements.allowedClassroomsInput, []);
                 resetPreferencesGrid({});
+                refreshSubjectSelects();
             },
             setEditingId: function (id) {
                 elements.subjectIdInput.value = id || "";
@@ -579,6 +605,7 @@
                 elements.groupInput.value = item.group ? String(item.group) : "";
                 setMultiSelectValues(elements.allowedClassroomsInput, item.allowed_classrooms || []);
                 resetPreferencesGrid(item.time_preferences || {});
+                refreshSubjectSelects();
             },
             buildPayload: function () {
                 return {

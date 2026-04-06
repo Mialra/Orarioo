@@ -44,6 +44,16 @@
         return "primary";
     }
 
+    function refreshCustomSelect(selectElement) {
+        if (
+            window.OrariooSelects &&
+            typeof window.OrariooSelects.refresh === "function" &&
+            selectElement
+        ) {
+            window.OrariooSelects.refresh(selectElement);
+        }
+    }
+
     function getStageMeta(stage) {
         const normalized = normalizeStage(stage);
         if (normalized === "preschool") {
@@ -76,44 +86,49 @@
     }
 
     function renderGroupItem(group) {
-        return dom.createElement("article", {
-            className: "card border-0 shadow-sm admin-card admin-group-card",
-            dataset: {
-                groupId: String(group.id),
-            },
+        return dom.createElement("div", {
+            className: "col",
             children: [
-                dom.createElement("div", {
-                    className: "card-body p-3 p-md-4",
+                dom.createElement("article", {
+                    className: "card border-0 shadow-sm admin-card admin-group-card",
+                    dataset: {
+                        groupId: String(group.id),
+                    },
                     children: [
                         dom.createElement("div", {
-                            className: "d-flex align-items-start justify-content-between gap-3",
+                            className: "card-body admin-card-body",
                             children: [
                                 dom.createElement("div", {
-                                    className: "flex-grow-1",
+                                    className: "admin-card-content",
                                     children: [
-                                        dom.createElement("h3", {
-                                            className: "h6 mb-2",
-                                            text: resolveGroupName(group),
+                                        dom.createElement("div", {
+                                            className: "admin-card-main",
+                                            children: [
+                                                dom.createElement("h3", {
+                                                    className: "h6 mb-0",
+                                                    text: resolveGroupName(group),
+                                                }),
+                                                dom.createElement("div", {
+                                                    className: "admin-card-meta",
+                                                    children: [stagePill(group.stage)],
+                                                }),
+                                            ],
                                         }),
                                         dom.createElement("div", {
-                                            className: "d-flex flex-wrap gap-2",
-                                            children: [stagePill(group.stage)],
+                                            className: "admin-actions",
+                                            children: [
+                                                createActionButton(
+                                                    "btn btn-link text-primary p-0 admin-action-btn admin-action-btn--edit admin-group-edit-btn",
+                                                    "Editar curso",
+                                                    "pencil"
+                                                ),
+                                                createActionButton(
+                                                    "btn btn-link text-danger p-0 admin-action-btn admin-action-btn--delete admin-group-delete-btn",
+                                                    "Eliminar curso",
+                                                    "trash-2"
+                                                ),
+                                            ],
                                         }),
-                                    ],
-                                }),
-                                dom.createElement("div", {
-                                    className: "admin-actions",
-                                    children: [
-                                        createActionButton(
-                                            "btn btn-link text-primary p-0 admin-action-btn admin-group-edit-btn",
-                                            "Editar curso",
-                                            "pencil"
-                                        ),
-                                        createActionButton(
-                                            "btn btn-link text-danger p-0 admin-action-btn admin-group-delete-btn",
-                                            "Eliminar curso",
-                                            "trash-2"
-                                        ),
                                     ],
                                 }),
                             ],
@@ -210,6 +225,7 @@
                 elements.groupIdInput.value = "";
                 elements.nameInput.value = "";
                 elements.stageInput.value = "primary";
+                refreshCustomSelect(elements.stageInput);
             },
             setEditingId: function (id) {
                 elements.groupIdInput.value = id || "";
@@ -220,6 +236,7 @@
             fillValues: function (item) {
                 elements.nameInput.value = item.name || "";
                 elements.stageInput.value = normalizeStage(item.stage);
+                refreshCustomSelect(elements.stageInput);
             },
             buildPayload: function () {
                 return {
