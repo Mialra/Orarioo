@@ -107,6 +107,51 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
     WEEKDAY_TO_DAY_NAME = {value: key for key, value in DAY_NAME_TO_WEEKDAY.items()}
 
     @staticmethod
+    def _build_teacher_workloads(schedules):
+        workloads = {}
+
+        for schedule in schedules or []:
+            teacher = getattr(schedule, "teacher", None)
+            start_time = getattr(schedule, "start_time", None)
+            end_time = getattr(schedule, "end_time", None)
+
+            if teacher is None or start_time is None or end_time is None:
+                continue
+
+            duration_seconds = (end_time - start_time).total_seconds()
+            if duration_seconds <= 0:
+                continue
+
+            duration_minutes = int(round(duration_seconds / 60.0))
+            if duration_minutes <= 0:
+                continue
+
+            teacher_name = (getattr(teacher, "name", "") or "").strip()
+            if not teacher_name:
+                teacher_name = f"Profesor {teacher.id}"
+
+            item = workloads.setdefault(
+                teacher.id,
+                {
+                    "teacher_id": teacher.id,
+                    "teacher_name": teacher_name,
+                    "total_minutes": 0,
+                },
+            )
+            item["total_minutes"] += duration_minutes
+
+        return [
+            {
+                **item,
+                "total_hours": round(item["total_minutes"] / 60.0, 2),
+            }
+            for item in sorted(
+                workloads.values(),
+                key=lambda value: value["teacher_name"].lower(),
+            )
+        ]
+
+    @staticmethod
     def _parse_positive_int(raw_value, field_name):
         if raw_value in (None, ""):
             return None, None
@@ -940,6 +985,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         serialized = self.get_serializer(schedules, many=True)
+        teacher_workloads = self._build_teacher_workloads(schedules)
         return Response(
             {
                 "detail": "Schedule generated successfully.",
@@ -947,6 +993,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "generation_options": generation_options,
                 "schedules": serialized.data,
                 "generated_count": len(serialized.data),
+                "teacher_workloads": teacher_workloads,
             },
             status=status.HTTP_201_CREATED,
         )
@@ -962,11 +1009,13 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         saved_queryset = self._saved_queryset_for_user(request.user).order_by(
             "start_time", "id"
         )
-        serialized = self.get_serializer(saved_queryset, many=True)
+        saved_schedules = list(saved_queryset)
+        serialized = self.get_serializer(saved_schedules, many=True)
         return Response(
             {
                 "count": len(serialized.data),
                 "results": serialized.data,
+                "teacher_workloads": self._build_teacher_workloads(saved_schedules),
             },
             status=status.HTTP_200_OK,
         )
@@ -1010,6 +1059,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             {
                 "count": len(serialized.data),
                 "results": serialized.data,
+                "teacher_workloads": self._build_teacher_workloads(schedules),
             },
             status=status.HTTP_200_OK,
         )
@@ -1270,6 +1320,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "detail": "Generated schedules saved successfully.",
                 "saved_count": len(schedules),
                 "schedules": serialized.data,
+                "teacher_workloads": self._build_teacher_workloads(schedules),
             },
             status=status.HTTP_200_OK,
         )
@@ -1802,6 +1853,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "no_changes": True,
                 "affected_schedules": [],
                 "affected_slots": [],
+                "teacher_workloads": [],
             },
             status=status.HTTP_200_OK,
         )
@@ -2143,6 +2195,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "no_changes": False,
                 "affected_schedules": serialized.data,
                 "affected_slots": unique_affected_slots,
+                "teacher_workloads": self._build_teacher_workloads(scope_schedules),
             },
             status=status.HTTP_200_OK,
         )
@@ -2215,6 +2268,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "detail": "Schedule replanned with manual change successfully.",
                 "schedules": serialized.data,
                 "generated_count": len(serialized.data),
+                "teacher_workloads": self._build_teacher_workloads(new_schedules),
             },
             status=status.HTTP_200_OK,
         )
