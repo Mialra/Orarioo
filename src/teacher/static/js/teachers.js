@@ -178,49 +178,54 @@
     }
 
     function renderTeacherItem(teacher) {
-        return dom.createElement("article", {
-            className: "card border-0 shadow-sm admin-card admin-teacher-card",
-            dataset: {
-                teacherId: String(teacher.id),
-            },
+        return dom.createElement("div", {
+            className: "col",
             children: [
-                dom.createElement("div", {
-                    className: "card-body p-3 p-md-4",
+                dom.createElement("article", {
+                    className: "card border-0 shadow-sm admin-card admin-teacher-card",
+                    dataset: {
+                        teacherId: String(teacher.id),
+                    },
                     children: [
                         dom.createElement("div", {
-                            className: "d-flex align-items-start justify-content-between gap-3",
+                            className: "card-body admin-card-body",
                             children: [
                                 dom.createElement("div", {
-                                    className: "flex-grow-1",
+                                    className: "admin-card-content",
                                     children: [
-                                        dom.createElement("h3", {
-                                            className: "h6 mb-2",
-                                            text: resolveTeacherName(teacher),
-                                        }),
                                         dom.createElement("div", {
-                                            className: "d-flex flex-wrap gap-2",
+                                            className: "admin-card-main",
                                             children: [
-                                                dom.createElement("span", {
-                                                    className: "admin-pill variant-blue",
-                                                    text: teacher.max_weekly_hours + " h máximo",
+                                                dom.createElement("h3", {
+                                                    className: "h6 mb-0",
+                                                    text: resolveTeacherName(teacher),
+                                                }),
+                                                dom.createElement("div", {
+                                                    className: "admin-card-meta",
+                                                    children: [
+                                                        dom.createElement("span", {
+                                                            className: "admin-pill variant-blue",
+                                                            text: teacher.max_weekly_hours + " h máximo",
+                                                        }),
+                                                    ],
                                                 }),
                                             ],
                                         }),
-                                    ],
-                                }),
-                                dom.createElement("div", {
-                                    className: "admin-actions",
-                                    children: [
-                                        createActionButton(
-                                            "btn btn-link text-primary p-0 admin-action-btn admin-teacher-edit-btn",
-                                            "Editar profesor",
-                                            "pencil"
-                                        ),
-                                        createActionButton(
-                                            "btn btn-link text-danger p-0 admin-action-btn admin-teacher-delete-btn",
-                                            "Eliminar profesor",
-                                            "trash-2"
-                                        ),
+                                        dom.createElement("div", {
+                                            className: "admin-actions",
+                                            children: [
+                                                createActionButton(
+                                                    "btn btn-link text-primary p-0 admin-action-btn admin-action-btn--edit admin-teacher-edit-btn",
+                                                    "Editar profesor",
+                                                    "pencil"
+                                                ),
+                                                createActionButton(
+                                                    "btn btn-link text-danger p-0 admin-action-btn admin-action-btn--delete admin-teacher-delete-btn",
+                                                    "Eliminar profesor",
+                                                    "trash-2"
+                                                ),
+                                            ],
+                                        }),
                                     ],
                                 }),
                             ],

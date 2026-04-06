@@ -1,0 +1,14 @@
+<div class="admin-section-header">
+    <div>
+        <h2 class="h4 fw-bold mb-1">{{ dashboard_admin_state.title }}</h2>
+        <p class="admin-section-copy mb-0">{{ dashboard_admin_state.description }}</p>
+    </div>
+    <button class="btn btn-primary fw-bold admin-toolbar-btn"
+            type="button"
+            id="{{ button_id }}"
+            data-bs-toggle="modal"
+            data-bs-target="{{ modal_target }}">
+        <i data-lucide="plus" class="admin-toolbar-icon" aria-hidden="true"></i>
+        {{ dashboard_admin_state.add_cta }}
+    </button>
+</div>

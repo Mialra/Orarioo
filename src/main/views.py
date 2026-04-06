@@ -26,7 +26,7 @@ SECTION_CONFIG = {
 ADMIN_ROUTE_CONFIG = {
     "users": {
         "template": "administration_users.html",
-        "extra_css": ["css/users.css"],
+        "extra_css": [],
         "extra_scripts": [
             "js/admin-core/dom-helpers.js",
             "js/admin-core/api.js",
@@ -42,7 +42,7 @@ ADMIN_ROUTE_CONFIG = {
     },
     "teachers": {
         "template": "administration_teachers.html",
-        "extra_css": ["css/teachers-admin.css", "css/preferences-grid.css"],
+        "extra_css": ["css/preferences-grid.css"],
         "extra_scripts": [
             "js/admin-core/dom-helpers.js",
             "js/admin-core/api.js",
@@ -58,7 +58,7 @@ ADMIN_ROUTE_CONFIG = {
     },
     "groups": {
         "template": "administration_groups.html",
-        "extra_css": ["css/groups-admin.css"],
+        "extra_css": [],
         "extra_scripts": [
             "js/admin-core/dom-helpers.js",
             "js/admin-core/api.js",
@@ -74,11 +74,7 @@ ADMIN_ROUTE_CONFIG = {
     },
     "subjects": {
         "template": "administration_subjects.html",
-        "extra_css": [
-            "css/teachers-admin.css",
-            "css/preferences-grid.css",
-            "css/subjects-admin.css",
-        ],
+        "extra_css": ["css/preferences-grid.css"],
         "extra_scripts": [
             "js/admin-core/dom-helpers.js",
             "js/admin-core/api.js",
@@ -94,7 +90,7 @@ ADMIN_ROUTE_CONFIG = {
     },
     "classrooms": {
         "template": "administration_classrooms.html",
-        "extra_css": ["css/classrooms-admin.css"],
+        "extra_css": [],
         "extra_scripts": [
             "js/admin-core/dom-helpers.js",
             "js/admin-core/api.js",

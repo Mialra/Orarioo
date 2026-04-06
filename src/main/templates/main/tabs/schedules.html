@@ -1,15 +1,15 @@
 <section id="schedulesSection" class="dash-panel dash-generator-card">
     <div class="dash-panel-body schedule-flow">
         <div id="scheduleAlert" class="alert d-none" role="alert"></div>
-
         <div id="generatedLandingSection">
             <div class="dash-panel-header">
                 <div>
                     <h2 class="dash-panel-title">Generador Automático de Horarios</h2>
-                    <p class="dash-panel-copy">Genera horarios respetando las restricciones de profesorado, cursos, aulas y asignaturas que hayas definido.</p>
+                    <p class="dash-panel-copy">
+                        Genera horarios respetando las restricciones de profesorado, cursos, aulas y asignaturas que hayas definido.
+                    </p>
                 </div>
             </div>
-
             <section class="schedule-section schedule-section-status mb-4">
                 <div class="dash-metrics-grid schedule-metrics-grid mb-0">
                     <article class="dash-metric metric-blue">
@@ -38,22 +38,24 @@
                     </article>
                 </div>
             </section>
-
             <section class="schedule-section schedule-section-control mb-4">
                 <div class="schedule-section-head mb-3">
                     <h3 class="h5 mb-1">Panel de control</h3>
                     <p class="text-secondary mb-0">Lanza la generación automática cuando estés listo.</p>
                 </div>
-                <p class="small text-secondary mb-3">El sistema buscará la solución más óptima. Sé paciente, cuanto más complejo sea el problema, más tiempo tomará.</p>
+                <p class="small text-secondary mb-3">
+                    El sistema buscará la solución más óptima. Sé paciente, cuanto más complejo sea el problema, más tiempo tomará.
+                </p>
                 <div class="schedule-control-actions">
-                    <button type="button" id="generateBtn" class="btn btn-primary schedule-generate-btn w-100 py-3 fw-semibold">
+                    <button type="button"
+                            id="generateBtn"
+                            class="btn btn-primary schedule-generate-btn w-100 py-3 fw-semibold">
                         <i data-lucide="sparkles" class="btn-icon" aria-hidden="true"></i>
-                        Generar horario automático
+                        Generar horario
                     </button>
                 </div>
             </section>
         </div>
-
         <section id="generatedWorkspaceSection" class="schedule-workspace d-none">
             <div class="schedule-workspace-head">
                 <div class="schedule-workspace-brand">
@@ -63,110 +65,87 @@
                     <div>
                         <h3 class="schedule-workspace-title mb-1">Horario Escolar</h3>
                         <div class="schedule-workspace-meta">
-                            <span id="generatedWorkspaceStateBadge" class="schedule-pill schedule-pill-draft">Borrador</span>
-                            <span id="generatedWorkspaceCount" class="text-secondary">0 sesiones programadas</span>
+                            <span id="generatedWorkspaceStateBadge"
+                                  class="schedule-pill schedule-pill-draft">Borrador</span>
                         </div>
                     </div>
                 </div>
-                <div class="schedule-workspace-actions">
-                    <div class="schedule-toolbar-filters">
-                        <select id="generatedWorkspaceCourseFilter" class="form-select schedule-toolbar-select" aria-label="Filtrar por curso">
+                <div class="row g-2 schedule-workspace-actions">
+                    <div class="col-12 col-xl schedule-toolbar-filters">
+                        <select id="generatedWorkspaceCourseFilter"
+                                class="form-select schedule-toolbar-select"
+                                aria-label="Filtrar por curso">
                             <option value="">Todos los cursos</option>
                         </select>
-                        <select id="generatedWorkspaceTeacherFilter" class="form-select schedule-toolbar-select" aria-label="Filtrar por profesor">
+                        <select id="generatedWorkspaceTeacherFilter"
+                                class="form-select schedule-toolbar-select"
+                                aria-label="Filtrar por profesor">
                             <option value="">Todos los profesores</option>
                         </select>
-                        <select id="generatedWorkspaceSubjectFilter" class="form-select schedule-toolbar-select" aria-label="Filtrar por asignatura">
+                        <select id="generatedWorkspaceSubjectFilter"
+                                class="form-select schedule-toolbar-select"
+                                aria-label="Filtrar por asignatura">
                             <option value="">Todas las asignaturas</option>
                         </select>
                     </div>
-                    <div class="schedule-toolbar-buttons">
-                        <button type="button" id="generatedWorkspacePdfBtn" class="btn btn-outline-secondary schedule-toolbar-btn">
+                    <div class="col-12 col-xl-auto schedule-toolbar-buttons">
+                        <button type="button"
+                                id="generatedWorkspacePdfBtn"
+                                class="btn btn-outline-secondary schedule-toolbar-btn">
                             <i data-lucide="download" class="btn-icon" aria-hidden="true"></i>
                             PDF
                         </button>
-                        <button type="button" id="generatedWorkspaceCsvBtn" class="btn btn-outline-secondary schedule-toolbar-btn">
+                        <button type="button"
+                                id="generatedWorkspaceCsvBtn"
+                                class="btn btn-outline-secondary schedule-toolbar-btn">
                             <i data-lucide="download" class="btn-icon" aria-hidden="true"></i>
                             CSV
                         </button>
-                        <button type="button" id="generatedWorkspaceSaveBtn" class="btn btn-success-subtle schedule-toolbar-btn schedule-toolbar-btn-save">
+                        <button type="button"
+                                id="generatedWorkspaceSaveBtn"
+                                class="btn btn-success-subtle schedule-toolbar-btn schedule-toolbar-btn-save">
                             <i data-lucide="save" class="btn-icon" aria-hidden="true"></i>
                             <span id="generatedWorkspaceSaveBtnLabel">Guardar</span>
                         </button>
-                        <button type="button" id="generatedWorkspaceRegenerateBtn" class="btn btn-primary schedule-toolbar-btn schedule-toolbar-btn-regenerate">
+                        <button type="button"
+                                id="generatedWorkspaceRegenerateBtn"
+                                class="btn btn-primary schedule-toolbar-btn schedule-toolbar-btn-regenerate">
                             <i data-lucide="sparkles" class="btn-icon" aria-hidden="true"></i>
                             Regenerar
                         </button>
                     </div>
                 </div>
-                <p class="small text-secondary mb-0">Arrastra y suelta una sesión para recolocarla. Si sueltas sobre otra sesión, se intercambian automáticamente.</p>
+                <p class="small text-secondary mb-0">
+                    Arrastra y suelta una sesión para recolocarla. Si sueltas sobre otra sesión, se intercambian automáticamente.
+                </p>
             </div>
-            <div id="generatedWorkspaceOutput" class="schedule-board-shell" style="display:none;"></div>
+            <div id="generatedWorkspaceOutput" class="schedule-board-shell"></div>
         </section>
     </div>
 </section>
-
-<div id="saveGeneratedModal" class="schedule-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="saveGeneratedModalTitle">
+<div id="saveGeneratedModal"
+     class="schedule-modal-overlay"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="saveGeneratedModalTitle">
     <div class="schedule-modal-card schedule-save-modal-card">
         <h3 id="saveGeneratedModalTitle" class="h5 mb-1">Guardar horario</h3>
         <p class="text-secondary small mb-3">Indica un nombre para guardar este horario generado.</p>
-
         <div class="mb-3">
             <label for="saveGeneratedNameInput" class="form-label">Nombre del horario</label>
-            <input
-                type="text"
-                id="saveGeneratedNameInput"
-                class="form-control"
-                placeholder="Ej: Horario 1o ESO - Semana Base"
-                maxlength="120"
-                autocomplete="off"
-            >
+            <input type="text"
+                   id="saveGeneratedNameInput"
+                   class="form-control"
+                   placeholder="Ej: Horario 1o ESO - Semana Base"
+                   maxlength="120"
+                   autocomplete="off">
         </div>
-
         <div class="d-flex justify-content-end gap-2 mt-3">
-            <button type="button" id="cancelSaveGeneratedBtn" class="btn btn-outline-secondary">Cancelar</button>
+            <button type="button"
+                    id="cancelSaveGeneratedBtn"
+                    class="btn btn-outline-secondary">Cancelar</button>
             <button type="button" id="confirmSaveGeneratedBtn" class="btn btn-primary">Guardar</button>
         </div>
     </div>
 </div>
-
-<div id="exportModal" class="schedule-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
-    <div class="schedule-modal-card">
-        <h3 id="exportModalTitle" class="h5 mb-1">Exportar horario</h3>
-        <p id="exportContextText" class="text-secondary small mb-3">Marca las entidades que quieres incluir o selecciona objetos concretos.</p>
-
-        <div class="mb-3">
-            <label for="exportFormat" class="form-label">Formato</label>
-            <select id="exportFormat" class="form-select">
-                <option value="csv">CSV</option>
-                <option value="pdf">PDF</option>
-            </select>
-        </div>
-
-        <div class="export-card-grid mb-2">
-            <button type="button" class="btn btn-outline-secondary export-entity-card" data-export-entity="group" aria-pressed="false">Todos los cursos</button>
-            <button type="button" class="btn btn-outline-secondary export-entity-card" data-export-entity="teacher" aria-pressed="false">Todos los profesores</button>
-            <button type="button" class="btn btn-outline-secondary export-entity-card" data-export-entity="classroom" aria-pressed="false">Todas las aulas</button>
-        </div>
-
-        <div class="row g-2">
-            <div class="col-12 col-md-4">
-                <label class="form-label">Cursos concretos</label>
-                <div id="exportGroupSelect" class="checkbox-list"></div>
-            </div>
-            <div class="col-12 col-md-4">
-                <label class="form-label">Profesores concretos</label>
-                <div id="exportTeacherSelect" class="checkbox-list"></div>
-            </div>
-            <div class="col-12 col-md-4">
-                <label class="form-label">Aulas concretas</label>
-                <div id="exportClassroomSelect" class="checkbox-list"></div>
-            </div>
-        </div>
-
-        <div class="d-flex justify-content-end gap-2 mt-3">
-            <button type="button" id="cancelExportBtn" class="btn btn-outline-secondary">Cancelar</button>
-            <button type="button" id="confirmExportBtn" class="btn btn-primary">Exportar</button>
-        </div>
-    </div>
-</div>
+{% include "main/tabs/_schedule_export_modal.html" %}

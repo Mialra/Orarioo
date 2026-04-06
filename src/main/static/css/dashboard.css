@@ -4,7 +4,56 @@
 }
 
 .dash-navbar {
+    position: sticky;
+    top: 0;
+    z-index: 1035;
+    background: rgba(255, 255, 255, 0.92);
+    border-bottom-color: rgba(220, 228, 241, 0.9) !important;
     backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(15, 30, 60, 0.06);
+}
+
+.dash-navbar .container-fluid {
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.dash-navbar .navbar-toggler {
+    border: 1px solid #d7dfed;
+    border-radius: 0.85rem;
+    padding: 0.55rem 0.7rem;
+    box-shadow: 0 6px 18px rgba(15, 30, 60, 0.05);
+}
+
+.dash-navbar .navbar-toggler:focus {
+    box-shadow: 0 0 0 0.2rem rgba(36, 88, 240, 0.14);
+}
+
+.dash-navbar-content {
+    align-items: center;
+    gap: 1rem;
+}
+
+.dash-tabs {
+    align-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.dash-tab-item {
+    display: flex;
+}
+
+.dash-profile-section {
+    margin-left: auto;
+    justify-content: flex-end;
+}
+
+.dash-profile-dropdown {
+    position: relative;
 }
 
 .dash-brand {
@@ -48,20 +97,30 @@
 .dash-tab {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.4rem;
+    min-height: 3rem;
+    padding: 0.78rem 1rem;
     font-weight: 700;
-    color: #2d3f5e;
-    border-radius: 0.65rem;
+    font-size: 0.92rem;
+    color: #3153a4;
+    border-radius: 0.8rem;
+    border: 1px solid transparent;
+    background: transparent;
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .dash-tab:hover {
-    color: var(--orarioo-primary);
-    background: #edf2ff;
+    color: #1e47b8;
+    background: rgba(47, 102, 244, 0.1);
+    border-color: rgba(47, 102, 244, 0.12);
 }
 
 .dash-tab.active {
-    background: #e1eaff;
-    color: #2348af;
+    background: linear-gradient(180deg, #2f73f7 0%, #2359cf 100%);
+    color: #ffffff;
+    border-color: transparent;
+    box-shadow: 0 10px 18px rgba(35, 89, 207, 0.22);
 }
 
 .dash-nav-icon {
@@ -71,7 +130,7 @@
 }
 
 .dash-tab.active .dash-nav-icon {
-    color: #5f77aa;
+    color: currentColor;
 }
 
 .dash-avatar {
@@ -87,8 +146,53 @@
     background: #dbe7ff;
 }
 
+.dash-profile-trigger {
+    min-height: 3rem;
+    min-width: 9.5rem;
+    justify-content: center;
+    border-radius: 0.9rem;
+}
+
+.dash-profile-trigger:hover,
+.dash-profile-trigger:focus-visible,
+.dash-profile-trigger[aria-expanded="true"] {
+    color: #19325f !important;
+}
+
 .dash-profile-menu {
-    min-width: 320px;
+    min-width: min(22rem, calc(100vw - 1rem));
+    width: min(22rem, calc(100vw - 1rem));
+    max-width: calc(100vw - 1rem);
+    margin-top: 0.7rem !important;
+    border: 1px solid #dbe4f3;
+    border-radius: 1rem;
+    box-shadow: 0 18px 38px rgba(15, 30, 60, 0.15);
+    overflow: hidden;
+}
+
+.dash-profile-dropdown .dash-profile-menu.dropdown-menu-end {
+    left: auto;
+    right: 0;
+}
+
+.dash-profile-menu {
+    padding: 0.55rem !important;
+}
+
+.dash-profile-menu .dropdown-item {
+    border-radius: 0.7rem;
+    padding: 0.65rem 0.8rem;
+    white-space: normal;
+}
+
+.dash-profile-menu .dropdown-item:hover,
+.dash-profile-menu .dropdown-item:focus-visible {
+    background: #eef4ff;
+    color: #1f4db8;
+}
+
+.dash-profile-menu .dropdown-divider {
+    margin: 0.45rem 0;
 }
 
 .dash-team-switch-item {
@@ -270,23 +374,10 @@
     color: var(--bs-secondary-color);
 }
 
-.admin-shell {
-    background: #ffffff;
-    border: 1px solid #d9e2ef;
-    border-radius: 0.9rem;
-    overflow: hidden;
-    box-shadow: 0 1px 2px rgba(15, 30, 60, 0.04), 0 10px 24px rgba(15, 30, 60, 0.03);
-}
-
 .admin-empty-state {
     border-radius: 0.7rem;
     background: #f1f4f9;
     padding: 2.9rem 1.2rem;
-}
-
-.admin-shell > .card-body:first-of-type,
-.admin-shell > .admin-panel-body:first-of-type {
-    border-top: 1px solid #edf2f7;
 }
 
 @media (max-width: 991.98px) {
@@ -294,9 +385,53 @@
         margin-bottom: 0.75rem;
     }
 
+    .dash-navbar .container-fluid {
+        align-items: flex-start;
+    }
+
+    .dash-navbar-content {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        width: 100%;
+        margin-top: 0.95rem;
+        padding: 0.5rem 0 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .dash-tabs {
+        width: min(100%, 21rem);
+        flex-direction: column;
+        align-items: stretch;
+        margin-inline: 0 0;
+        gap: 0.45rem !important;
+        padding: 0;
+    }
+
+    .dash-tab-item {
+        width: 100%;
+    }
+
     .dash-tab {
         width: 100%;
         justify-content: flex-start;
+        padding: 0.8rem 0.95rem;
+    }
+
+    .dash-profile-section {
+        width: min(100%, 21rem);
+        padding-top: 0.35rem;
+    }
+
+    .dash-profile-dropdown {
+        margin-left: auto;
+    }
+
+    .dash-profile-trigger {
+        min-width: 10.25rem;
     }
 
     .dash-panel-header {
@@ -311,8 +446,27 @@
     .dash-metrics-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+}
 
-    .admin-shell {
-        box-shadow: 0 1px 2px rgba(15, 30, 60, 0.04);
+@media (max-width: 575.98px) {
+    .dash-brand {
+        max-width: calc(100% - 4.5rem);
+    }
+
+    .dash-brand h1 {
+        font-size: 1.05rem;
+    }
+
+    .dash-profile-section {
+        justify-content: flex-end;
+    }
+
+    .dash-profile-trigger {
+        width: min(100%, 12rem);
+    }
+
+    .dash-profile-menu {
+        width: min(20rem, calc(100vw - 1rem));
+        min-width: min(20rem, calc(100vw - 1rem));
     }
 }

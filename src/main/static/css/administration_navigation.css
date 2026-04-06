@@ -1,46 +1,29 @@
 .admin-panel-tabs {
-    --admin-tab-gap: 18px;
     padding: 1.5rem 3rem 0;
     background: transparent;
     border-bottom: 1px solid #d8e0eb;
-    box-shadow: none;
 }
 
 .admin-subtabs {
-    display: flex;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    flex-wrap: nowrap;
-    align-items: flex-end;
-    gap: var(--admin-tab-gap);
+    gap: 1.25rem;
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: thin;
 }
 
-.admin-subtabs li {
-    display: flex;
-    flex: 1 1 0;
-    min-width: 0;
-}
-
 .admin-subtab {
-    border: none;
+    border: 0;
     border-bottom: 2px solid transparent;
     border-radius: 0;
     color: #637389;
     font-weight: 600;
-    display: flex;
-    width: 100%;
-    justify-content: center;
+    display: inline-flex;
     align-items: center;
     gap: 0.4rem;
     padding: 0 0 0.7rem;
-    margin-right: 0;
     background: transparent;
     text-decoration: none;
+    white-space: nowrap;
 }
 
 .admin-subtab:hover,
@@ -96,25 +79,13 @@
 }
 
 @media (max-width: 991.98px) {
-    .admin-subtabs {
-        border-bottom: 0;
-        row-gap: 0;
-    }
-
     .admin-panel-tabs {
         padding: 1.25rem 1.5rem 0;
     }
 
-    .admin-subtabs li {
-        flex: 1 1 0;
-    }
-
     .admin-subtab {
-        margin-right: 0;
-        border-radius: 0;
         padding: 0 0 0.65rem;
         border-bottom-width: 2px;
-        white-space: nowrap;
     }
 
     .admin-subtab.active,

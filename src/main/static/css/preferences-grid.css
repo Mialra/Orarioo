@@ -107,22 +107,6 @@
     border-color: #f2a1a5;
 }
 
-.admin-legend {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-    font-size: 0.8rem;
-    margin-top: 0.75rem;
-    justify-content: flex-end;
-}
-
-.admin-legend span {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-}
-
-
 @media (max-width: 768px) {
     .pref-grid {
         min-width: 34rem;

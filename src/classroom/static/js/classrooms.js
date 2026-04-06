@@ -55,44 +55,49 @@
     }
 
     function renderClassroomItem(classroom) {
-        return dom.createElement("article", {
-            className: "card border-0 shadow-sm admin-card admin-classroom-card",
-            dataset: {
-                classroomId: String(classroom.id),
-            },
+        return dom.createElement("div", {
+            className: "col",
             children: [
-                dom.createElement("div", {
-                    className: "card-body p-3 p-md-4",
+                dom.createElement("article", {
+                    className: "card border-0 shadow-sm admin-card admin-classroom-card",
+                    dataset: {
+                        classroomId: String(classroom.id),
+                    },
                     children: [
                         dom.createElement("div", {
-                            className: "d-flex align-items-start justify-content-between gap-3",
+                            className: "card-body admin-card-body",
                             children: [
                                 dom.createElement("div", {
-                                    className: "flex-grow-1",
+                                    className: "admin-card-content",
                                     children: [
-                                        dom.createElement("h3", {
-                                            className: "h6 mb-2",
-                                            text: resolveClassroomName(classroom),
+                                        dom.createElement("div", {
+                                            className: "admin-card-main",
+                                            children: [
+                                                dom.createElement("h3", {
+                                                    className: "h6 mb-0",
+                                                    text: resolveClassroomName(classroom),
+                                                }),
+                                                dom.createElement("div", {
+                                                    className: "admin-card-meta",
+                                                    children: [sharedPill(classroom.is_shared)],
+                                                }),
+                                            ],
                                         }),
                                         dom.createElement("div", {
-                                            className: "d-flex flex-wrap gap-2",
-                                            children: [sharedPill(classroom.is_shared)],
+                                            className: "admin-actions",
+                                            children: [
+                                                createActionButton(
+                                                    "btn btn-link text-primary p-0 admin-action-btn admin-action-btn--edit admin-classroom-edit-btn",
+                                                    "Editar aula",
+                                                    "pencil"
+                                                ),
+                                                createActionButton(
+                                                    "btn btn-link text-danger p-0 admin-action-btn admin-action-btn--delete admin-classroom-delete-btn",
+                                                    "Eliminar aula",
+                                                    "trash-2"
+                                                ),
+                                            ],
                                         }),
-                                    ],
-                                }),
-                                dom.createElement("div", {
-                                    className: "admin-actions",
-                                    children: [
-                                        createActionButton(
-                                            "btn btn-link text-primary p-0 admin-action-btn admin-classroom-edit-btn",
-                                            "Editar aula",
-                                            "pencil"
-                                        ),
-                                        createActionButton(
-                                            "btn btn-link text-danger p-0 admin-action-btn admin-classroom-delete-btn",
-                                            "Eliminar aula",
-                                            "trash-2"
-                                        ),
                                     ],
                                 }),
                             ],
