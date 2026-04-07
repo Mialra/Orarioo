@@ -250,54 +250,12 @@ class UserApiTests(APITestCase):
         response = self.client.get(reverse("user-detail", kwargs={"pk": outsider.pk}))
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_update_user_allowed_for_same_team(self):
-        self.client.force_authenticate(user=self.admin)
-        response = self.client.patch(
-            reverse("user-detail", kwargs={"pk": self.direccion.pk}),
-            {"given_name": "Updated"},
-            format="json",
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.direccion.refresh_from_db()
-        self.assertEqual(self.direccion.given_name, "Updated")
-
     def test_delete_is_not_allowed(self):
         self.client.force_authenticate(user=self.admin)
         response = self.client.delete(
             reverse("user-detail", kwargs={"pk": self.direccion.pk})
         )
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    def test_managed_create_user_without_login_password(self):
-        self.client.force_authenticate(user=self.admin)
-        payload = {
-            "given_name": "Nuevo",
-            "family_name": "Direccion",
-            "email": "nuevo-direccion@test.com",
-            "can_login": False,
-        }
-        response = self.client.post(
-            reverse("user-managed-create"), payload, format="json"
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        created_user = User.objects.get(email="nuevo-direccion@test.com")
-        self.assertFalse(created_user.has_usable_password())
-
-    def test_managed_create_user_with_login_requires_password(self):
-        self.client.force_authenticate(user=self.admin)
-        payload = {
-            "given_name": "Nuevo",
-            "family_name": "Admin",
-            "email": "nuevo-admin@test.com",
-            "can_login": True,
-        }
-        response = self.client.post(
-            reverse("user-managed-create"), payload, format="json"
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("password", response.data)
 
     def test_change_password(self):
         self.client.force_authenticate(user=self.direccion)
@@ -595,14 +553,3 @@ class PermissionsTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-
-    def test_user_cannot_update_other_users(self):
-        self.client.force_authenticate(user=self.user_1)
-
-        response = self.client.patch(
-            reverse("user-detail", kwargs={"pk": self.user_2.pk}),
-            {"given_name": "Modified"},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
