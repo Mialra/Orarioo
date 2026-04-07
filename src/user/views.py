@@ -19,7 +19,6 @@ from user.models import (
     CollaborationTeam,
     CollaborationTeamInvitation,
     CollaborationTeamInvitationStatus,
-    RoleChoices,
     User,
 )
 from user.serializers import (
@@ -30,9 +29,7 @@ from user.serializers import (
     LoginSerializer,
     UserChangePasswordSerializer,
     UserCreateSerializer,
-    UserManagementCreateSerializer,
     UserSerializer,
-    UserUpdateSerializer,
 )
 
 
@@ -45,12 +42,10 @@ def sign_up(request):
 
 
 def admin_users(request):
-    users = User.objects.filter(is_enabled=True).order_by("-created_at")
     state = {
-        "title": "Gestión de Usuarios",
-        "description": "Administra el personal del centro, sus accesos y sus roles.",
-        "empty_message": "No hay usuarios registrados. Añade el primero para comenzar.",
-        "add_cta": "Añadir Usuario",
+        "title": "Usuarios del equipo",
+        "description": "Consulta los usuarios de tu equipo activo.",
+        "empty_message": "No hay usuarios en el equipo activo.",
     }
 
     return render_admin_dashboard(
@@ -58,19 +53,8 @@ def admin_users(request):
         "users",
         {
             "dashboard_admin_state": state,
-            "dashboard_admin_users": users,
         },
     )
-
-
-class IsAdministratorOrSelf(permissions.BasePermission):
-    """Permission for administrators or the user themselves to access"""
-
-    def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated)
-
-    def has_object_permission(self, request, view, obj):
-        return request.user.is_administrator() or obj.id == request.user.id
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -192,7 +176,7 @@ class CollaborationTeamInviteView(APIView):
                 {
                     "email": (
                         "No active user exists with that email. "
-                        "Create the user first from Administracion > Usuarios."
+                        "Ask that person to sign up first."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -354,11 +338,8 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
 
     Available operations:
     - GET /api/users/ - List all users
-    - POST /api/users/ - Create new user
+    - POST /api/users/ - Create new user (signup)
     - GET /api/users/{id}/ - Get user details
-    - PUT /api/users/{id}/ - Update complete user
-    - PATCH /api/users/{id}/ - Partially update
-    - DELETE /api/users/{id}/ - Delete user
     - POST /api/users/change_password/ - Change password
     - POST /api/users/me/ - Get current user data
     """
@@ -371,11 +352,9 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
     queryset = User.objects.filter(is_enabled=True).order_by("-created_at")
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = UserPagination
+    http_method_names = ["get", "post", "head", "options"]
     serializer_action_classes = {
         "create": UserCreateSerializer,
-        "managed_create": UserManagementCreateSerializer,
-        "partial_update": UserUpdateSerializer,
-        "update": UserUpdateSerializer,
         "change_password": UserChangePasswordSerializer,
     }
 
@@ -394,15 +373,9 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
         if self.action == "create":
             # Allow creating users (signup)
             return [permissions.AllowAny()]
-        if self.action == "managed_create":
-            # Authenticated staff (administrator/direccion) can create managed users
+        if self.action in ["list", "retrieve"]:
+            # Team-scoped management is available to authenticated users.
             return [IsManagementUser()]
-        if self.action in ["list", "destroy", "update", "partial_update"]:
-            # Administrator and direccion have the same management scope.
-            return [IsManagementUser()]
-        if self.action == "retrieve":
-            # User can see their own profile, administrator can see any
-            return [IsAdministratorOrSelf()]
         if self.action in ["change_password", "me"]:
             # Authenticated user can change their password
             return [permissions.IsAuthenticated()]
@@ -410,39 +383,20 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
         return super().get_permissions()
 
     def get_queryset(self):
-        """Filters users based on permissions"""
-        user = self.request.user
+        """Return enabled users from the authenticated user's active team."""
+        try:
+            active_team = get_active_team(self.request)
+        except PermissionDenied:
+            return User.objects.none()
 
-        if user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECCION]:
-            try:
-                active_team = get_active_team(self.request)
-            except PermissionDenied:
-                return User.objects.none()
-
-            return (
-                User.objects.filter(
-                    is_enabled=True,
-                    collaboration_teams=active_team,
-                )
-                .distinct()
-                .order_by("-created_at")
+        return (
+            User.objects.filter(
+                is_enabled=True,
+                collaboration_teams=active_team,
             )
-
-        # Other users only see their own profile.
-        return User.objects.filter(id=user.id, is_enabled=True).order_by("-created_at")
-
-    @action(
-        detail=False,
-        methods=["post"],
-        permission_classes=[IsManagementUser],
-        url_path="managed_create",
-    )
-    def managed_create(self, request):
-        """Creates users for audit/assignment flows with optional login access."""
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+            .distinct()
+            .order_by("-created_at")
+        )
 
     @action(
         detail=False,
@@ -511,15 +465,6 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
             {"message": _("Session closed successfully")},
             status=status.HTTP_200_OK,
         )
-
-    def perform_update(self, serializer):
-        """Updates an existing user"""
-        serializer.save()
-
-    def perform_destroy(self, instance):
-        """Deletes a user (soft delete - marks as inactive)"""
-        instance.is_enabled = False
-        instance.save()
 
     def create(self, request, *args, **kwargs):
         """Allows creating users without authentication (signup)"""

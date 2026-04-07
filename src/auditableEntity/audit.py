@@ -64,7 +64,6 @@ FIELD_LABELS = {
     "name": "Nombre",
     "family_name": "Apellidos",
     "email": "Correo",
-    "role": "Rol",
     "is_enabled": "Activo",
     "max_weekly_hours": "Máximo de horas semanales",
     "working_hours": "Horas de trabajo",
@@ -91,8 +90,6 @@ DISPLAY_VALUE_TRANSLATIONS = {
     "Preschool": "Infantil",
     "Primary": "Primaria",
     "Secondary": "Secundaria",
-    "Administrator": "Administrador",
-    "Direccion": "Dirección",
     "Normal": "Normal",
     "TC": "TC",
 }

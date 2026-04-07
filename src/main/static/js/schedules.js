@@ -52,6 +52,8 @@
     detailPageSize: 20,
     generatedSaved: false,
     generatedSavedName: "",
+    generatedTeacherWorkloadsByName: {},
+    savedTeacherWorkloadsByName: {},
     generatedMoveInFlight: false,
     savedMoveInFlight: false,
     generatedDragState: {
@@ -116,9 +118,7 @@
       return [];
     }
 
-    return Array.from(
-      dropdown.querySelectorAll(".schedule-filter-option:not(:disabled)"),
-    );
+    return Array.from(dropdown.querySelectorAll(".schedule-filter-option:not(:disabled)"));
   }
 
   function focusScheduleFilterOption(dropdown, index) {
@@ -613,6 +613,88 @@
     }
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  }
+
+  function formatTeacherWorkloadHours(rawHours) {
+    const numericHours = Number(rawHours);
+    if (!Number.isFinite(numericHours) || numericHours <= 0) {
+      return "0 h";
+    }
+
+    const rounded = Math.round(numericHours * 100) / 100;
+    if (Number.isInteger(rounded)) {
+      return String(rounded) + " h";
+    }
+
+    const text = rounded
+      .toFixed(2)
+      .replace(/\.00$/, "")
+      .replace(/(\.[1-9])0$/, "$1")
+      .replace(".", ",");
+    return text + " h";
+  }
+
+  function buildTeacherWorkloadsByNameFromApi(workloads) {
+    const byName = {};
+
+    (workloads || []).forEach(function (item) {
+      const teacherName = String((item && item.teacher_name) || "").trim();
+      if (!teacherName) {
+        return;
+      }
+
+      const totalHours = Number(item.total_hours);
+      if (!Number.isFinite(totalHours) || totalHours <= 0) {
+        return;
+      }
+
+      byName[teacherName] = totalHours;
+    });
+
+    return byName;
+  }
+
+  function buildTeacherWorkloadsByNameFromSessions(sessions) {
+    const minutesByName = {};
+
+    (sessions || []).forEach(function (session) {
+      const teacherName = String((session && session.teacher_name) || "").trim();
+      if (!teacherName) {
+        return;
+      }
+
+      const startTime = new Date(session.start_time);
+      const endTime = new Date(session.end_time);
+      if (Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) {
+        return;
+      }
+
+      const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
+      if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+        return;
+      }
+
+      minutesByName[teacherName] = (minutesByName[teacherName] || 0) + durationMinutes;
+    });
+
+    return Object.keys(minutesByName).reduce(function (acc, teacherName) {
+      acc[teacherName] = minutesByName[teacherName] / 60;
+      return acc;
+    }, {});
+  }
+
+  function resolveTeacherLabelWithWorkload(teacherName, workloadsByName) {
+    const normalizedName = String(teacherName || "").trim();
+    if (!normalizedName) {
+      return "-";
+    }
+
+    const totalHours = workloadsByName && workloadsByName[normalizedName];
+    if (!Number.isFinite(Number(totalHours)) || Number(totalHours) <= 0) {
+      return normalizedName;
+    }
+
+    return normalizedName + " (" + formatTeacherWorkloadHours(totalHours) + ")";
   }
 
   function createEmptyDayCells() {
@@ -1141,7 +1223,10 @@
       cell.innerHTML = entries.length
         ? entries
             .map(function (entry) {
-              return renderSessionCard(entry, { enableDragDrop: true });
+              return renderSessionCard(entry, {
+                enableDragDrop: true,
+                teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
+              });
             })
             .join("")
         : renderEmptyCell();
@@ -1338,6 +1423,14 @@
     }
 
     upsertGeneratedSchedules(result.data && result.data.affected_schedules);
+    if (result.data && Array.isArray(result.data.teacher_workloads)) {
+      state.generatedTeacherWorkloadsByName = buildTeacherWorkloadsByNameFromApi(result.data.teacher_workloads);
+    } else {
+      state.generatedTeacherWorkloadsByName = buildTeacherWorkloadsByNameFromSessions(state.latestGeneratedSchedules);
+    }
+    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds, {
+      teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
+    });
 
     const affectedKeys = [candidate.sourceSlotKey, candidate.targetSlotKey];
     if (Array.isArray(result.data && result.data.affected_slots)) {
@@ -1515,7 +1608,10 @@
       cell.innerHTML = entries.length
         ? entries
             .map(function (entry) {
-              return renderSessionCard(entry, { enableDragDrop: true });
+              return renderSessionCard(entry, {
+                enableDragDrop: true,
+                teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
+              });
             })
             .join("")
         : renderEmptyCell();
@@ -1717,6 +1813,20 @@
     }
 
     upsertSelectedSavedSchedules(result.data && result.data.affected_schedules);
+    if (result.data && Array.isArray(result.data.teacher_workloads)) {
+      state.savedTeacherWorkloadsByName = buildTeacherWorkloadsByNameFromApi(result.data.teacher_workloads);
+    } else {
+      const selectedGroup = getSelectedSavedGroup();
+      state.savedTeacherWorkloadsByName = buildTeacherWorkloadsByNameFromSessions(
+        selectedGroup && Array.isArray(selectedGroup.sessions) ? selectedGroup.sessions : [],
+      );
+    }
+    const selectedSavedGroup = getSelectedSavedGroup();
+    if (selectedSavedGroup && Array.isArray(selectedSavedGroup.sessions)) {
+      populateWorkspaceFiltersFromSessions(selectedSavedGroup.sessions, savedFilterIds, {
+        teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
+      });
+    }
 
     state.savedTimetableGroups.sort(function (left, right) {
       const updatedDiff = toDateMillis(right.updated_at) - toDateMillis(left.updated_at);
@@ -1752,7 +1862,7 @@
     return select ? select.value : "";
   }
 
-  function setSelectOptions(selectId, optionValues, emptyLabel) {
+  function setSelectOptions(selectId, optionValues, emptyLabel, labelsByValue) {
     const select = document.getElementById(selectId);
     if (!select) {
       return;
@@ -1772,7 +1882,8 @@
       "</option>" +
       values
         .map(function (value) {
-          return '<option value="' + value + '">' + value + "</option>";
+          const label = labelsByValue && labelsByValue[value] ? labelsByValue[value] : value;
+          return '<option value="' + value + '">' + label + "</option>";
         })
         .join("");
 
@@ -1783,7 +1894,8 @@
     syncScheduleFilterDropdown(select);
   }
 
-  function populateWorkspaceFiltersFromSessions(sessions, filterIds) {
+  function populateWorkspaceFiltersFromSessions(sessions, filterIds, options) {
+    const safeOptions = options || {};
     const courseNames = Array.from(
       new Set(
         (sessions || [])
@@ -1804,6 +1916,13 @@
       ),
     );
 
+    const teacherWorkloadsByName =
+      safeOptions.teacherWorkloadsByName || buildTeacherWorkloadsByNameFromSessions(sessions);
+    const teacherLabelsByName = teacherNames.reduce(function (acc, teacherName) {
+      acc[teacherName] = resolveTeacherLabelWithWorkload(teacherName, teacherWorkloadsByName);
+      return acc;
+    }, {});
+
     const subjectNames = Array.from(
       new Set(
         (sessions || [])
@@ -1819,7 +1938,7 @@
     }
 
     setSelectOptions(filterIds.courseId, courseNames, "Todos los cursos");
-    setSelectOptions(filterIds.teacherId, teacherNames, "Todos los profesores");
+    setSelectOptions(filterIds.teacherId, teacherNames, "Todos los profesores", teacherLabelsByName);
     setSelectOptions(filterIds.subjectId, subjectNames, "Todas las asignaturas");
   }
 
@@ -1850,6 +1969,7 @@
   }
 
   function updateGeneratedWorkspaceHeader() {
+    const count = Array.isArray(state.latestGeneratedSchedules) ? state.latestGeneratedSchedules.length : 0;
     const badge = document.getElementById("generatedWorkspaceStateBadge");
     if (badge) {
       badge.textContent = state.generatedSaved ? "Guardado" : "Borrador";
@@ -1916,6 +2036,7 @@
       detailPage: state.generatedDetailPage,
       detailPageSize: state.detailPageSize,
       enableDragDrop: true,
+      teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
     });
 
     state.generatedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
@@ -1980,6 +2101,7 @@
       detailPage: state.savedDetailPage,
       detailPageSize: state.detailPageSize,
       enableDragDrop: true,
+      teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
     });
 
     state.savedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
@@ -2076,7 +2198,10 @@
       return null;
     }
 
-    return listFromPayload(result.data);
+    return {
+      sessions: listFromPayload(result.data),
+      teacherWorkloadsByName: buildTeacherWorkloadsByNameFromApi(result.data && result.data.teacher_workloads),
+    };
   }
 
   async function openSavedWorkspace(index) {
@@ -2100,14 +2225,20 @@
           '<article class="saved-card-placeholder"><p class="text-secondary mb-0">Cargando sesiones...</p></article>';
       }
 
-      const sessions = await fetchSavedSessionsByName(selected.name);
-      if (sessions === null) {
+      const savedDetail = await fetchSavedSessionsByName(selected.name);
+      if (savedDetail === null) {
         showSavedPicker();
         return false;
       }
 
+      const sessions = savedDetail.sessions;
+
       selected.sessions = sessions;
       selected.sessionsLoaded = true;
+      state.savedTeacherWorkloadsByName =
+        savedDetail.teacherWorkloadsByName && Object.keys(savedDetail.teacherWorkloadsByName).length
+          ? savedDetail.teacherWorkloadsByName
+          : buildTeacherWorkloadsByNameFromSessions(sessions);
 
       const latestUpdatedAt = sessions.reduce(function (latest, session) {
         if (!session || !session.updated_at) {
@@ -2122,7 +2253,13 @@
       renderSavedCards();
     }
 
-    populateWorkspaceFiltersFromSessions(selected.sessions, savedFilterIds);
+    if (!state.savedTeacherWorkloadsByName || !Object.keys(state.savedTeacherWorkloadsByName).length) {
+      state.savedTeacherWorkloadsByName = buildTeacherWorkloadsByNameFromSessions(selected.sessions);
+    }
+
+    populateWorkspaceFiltersFromSessions(selected.sessions, savedFilterIds, {
+      teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
+    });
     renderSavedWorkspace();
     return true;
   }
@@ -2592,8 +2729,14 @@
     state.generatedSaved = true;
     state.generatedSavedName = timetableName;
     state.latestGeneratedSchedules = (result.data && result.data.schedules) || state.latestGeneratedSchedules;
+    state.generatedTeacherWorkloadsByName =
+      result.data && Array.isArray(result.data.teacher_workloads)
+        ? buildTeacherWorkloadsByNameFromApi(result.data.teacher_workloads)
+        : buildTeacherWorkloadsByNameFromSessions(state.latestGeneratedSchedules);
 
-    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds);
+    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds, {
+      teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
+    });
     renderGeneratedWorkspace();
     await loadSavedSchedules();
 
@@ -2633,9 +2776,15 @@
     state.generatedDetailPage = 1;
     state.generatedSaved = false;
     state.generatedSavedName = "";
+    state.generatedTeacherWorkloadsByName =
+      result.data && Array.isArray(result.data.teacher_workloads)
+        ? buildTeacherWorkloadsByNameFromApi(result.data.teacher_workloads)
+        : buildTeacherWorkloadsByNameFromSessions(state.latestGeneratedSchedules);
     state.generatedMoveInFlight = false;
 
-    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds);
+    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds, {
+      teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
+    });
     showGeneratedWorkspace();
     renderGeneratedWorkspace();
 

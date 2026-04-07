@@ -1,12 +1,4 @@
-"""
-Tests for the Orarioo user backend.
-
-This file contains tests to verify authentication,
-permissions, and user management behavior.
-
-Run with:
-    python manage.py test user
-"""
+"""Tests for user, authentication and collaboration-team flows."""
 
 from django.test import TestCase
 from django.urls import reverse
@@ -18,7 +10,6 @@ from user.models import (
     CollaborationTeam,
     CollaborationTeamInvitation,
     CollaborationTeamInvitationStatus,
-    RoleChoices,
     User,
 )
 
@@ -32,11 +23,9 @@ class UserModelTests(TestCase):
             "given_name": "Test",
             "family_name": "User",
             "password": "TestPassword123!",
-            "role": RoleChoices.ADMINISTRATOR,
         }
 
     def test_create_user(self):
-        """Creates a regular user successfully."""
         user = User.objects.create_user(**self.user_data)
 
         self.assertEqual(user.email, self.user_data["email"])
@@ -46,7 +35,6 @@ class UserModelTests(TestCase):
         self.assertTrue(user.is_enabled)
 
     def test_password_is_stored_hashed_not_plaintext(self):
-        """Password must be stored hashed and never equal to the raw input."""
         raw_password = self.user_data["password"]
         user = User.objects.create_user(**self.user_data)
 
@@ -59,7 +47,6 @@ class UserModelTests(TestCase):
         self.assertTrue(issubclass(User, NamedEntity))
 
     def test_create_superuser(self):
-        """Creates a superuser successfully."""
         superuser = User.objects.create_superuser(
             email="admin@example.com",
             password="AdminPassword123!",
@@ -68,36 +55,16 @@ class UserModelTests(TestCase):
 
         self.assertTrue(superuser.is_superuser)
         self.assertTrue(superuser.is_staff)
-        self.assertEqual(superuser.role, RoleChoices.ADMINISTRATOR)
 
     def test_string_representation(self):
-        """Uses first and last name in string representation."""
         user = User.objects.create_user(**self.user_data)
         expected = f"{user.given_name} {user.family_name} ({user.email})"
 
         self.assertEqual(str(user), expected)
 
-    def test_role_helpers(self):
-        """Checks role helper methods."""
-        admin_user = User.objects.create_user(
-            email="admin@test.com",
-            given_name="Admin",
-            password="Pass123!",
-            role=RoleChoices.ADMINISTRATOR,
-        )
-        direccion_user = User.objects.create_user(
-            email="direccion@test.com",
-            given_name="Direccion",
-            password="Pass123!",
-            role=RoleChoices.DIRECCION,
-        )
-
-        self.assertTrue(admin_user.is_administrator())
-        self.assertFalse(direccion_user.is_administrator())
-        self.assertTrue(direccion_user.is_direccion())
-
-    def test_only_expected_roles_exist(self):
-        self.assertEqual(set(RoleChoices.values), {"administrator", "direccion"})
+    def test_create_user_ignores_legacy_role_field(self):
+        user = User.objects.create_user(**self.user_data, role="administrator")
+        self.assertEqual(user.email, self.user_data["email"])
 
 
 class AuthenticationApiTests(APITestCase):
@@ -114,7 +81,6 @@ class AuthenticationApiTests(APITestCase):
             "email": "test@example.com",
             "password": "TestPassword123!",
             "password_confirm": "TestPassword123!",
-            "role": "direccion",
         }
 
     def test_signup_success(self):
@@ -143,52 +109,25 @@ class AuthenticationApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_signup_assigns_administrator_role_when_requested(self):
-        admin_payload = self.user_data.copy()
-        admin_payload["email"] = "admin-signup@test.com"
-        admin_payload["role"] = "administrator"
-
-        response = self.client.post(self.signup_url, admin_payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        created_user = User.objects.get(email=admin_payload["email"])
-        self.assertEqual(created_user.role, RoleChoices.ADMINISTRATOR)
-
-    def test_signup_assigns_direccion_role_when_requested(self):
-        direccion_payload = self.user_data.copy()
-        direccion_payload["email"] = "direccion-signup@test.com"
-        direccion_payload["role"] = "direccion"
-
-        response = self.client.post(self.signup_url, direccion_payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        created_user = User.objects.get(email=direccion_payload["email"])
-        self.assertEqual(created_user.role, RoleChoices.DIRECCION)
-
-    def test_signup_defaults_to_direccion_when_role_missing(self):
+    def test_signup_ignores_administrator_role_when_requested(self):
         payload = self.user_data.copy()
-        payload["email"] = "default-role@test.com"
-        payload.pop("role", None)
+        payload["email"] = "admin-signup@test.com"
+        payload["role"] = "administrator"
 
         response = self.client.post(self.signup_url, payload, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        created_user = User.objects.get(email=payload["email"])
-        self.assertEqual(created_user.role, RoleChoices.DIRECCION)
+        self.assertNotIn("role", response.data["user"])
 
-    def test_signup_rejects_invalid_role_value(self):
-        invalid_role_payload = self.user_data.copy()
-        invalid_role_payload["email"] = "invalid-role@test.com"
-        invalid_role_payload["role"] = "administrador"
+    def test_signup_ignores_direccion_role_when_requested(self):
+        payload = self.user_data.copy()
+        payload["email"] = "direccion-signup@test.com"
+        payload["role"] = "direccion"
 
-        response = self.client.post(
-            self.signup_url,
-            invalid_role_payload,
-            format="json",
-        )
+        response = self.client.post(self.signup_url, payload, format="json")
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("role", response.data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertNotIn("role", response.data["user"])
 
     def test_login_success(self):
         User.objects.create_user(
@@ -243,7 +182,7 @@ class AuthenticationApiTests(APITestCase):
 
 
 class UserApiTests(APITestCase):
-    """Tests for user management endpoints."""
+    """Tests for user endpoints and team scoping."""
 
     def setUp(self):
         self.client = APIClient()
@@ -252,14 +191,12 @@ class UserApiTests(APITestCase):
             email="admin@test.com",
             password="Admin123!",
             given_name="Admin",
-            role=RoleChoices.ADMINISTRATOR,
         )
 
         self.direccion = User.objects.create_user(
             email="direccion@test.com",
             password="Dir123!",
             given_name="Direccion",
-            role=RoleChoices.DIRECCION,
         )
         self.team = CollaborationTeam.objects.create(name="Equipo API")
         self.team.members.add(self.admin, self.direccion)
@@ -276,7 +213,7 @@ class UserApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["email"], self.direccion.email)
 
-    def test_list_users_as_admin(self):
+    def test_list_users_returns_active_team_members(self):
         self.client.force_authenticate(user=self.admin)
 
         response = self.client.get(reverse("user-list"))
@@ -289,7 +226,6 @@ class UserApiTests(APITestCase):
             email="outsider@test.com",
             password="Outsider123!",
             given_name="Outsider",
-            role=RoleChoices.DIRECCION,
         )
 
         self.client.force_authenticate(user=self.admin)
@@ -299,47 +235,27 @@ class UserApiTests(APITestCase):
         returned_ids = {row["id"] for row in response.data["results"]}
         self.assertNotIn(outsider.id, returned_ids)
 
-    def test_list_users_as_direccion_forbidden(self):
+    def test_retrieve_user_in_same_team(self):
         self.client.force_authenticate(user=self.direccion)
-
-        response = self.client.get(reverse("user-list"))
-
+        response = self.client.get(reverse("user-detail", kwargs={"pk": self.admin.pk}))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_managed_create_user_without_login_password(self):
-        self.client.force_authenticate(user=self.admin)
-
-        payload = {
-            "given_name": "Nuevo",
-            "family_name": "Direccion",
-            "email": "nuevo-direccion@test.com",
-            "role": "direccion",
-            "can_login": False,
-        }
-        response = self.client.post(
-            reverse("user-managed-create"), payload, format="json"
+    def test_retrieve_user_outside_team_not_found(self):
+        outsider = User.objects.create_user(
+            email="outsider2@test.com",
+            password="Outsider123!",
+            given_name="Outsider2",
         )
+        self.client.force_authenticate(user=self.direccion)
+        response = self.client.get(reverse("user-detail", kwargs={"pk": outsider.pk}))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        created_user = User.objects.get(email="nuevo-direccion@test.com")
-        self.assertFalse(created_user.has_usable_password())
-
-    def test_managed_create_user_with_login_requires_password(self):
+    def test_delete_is_not_allowed(self):
         self.client.force_authenticate(user=self.admin)
-
-        payload = {
-            "given_name": "Nuevo",
-            "family_name": "Admin",
-            "email": "nuevo-admin@test.com",
-            "role": "administrator",
-            "can_login": True,
-        }
-        response = self.client.post(
-            reverse("user-managed-create"), payload, format="json"
+        response = self.client.delete(
+            reverse("user-detail", kwargs={"pk": self.direccion.pk})
         )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("password", response.data)
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def test_change_password(self):
         self.client.force_authenticate(user=self.direccion)
@@ -405,12 +321,37 @@ class UserApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("team_id", response.data)
 
+
+class CollaborationTeamApiTests(APITestCase):
+    """Tests for collaboration team creation/invitations/membership flows."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+        self.admin = User.objects.create_user(
+            email="admin-team@test.com",
+            password="Admin123!",
+            given_name="Admin",
+        )
+
+        self.member = User.objects.create_user(
+            email="member@test.com",
+            password="Member123!",
+            given_name="Member",
+        )
+
+        self.team = CollaborationTeam.objects.create(name="Equipo Inicial")
+        self.team.members.add(self.admin, self.member)
+        self.admin.active_team = self.team
+        self.member.active_team = self.team
+        self.admin.save(update_fields=["active_team"])
+        self.member.save(update_fields=["active_team"])
+
     def test_create_collaboration_team_assigns_creator_as_member_and_active_team(self):
         solo_user = User.objects.create_user(
             email="solo@test.com",
             password="Solo123!",
             given_name="Solo",
-            role=RoleChoices.DIRECCION,
         )
 
         self.client.force_authenticate(user=solo_user)
@@ -433,7 +374,6 @@ class UserApiTests(APITestCase):
             email="invitee@test.com",
             password="Invitee123!",
             given_name="Invitado",
-            role=RoleChoices.DIRECCION,
         )
 
         self.client.force_authenticate(user=self.admin)
@@ -460,7 +400,7 @@ class UserApiTests(APITestCase):
         self.client.force_authenticate(user=self.admin)
         response = self.client.post(
             reverse("invite-collaboration-team-member"),
-            {"email": self.direccion.email},
+            {"email": self.member.email},
             format="json",
         )
 
@@ -471,7 +411,6 @@ class UserApiTests(APITestCase):
             email="pending-invitee@test.com",
             password="Invitee123!",
             given_name="Invitado",
-            role=RoleChoices.DIRECCION,
         )
         CollaborationTeamInvitation.objects.create(
             team=self.team,
@@ -492,12 +431,12 @@ class UserApiTests(APITestCase):
     def test_list_pending_invitations_for_current_user(self):
         CollaborationTeamInvitation.objects.create(
             team=self.team,
-            invited_user=self.direccion,
+            invited_user=self.member,
             invited_by=self.admin,
             status=CollaborationTeamInvitationStatus.PENDING,
         )
 
-        self.client.force_authenticate(user=self.direccion)
+        self.client.force_authenticate(user=self.member)
         response = self.client.get(reverse("list-collaboration-team-invitations"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -507,13 +446,13 @@ class UserApiTests(APITestCase):
     def test_accept_invitation_adds_membership(self):
         invitation = CollaborationTeamInvitation.objects.create(
             team=self.team,
-            invited_user=self.direccion,
+            invited_user=self.member,
             invited_by=self.admin,
             status=CollaborationTeamInvitationStatus.PENDING,
         )
-        self.team.members.remove(self.direccion)
+        self.team.members.remove(self.member)
 
-        self.client.force_authenticate(user=self.direccion)
+        self.client.force_authenticate(user=self.member)
         response = self.client.post(
             reverse(
                 "respond-collaboration-team-invitation",
@@ -526,18 +465,18 @@ class UserApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         invitation.refresh_from_db()
         self.assertEqual(invitation.status, CollaborationTeamInvitationStatus.ACCEPTED)
-        self.assertTrue(self.team.members.filter(id=self.direccion.id).exists())
+        self.assertTrue(self.team.members.filter(id=self.member.id).exists())
 
     def test_reject_invitation_marks_rejected(self):
         invitation = CollaborationTeamInvitation.objects.create(
             team=self.team,
-            invited_user=self.direccion,
+            invited_user=self.member,
             invited_by=self.admin,
             status=CollaborationTeamInvitationStatus.PENDING,
         )
-        self.team.members.remove(self.direccion)
+        self.team.members.remove(self.member)
 
-        self.client.force_authenticate(user=self.direccion)
+        self.client.force_authenticate(user=self.member)
         response = self.client.post(
             reverse(
                 "respond-collaboration-team-invitation",
@@ -550,10 +489,10 @@ class UserApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         invitation.refresh_from_db()
         self.assertEqual(invitation.status, CollaborationTeamInvitationStatus.REJECTED)
-        self.assertFalse(self.team.members.filter(id=self.direccion.id).exists())
+        self.assertFalse(self.team.members.filter(id=self.member.id).exists())
 
     def test_leave_team_removes_membership(self):
-        self.client.force_authenticate(user=self.direccion)
+        self.client.force_authenticate(user=self.member)
         response = self.client.post(
             reverse("leave-collaboration-team"),
             {"team_id": self.team.id},
@@ -561,88 +500,56 @@ class UserApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertFalse(self.team.members.filter(id=self.direccion.id).exists())
+        self.assertFalse(self.team.members.filter(id=self.member.id).exists())
 
 
 class PermissionsTests(APITestCase):
-    """Tests for permissions and access control."""
+    """Tests for access behavior under team scoping and read-only user API."""
 
     def setUp(self):
         self.client = APIClient()
 
-        self.admin = User.objects.create_user(
-            email="admin@test.com",
-            password="Admin123!",
-            given_name="Admin",
-            role=RoleChoices.ADMINISTRATOR,
-        )
-
-        self.direccion_1 = User.objects.create_user(
-            email="direccion1@test.com",
-            password="Dir123!",
-            given_name="Direccion",
+        self.user_1 = User.objects.create_user(
+            email="user1@test.com",
+            password="User123!",
+            given_name="User",
             family_name="One",
-            role=RoleChoices.DIRECCION,
         )
 
-        self.direccion_2 = User.objects.create_user(
-            email="direccion2@test.com",
-            password="Dir123!",
-            given_name="Direccion",
+        self.user_2 = User.objects.create_user(
+            email="user2@test.com",
+            password="User123!",
+            given_name="User",
             family_name="Two",
-            role=RoleChoices.DIRECCION,
+        )
+
+        self.outside = User.objects.create_user(
+            email="outside@test.com",
+            password="User123!",
+            given_name="Outside",
         )
 
         self.team = CollaborationTeam.objects.create(name="Equipo Permisos")
-        self.team.members.add(self.admin, self.direccion_1, self.direccion_2)
-        self.admin.active_team = self.team
-        self.direccion_1.active_team = self.team
-        self.direccion_2.active_team = self.team
-        self.admin.save(update_fields=["active_team"])
-        self.direccion_1.save(update_fields=["active_team"])
-        self.direccion_2.save(update_fields=["active_team"])
+        self.team.members.add(self.user_1, self.user_2)
+        self.user_1.active_team = self.team
+        self.user_2.active_team = self.team
+        self.user_1.save(update_fields=["active_team"])
+        self.user_2.save(update_fields=["active_team"])
 
-    def test_direccion_cannot_view_other_profiles(self):
-        self.client.force_authenticate(user=self.direccion_1)
+    def test_same_team_user_can_view_other_profile(self):
+        self.client.force_authenticate(user=self.user_1)
 
         response = self.client.get(
-            reverse("user-detail", kwargs={"pk": self.direccion_2.pk})
+            reverse("user-detail", kwargs={"pk": self.user_2.pk})
         )
 
-        self.assertIn(
-            response.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
-        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_admin_can_view_any_profile(self):
-        self.client.force_authenticate(user=self.admin)
+    def test_outside_team_user_cannot_view_profile(self):
+        self.client.force_authenticate(user=self.user_1)
 
         response = self.client.get(
-            reverse("user-detail", kwargs={"pk": self.direccion_1.pk})
+            reverse("user-detail", kwargs={"pk": self.outside.pk})
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-    def test_direccion_cannot_update_other_users(self):
-        self.client.force_authenticate(user=self.direccion_1)
-
-        response = self.client.patch(
-            reverse("user-detail", kwargs={"pk": self.direccion_2.pk}),
-            {"given_name": "Modified"},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-    def test_admin_can_update_users(self):
-        self.client.force_authenticate(user=self.admin)
-
-        response = self.client.patch(
-            reverse("user-detail", kwargs={"pk": self.direccion_1.pk}),
-            {"given_name": "Updated"},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-        self.direccion_1.refresh_from_db()
-        self.assertEqual(self.direccion_1.given_name, "Updated")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

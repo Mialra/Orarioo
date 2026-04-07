@@ -6,7 +6,6 @@ from user.models import (
     CollaborationTeam,
     CollaborationTeamInvitation,
     CollaborationTeamInvitationStatus,
-    RoleChoices,
     User,
 )
 
@@ -82,7 +81,6 @@ class UserSerializer(serializers.ModelSerializer):
     """Serializer for displaying user information"""
 
     given_name = serializers.CharField(source="name")
-    role_display = serializers.SerializerMethodField()
     active_team = CollaborationTeamSerializer(read_only=True)
     collaboration_teams = CollaborationTeamSerializer(many=True, read_only=True)
 
@@ -93,8 +91,6 @@ class UserSerializer(serializers.ModelSerializer):
             "given_name",
             "family_name",
             "email",
-            "role",
-            "role_display",
             "active_team",
             "collaboration_teams",
             "is_enabled",
@@ -102,10 +98,6 @@ class UserSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
-
-    def get_role_display(self, obj):
-        """Returns the readable representation of the role"""
-        return obj.get_role_display()
 
 
 class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerializer):
@@ -121,11 +113,6 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
     password_confirm = serializers.CharField(
         write_only=True, required=True, help_text="Password confirmation"
     )
-    role = serializers.ChoiceField(
-        choices=RoleChoices.choices,
-        default=RoleChoices.DIRECCION,
-        help_text="User role (administrator, direccion)",
-    )
 
     class Meta:
         model = User
@@ -133,7 +120,6 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
             "given_name",
             "family_name",
             "email",
-            "role",
             "password",
             "password_confirm",
         ]
@@ -154,63 +140,10 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
         return user
 
 
-class UserManagementCreateSerializer(
-    UserNameEmailValidationMixin,
-    serializers.ModelSerializer,
-):
-    """Serializer for creating users from admin/direction panel with optional login."""
-
-    given_name = serializers.CharField(source="name")
-    role = serializers.ChoiceField(
-        choices=RoleChoices.choices,
-        default=RoleChoices.DIRECCION,
-        help_text="User role (administrator, direccion)",
-    )
-    can_login = serializers.BooleanField(default=False)
-    password = serializers.CharField(
-        write_only=True,
-        required=False,
-        allow_blank=True,
-        validators=[validate_password],
-        help_text="Optional password. Required only if can_login=true.",
-    )
-
-    class Meta:
-        model = User
-        fields = [
-            "given_name",
-            "family_name",
-            "email",
-            "role",
-            "can_login",
-            "password",
-            "is_enabled",
-        ]
-
-    def validate(self, data):
-        can_login = data.get("can_login", False)
-        password = data.get("password", "")
-        if can_login and not password:
-            raise serializers.ValidationError(
-                {"password": "Password is required when can_login is true."}
-            )
-        return data
-
-    @transaction.atomic
-    def create(self, validated_data):
-        can_login = validated_data.pop("can_login", False)
-        password = validated_data.pop("password", "")
-        if not can_login:
-            password = None
-        user = User.objects.create_user(**validated_data, password=password)
-        return user
-
-
 class UserUpdateSerializer(UserNameEmailValidationMixin, serializers.ModelSerializer):
     """Serializer for updating user information"""
 
     given_name = serializers.CharField(source="name")
-    role = serializers.ChoiceField(choices=RoleChoices.choices, help_text="User role")
 
     class Meta:
         model = User
@@ -218,7 +151,6 @@ class UserUpdateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
             "given_name",
             "family_name",
             "email",
-            "role",
             "is_enabled",
         ]
 

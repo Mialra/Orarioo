@@ -24,7 +24,6 @@ class UserAdmin(UserAdmin):
             _("System information"),
             {
                 "fields": (
-                    "role",
                     "is_enabled",
                     "is_staff",
                     "is_superuser",
@@ -58,7 +57,7 @@ class UserAdmin(UserAdmin):
             _("Permissions"),
             {
                 "classes": ("wide",),
-                "fields": ("role", "is_enabled", "is_staff", "is_superuser"),
+                "fields": ("is_enabled", "is_staff", "is_superuser"),
             },
         ),
     )
@@ -67,12 +66,11 @@ class UserAdmin(UserAdmin):
         "email",
         "name",
         "family_name",
-        "role",
         "is_enabled",
         "is_staff",
         "created_at",
     )
-    list_filter = ("role", "is_enabled", "is_staff", "is_superuser", "created_at")
+    list_filter = ("is_enabled", "is_staff", "is_superuser", "created_at")
     search_fields = ("email", "name", "family_name")
     ordering = ("-created_at",)
     readonly_fields = ("created_at", "updated_at", "last_login")
