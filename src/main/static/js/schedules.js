@@ -32,12 +32,14 @@
   const generatedFilterIds = {
     courseId: "generatedWorkspaceCourseFilter",
     teacherId: "generatedWorkspaceTeacherFilter",
+    classroomId: "generatedWorkspaceClassroomFilter",
     subjectId: "generatedWorkspaceSubjectFilter",
   };
 
   const savedFilterIds = {
     courseId: "savedWorkspaceCourseFilter",
     teacherId: "savedWorkspaceTeacherFilter",
+    classroomId: "savedWorkspaceClassroomFilter",
     subjectId: "savedWorkspaceSubjectFilter",
   };
 
@@ -1923,6 +1925,16 @@
       return acc;
     }, {});
 
+    const classroomNames = Array.from(
+      new Set(
+        (sessions || [])
+          .map(function (session) {
+            return session.classroom_name;
+          })
+          .filter(Boolean),
+      ),
+    );
+
     const subjectNames = Array.from(
       new Set(
         (sessions || [])
@@ -1939,12 +1951,14 @@
 
     setSelectOptions(filterIds.courseId, courseNames, "Todos los cursos");
     setSelectOptions(filterIds.teacherId, teacherNames, "Todos los profesores", teacherLabelsByName);
+    setSelectOptions(filterIds.classroomId, classroomNames, "Todas las aulas");
     setSelectOptions(filterIds.subjectId, subjectNames, "Todas las asignaturas");
   }
 
   function getFilteredSessions(sessions, filterIds) {
     const selectedCourse = getFilterValue(filterIds.courseId);
     const selectedTeacher = getFilterValue(filterIds.teacherId);
+    const selectedClassroom = getFilterValue(filterIds.classroomId);
     const selectedSubject = getFilterValue(filterIds.subjectId);
 
     return (sessions || []).filter(function (session) {
@@ -1953,6 +1967,13 @@
       }
 
       if (selectedTeacher && normalizeForCompare(session.teacher_name) !== normalizeForCompare(selectedTeacher)) {
+        return false;
+      }
+
+      if (
+        selectedClassroom &&
+        normalizeForCompare(session.classroom_name) !== normalizeForCompare(selectedClassroom)
+      ) {
         return false;
       }
 
@@ -2844,7 +2865,12 @@
       generateButton.addEventListener("click", handleGenerate);
     }
 
-    [generatedFilterIds.courseId, generatedFilterIds.teacherId, generatedFilterIds.subjectId].forEach(function (id) {
+    [
+      generatedFilterIds.courseId,
+      generatedFilterIds.teacherId,
+      generatedFilterIds.classroomId,
+      generatedFilterIds.subjectId,
+    ].forEach(function (id) {
       const select = document.getElementById(id);
       if (!select) {
         return;
@@ -3149,7 +3175,12 @@
       });
     }
 
-    [savedFilterIds.courseId, savedFilterIds.teacherId, savedFilterIds.subjectId].forEach(function (id) {
+    [
+      savedFilterIds.courseId,
+      savedFilterIds.teacherId,
+      savedFilterIds.classroomId,
+      savedFilterIds.subjectId,
+    ].forEach(function (id) {
       const select = document.getElementById(id);
       if (!select) {
         return;
