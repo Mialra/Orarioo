@@ -23,20 +23,28 @@
         </section>
         <section id="savedWorkspaceSection" class="schedule-workspace d-none">
             <div class="schedule-workspace-head">
-                <div class="schedule-workspace-brand">
-                    <div class="schedule-workspace-brand-icon" aria-hidden="true">
-                        <i data-lucide="folder-open" class="workspace-icon"></i>
-                    </div>
-                    <div>
-                        <h3 id="savedWorkspaceTitle" class="schedule-workspace-title mb-1">Horario Guardado</h3>
-                        <div class="schedule-workspace-meta">
-                            <span id="savedWorkspaceStateBadge"
-                                  class="schedule-pill schedule-pill-saved">Guardado</span>
+                <div class="schedule-workspace-topbar">
+                    <div class="schedule-workspace-brand">
+                        <div class="schedule-workspace-brand-icon" aria-hidden="true">
+                            <i data-lucide="folder-open" class="workspace-icon"></i>
+                        </div>
+                        <div class="schedule-workspace-heading">
+                            <div class="schedule-workspace-title-row">
+                                <h3 id="savedWorkspaceTitle" class="schedule-workspace-title">Horario Guardado</h3>
+                                <span id="savedWorkspaceStateBadge"
+                                      class="schedule-pill schedule-pill-saved">Guardado</span>
+                            </div>
                         </div>
                     </div>
+                    <button type="button"
+                            id="savedWorkspaceBackBtn"
+                            class="btn btn-outline-dark schedule-toolbar-btn">
+                        <i data-lucide="arrow-left" class="btn-icon" aria-hidden="true"></i>
+                        Volver
+                    </button>
                 </div>
-                <div class="row g-2 schedule-workspace-actions">
-                    <div class="col-12 col-xl schedule-toolbar-filters">
+                <div class="schedule-workspace-toolbar">
+                    <div class="schedule-toolbar-filters">
                         <select id="savedWorkspaceCourseFilter"
                                 class="form-select schedule-toolbar-select"
                                 aria-label="Filtrar por curso">
@@ -58,27 +66,22 @@
                             <option value="">Todas las asignaturas</option>
                         </select>
                     </div>
-                    <div class="col-12 col-xl-auto schedule-toolbar-buttons">
+                    <div class="schedule-toolbar-buttons">
                         <button type="button"
-                                id="savedWorkspacePdfBtn"
+                                id="savedWorkspaceExportBtn"
                                 class="btn btn-outline-secondary schedule-toolbar-btn">
                             <i data-lucide="download" class="btn-icon" aria-hidden="true"></i>
-                            PDF
-                        </button>
-                        <button type="button"
-                                id="savedWorkspaceCsvBtn"
-                                class="btn btn-outline-secondary schedule-toolbar-btn">
-                            <i data-lucide="download" class="btn-icon" aria-hidden="true"></i>
-                            CSV
-                        </button>
-                        <button type="button"
-                                id="savedWorkspaceBackBtn"
-                                class="btn btn-outline-dark schedule-toolbar-btn">
-                            <i data-lucide="arrow-left" class="btn-icon" aria-hidden="true"></i>
-                            Volver
+                            Exportar
                         </button>
                     </div>
                 </div>
+                <p class="schedule-workspace-hint mb-0"
+                   title="Puedes arrastrar y soltar una sesión para recolocarla dentro del horario.">
+                    <i data-lucide="move"
+                       class="schedule-workspace-hint-icon"
+                       aria-hidden="true"></i>
+                    Arrastra y suelta una sesión para recolocarla dentro del horario. Si la sueltas sobre otra, se intercambian automáticamente.
+                </p>
             </div>
             <div id="savedWorkspaceOutput" class="schedule-board-shell"></div>
         </section>

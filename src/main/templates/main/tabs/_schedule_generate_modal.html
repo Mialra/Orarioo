@@ -1,0 +1,33 @@
+<div class="modal fade"
+     id="scheduleGenerateModal"
+     tabindex="-1"
+     aria-labelledby="scheduleGenerateModalTitle"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content schedule-modal-content schedule-generate-modal-content">
+            <div class="modal-header">
+                <h5 id="scheduleGenerateModalTitle" class="modal-title">Generar horario</h5>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p id="scheduleGenerateModalText" class="text-secondary mb-2">
+                    Se lanzará una nueva generación automática del horario con las restricciones actuales.
+                </p>
+                <p id="scheduleGenerateModalHint" class="small text-secondary mb-0">
+                    Este proceso puede tardar unos segundos si el problema es complejo.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        data-bs-dismiss="modal">Cancelar</button>
+                <button type="button"
+                        id="confirmScheduleGenerateBtn"
+                        class="btn btn-primary">Generar horario</button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -77,6 +77,7 @@
     selectedSavedTimetableName: null,
     currentExportSource: "generated",
     currentExportSavedName: "",
+    generateModalMode: "generate",
     initialSavedRouteName: "",
     exportEntityState: {
       group: false,
@@ -92,6 +93,60 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function getModalInstance(element) {
+    if (!element || !window.bootstrap || !window.bootstrap.Modal) {
+      return null;
+    }
+    return window.bootstrap.Modal.getOrCreateInstance(element);
+  }
+
+  function showModalElement(element, onShown) {
+    if (!element) {
+      return;
+    }
+
+    if (typeof onShown === "function") {
+      element.addEventListener(
+        "shown.bs.modal",
+        function handleShown() {
+          onShown();
+        },
+        { once: true },
+      );
+    }
+
+    const instance = getModalInstance(element);
+    if (instance) {
+      instance.show();
+      return;
+    }
+
+    element.classList.add("show");
+    element.style.display = "block";
+    element.removeAttribute("aria-hidden");
+    document.body.classList.add("modal-open");
+    if (typeof onShown === "function") {
+      onShown();
+    }
+  }
+
+  function hideModalElement(element) {
+    if (!element) {
+      return;
+    }
+
+    const instance = getModalInstance(element);
+    if (instance) {
+      instance.hide();
+      return;
+    }
+
+    element.classList.remove("show");
+    element.style.display = "none";
+    element.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("modal-open");
   }
 
   function closeScheduleFilterDropdown(dropdown) {
@@ -2533,7 +2588,7 @@
     });
 
     renderExportEntityCards();
-    modal.classList.add("show");
+    showModalElement(modal);
   }
 
   function closeExportModal() {
@@ -2542,9 +2597,7 @@
     if (exportFormat) {
       exportFormat.disabled = false;
     }
-    if (modal) {
-      modal.classList.remove("show");
-    }
+    hideModalElement(modal);
   }
 
   function openSaveGeneratedModal() {
@@ -2566,19 +2619,51 @@
     }
 
     input.value = state.generatedSavedName || buildDefaultTimetableName();
-    modal.classList.add("show");
-
-    window.setTimeout(function () {
+    showModalElement(modal, function () {
       input.focus();
       input.select();
-    }, 0);
+    });
   }
 
   function closeSaveGeneratedModal() {
-    const modal = document.getElementById("saveGeneratedModal");
-    if (modal) {
-      modal.classList.remove("show");
+    hideModalElement(document.getElementById("saveGeneratedModal"));
+  }
+
+  function openGenerateModal(mode) {
+    const modal = document.getElementById("scheduleGenerateModal");
+    const title = document.getElementById("scheduleGenerateModalTitle");
+    const text = document.getElementById("scheduleGenerateModalText");
+    const hint = document.getElementById("scheduleGenerateModalHint");
+    const confirmButton = document.getElementById("confirmScheduleGenerateBtn");
+
+    if (!modal || !title || !text || !hint || !confirmButton) {
+      handleGenerate();
+      return;
     }
+
+    state.generateModalMode = mode === "regenerate" ? "regenerate" : "generate";
+
+    if (state.generateModalMode === "regenerate") {
+      title.textContent = "Regenerar horario";
+      text.textContent = state.generatedSaved
+        ? "Se generará una nueva propuesta en borrador. El horario guardado actual seguirá disponible."
+        : "Se generará una nueva propuesta y reemplazará el borrador actual que estás viendo.";
+      hint.textContent = "Usará las restricciones actuales y puede tardar unos segundos si el problema es complejo.";
+      confirmButton.textContent = "Regenerar horario";
+    } else {
+      title.textContent = "Generar horario";
+      text.textContent = "Se lanzará una nueva generación automática del horario con las restricciones actuales.";
+      hint.textContent = "Este proceso puede tardar unos segundos si el problema es complejo.";
+      confirmButton.textContent = "Generar horario";
+    }
+
+    showModalElement(modal, function () {
+      confirmButton.focus();
+    });
+  }
+
+  function closeGenerateModal() {
+    hideModalElement(document.getElementById("scheduleGenerateModal"));
   }
 
   function hasSavedTimetableNameCollision(timetableName) {
@@ -2768,20 +2853,24 @@
     openSaveGeneratedModal();
   }
 
+  function setGenerateActionButtonsDisabled(disabled) {
+    ["generateBtn", "generatedWorkspaceRegenerateBtn", "confirmScheduleGenerateBtn"].forEach(function (id) {
+      const button = document.getElementById(id);
+      if (button) {
+        button.disabled = disabled;
+      }
+    });
+  }
+
   async function handleGenerate() {
-    const button = document.getElementById("generateBtn");
-    if (button) {
-      button.disabled = true;
-    }
+    setGenerateActionButtonsDisabled(true);
 
     clearGeneratedDropFeedback();
     resetGeneratedDragState();
 
     const result = await apiJson("/schedules/generate/", "POST", {});
 
-    if (button) {
-      button.disabled = false;
-    }
+    setGenerateActionButtonsDisabled(false);
 
     if (!result.ok) {
       state.latestGeneratedSchedules = [];
@@ -2814,18 +2903,17 @@
     showAlert("success", "Se generaron " + generatedCount + " sesiones.");
   }
 
-  async function handleRegenerate() {
+  async function handleGenerateModalConfirm() {
+    closeGenerateModal();
     await handleGenerate();
   }
 
-  function openGeneratedExport(format) {
+  function openGeneratedExport() {
     const source = state.generatedSaved ? "saved" : "generated";
     const savedName = state.generatedSaved ? state.generatedSavedName : "";
     openExportModal({
       source: source,
       savedName: savedName,
-      format: format,
-      lockFormat: true,
     });
   }
 
@@ -2862,7 +2950,9 @@
   function bindGeneratedEvents() {
     const generateButton = document.getElementById("generateBtn");
     if (generateButton) {
-      generateButton.addEventListener("click", handleGenerate);
+      generateButton.addEventListener("click", function () {
+        openGenerateModal("generate");
+      });
     }
 
     [
@@ -3043,37 +3133,16 @@
       });
     }
 
-    const pdfButton = document.getElementById("generatedWorkspacePdfBtn");
-    if (pdfButton) {
-      pdfButton.addEventListener("click", function () {
-        openGeneratedExport("pdf");
-      });
-    }
-
-    const csvButton = document.getElementById("generatedWorkspaceCsvBtn");
-    if (csvButton) {
-      csvButton.addEventListener("click", function () {
-        openGeneratedExport("csv");
+    const exportButton = document.getElementById("generatedWorkspaceExportBtn");
+    if (exportButton) {
+      exportButton.addEventListener("click", function () {
+        openGeneratedExport();
       });
     }
 
     const saveButton = document.getElementById("generatedWorkspaceSaveBtn");
     if (saveButton) {
       saveButton.addEventListener("click", handleSaveGenerated);
-    }
-
-    const saveModal = document.getElementById("saveGeneratedModal");
-    if (saveModal) {
-      saveModal.addEventListener("click", function (event) {
-        if (event.target === saveModal) {
-          closeSaveGeneratedModal();
-        }
-      });
-    }
-
-    const cancelSaveButton = document.getElementById("cancelSaveGeneratedBtn");
-    if (cancelSaveButton) {
-      cancelSaveButton.addEventListener("click", closeSaveGeneratedModal);
     }
 
     const confirmSaveButton = document.getElementById("confirmSaveGeneratedBtn");
@@ -3093,7 +3162,14 @@
 
     const regenerateButton = document.getElementById("generatedWorkspaceRegenerateBtn");
     if (regenerateButton) {
-      regenerateButton.addEventListener("click", handleRegenerate);
+      regenerateButton.addEventListener("click", function () {
+        openGenerateModal("regenerate");
+      });
+    }
+
+    const confirmGenerateButton = document.getElementById("confirmScheduleGenerateBtn");
+    if (confirmGenerateButton) {
+      confirmGenerateButton.addEventListener("click", handleGenerateModalConfirm);
     }
   }
 
@@ -3362,26 +3438,12 @@
       });
     }
 
-    const pdfButton = document.getElementById("savedWorkspacePdfBtn");
-    if (pdfButton) {
-      pdfButton.addEventListener("click", function () {
+    const exportButton = document.getElementById("savedWorkspaceExportBtn");
+    if (exportButton) {
+      exportButton.addEventListener("click", function () {
         openExportModal({
           source: "saved",
           savedName: state.selectedSavedTimetableName || "",
-          format: "pdf",
-          lockFormat: true,
-        });
-      });
-    }
-
-    const csvButton = document.getElementById("savedWorkspaceCsvBtn");
-    if (csvButton) {
-      csvButton.addEventListener("click", function () {
-        openExportModal({
-          source: "saved",
-          savedName: state.selectedSavedTimetableName || "",
-          format: "csv",
-          lockFormat: true,
         });
       });
     }
@@ -3403,9 +3465,10 @@
       confirmButton.addEventListener("click", handleExportConfirm);
     }
 
-    modal.addEventListener("click", function (event) {
-      if (event.target === modal) {
-        closeExportModal();
+    modal.addEventListener("hidden.bs.modal", function () {
+      const exportFormat = document.getElementById("exportFormat");
+      if (exportFormat) {
+        exportFormat.disabled = false;
       }
     });
 
