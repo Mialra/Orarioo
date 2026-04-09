@@ -27,8 +27,8 @@ from user.models import (
     CollaborationTeam,
     CollaborationTeamInvitation,
     CollaborationTeamInvitationStatus,
-    UserDataExportLog,
     User,
+    UserDataExportLog,
 )
 from user.serializers import (
     CollaborationTeamCreateSerializer,
@@ -41,7 +41,6 @@ from user.serializers import (
     UserSerializer,
     UserUpdateSerializer,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +158,8 @@ def profile(request):
         {
             "show_authenticated_footer": True,
             "export_rate_limit_max_requests": _get_export_rate_limit_config()[0],
-            "export_rate_limit_window_minutes": _get_export_rate_limit_config()[1] // 60,
+            "export_rate_limit_window_minutes": _get_export_rate_limit_config()[1]
+            // 60,
         },
     )
 
@@ -206,9 +206,13 @@ class ProfileExportDataView(APIView):
         try:
             payload = _build_export_payload(user)
             body = json.dumps(payload, ensure_ascii=False, indent=2)
-            filename = f"orarioo-personal-data-{user.pk}-{timezone.now():%Y%m%dT%H%M%SZ}.json"
+            filename = (
+                f"orarioo-personal-data-{user.pk}-{timezone.now():%Y%m%dT%H%M%SZ}.json"
+            )
 
-            response = HttpResponse(body, content_type="application/json; charset=utf-8")
+            response = HttpResponse(
+                body, content_type="application/json; charset=utf-8"
+            )
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
             response["Cache-Control"] = "no-store, private"
             response["Pragma"] = "no-cache"

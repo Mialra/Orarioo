@@ -5,13 +5,7 @@ from group.views import admin_groups
 from main.views import dashboard, privacy_policy, root_redirect, terms_and_conditions
 from subject.views import admin_subjects
 from teacher.views import admin_teachers
-from user.views import (
-    ProfileExportDataView,
-    admin_users,
-    profile,
-    sign_in,
-    sign_up,
-)
+from user.views import ProfileExportDataView, admin_users, profile, sign_in, sign_up
 
 urlpatterns = [
     path("", root_redirect, name="root-redirect"),
