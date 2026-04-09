@@ -10,6 +10,7 @@ from user.views import (
     CollaborationTeamLeaveView,
     CustomTokenObtainPairView,
     SetActiveTeamView,
+    UserSelfUpdateView,
     UserViewSet,
 )
 
@@ -20,6 +21,7 @@ router.register(r"users", UserViewSet, basename="user")
 urlpatterns = [
     # Router routes
     path("", include(router.urls)),
+    path("users/me/update/", UserSelfUpdateView.as_view(), name="user-self-update"),
     path("set-active-team/", SetActiveTeamView.as_view(), name="set-active-team"),
     path(
         "collaboration-teams/create/",

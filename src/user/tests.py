@@ -1,5 +1,9 @@
 """Tests for user, authentication and collaboration-team flows."""
 
+import json
+
+from django.core.cache import cache
+from django.test import override_settings
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -11,6 +15,7 @@ from user.models import (
     CollaborationTeamInvitation,
     CollaborationTeamInvitationStatus,
     User,
+    UserDataExportLog,
 )
 
 
@@ -573,3 +578,117 @@ class PermissionsTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+@override_settings(
+    DATA_EXPORT_RATE_LIMIT_MAX_REQUESTS=2,
+    DATA_EXPORT_RATE_LIMIT_WINDOW_SECONDS=3600,
+)
+class DataPortabilityTests(TestCase):
+    """Tests for S-08 GDPR data portability profile and export flow."""
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email="gdpr-user@test.com",
+            password="StrongPassword123!",
+            given_name="Lucia",
+            family_name="Martinez",
+        )
+        self.other_user = User.objects.create_user(
+            email="other-user@test.com",
+            password="StrongPassword123!",
+            given_name="Carlos",
+            family_name="Lopez",
+        )
+        self.profile_url = reverse("profile")
+        self.export_url = reverse("profile-export-data")
+
+    def _authenticate_as_user(self):
+        self.client.force_authenticate(user=self.user)
+
+    def test_profile_page_is_accessible_shell(self):
+        response = self.client.get(self.profile_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertContains(response, "Tus datos personales")
+
+    def test_export_requires_authentication(self):
+        response = self.client.post(self.export_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_export_json_integrity_and_headers(self):
+        self._authenticate_as_user()
+
+        response = self.client.post(
+            self.export_url,
+            REMOTE_ADDR="203.0.113.7",
+            HTTP_USER_AGENT="OrariooTest/1.0",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/json; charset=utf-8")
+        self.assertIn("attachment; filename=", response["Content-Disposition"])
+        self.assertEqual(response["Cache-Control"], "no-store, private")
+
+        payload = json.loads(response.content.decode("utf-8"))
+        self.assertIn("exported_at", payload["metadata"])
+        self.assertIn("personal_data", payload)
+        self.assertEqual(payload["personal_data"]["username"], self.user.name)
+        self.assertEqual(payload["personal_data"]["family_name"], self.user.family_name)
+        self.assertEqual(payload["personal_data"]["email"], self.user.email)
+        self.assertIn("active_team", payload["personal_data"])
+        self.assertIn("activity", payload)
+        self.assertIsInstance(payload["activity"], list)
+
+        self.assertNotIn("system_id", payload["metadata"])
+        self.assertNotIn("export_version", payload["metadata"])
+        self.assertNotIn("legal_reference", payload["metadata"])
+        self.assertNotIn("data_subject", payload["metadata"])
+        self.assertNotIn("user_data", payload)
+        self.assertNotIn("name", payload["personal_data"])
+        self.assertNotIn("account_created_at", payload["personal_data"])
+
+    def test_export_does_not_include_other_user_data(self):
+        self._authenticate_as_user()
+
+        response = self.client.post(
+            self.export_url,
+        )
+        payload = json.loads(response.content.decode("utf-8"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(payload["personal_data"]["email"], self.other_user.email)
+        self.assertEqual(payload["personal_data"]["email"], self.user.email)
+
+    def test_rate_limiting_blocks_excessive_requests(self):
+        self._authenticate_as_user()
+
+        first = self.client.post(self.export_url)
+        second = self.client.post(self.export_url)
+        third = self.client.post(self.export_url)
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(third.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertIn("Retry-After", third)
+
+    def test_audit_log_is_created_with_user_time_and_ip(self):
+        self._authenticate_as_user()
+
+        response = self.client.post(
+            self.export_url,
+            REMOTE_ADDR="198.51.100.44",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        log = UserDataExportLog.objects.filter(user=self.user).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.ip_address, "198.51.100.44")
+        self.assertEqual(log.outcome, UserDataExportLog.Outcome.SUCCESS)
+        self.assertIsNotNone(log.created_at)
+
+    def test_get_on_export_endpoint_is_not_allowed(self):
+        self._authenticate_as_user()
+        response = self.client.get(self.export_url)
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)

@@ -38,7 +38,9 @@ class MainSmokeTests(TestCase):
         response = self.client.get(reverse("terms-and-conditions"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Términos y Condiciones de Uso de la plataforma Orarioo")
+        self.assertContains(
+            response, "Términos y Condiciones de Uso de la plataforma Orarioo"
+        )
 
     def test_footer_is_rendered_on_dashboard_page(self):
         response = self.client.get(reverse("dashboard"))
@@ -47,3 +49,10 @@ class MainSmokeTests(TestCase):
         self.assertContains(response, "orarioo-footer")
         self.assertContains(response, "Política de Privacidad")
         self.assertContains(response, "Términos y Condiciones")
+
+    def test_dashboard_includes_profile_link(self):
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("profile"))
+        self.assertContains(response, "Mi perfil")

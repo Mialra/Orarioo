@@ -192,5 +192,14 @@ SIMPLE_JWT = {
     "SIGNING_KEY": SECRET_KEY,
 }
 
+# GDPR data portability export throttling (session-based profile download endpoint).
+# Uses Django cache backend (default: local-memory cache if not overridden).
+DATA_EXPORT_RATE_LIMIT_MAX_REQUESTS = config(
+    "DATA_EXPORT_RATE_LIMIT_MAX_REQUESTS", default=1, cast=int
+)
+DATA_EXPORT_RATE_LIMIT_WINDOW_SECONDS = config(
+    "DATA_EXPORT_RATE_LIMIT_WINDOW_SECONDS", default=600, cast=int
+)
+
 # Custom User Model
 AUTH_USER_MODEL = "user.User"

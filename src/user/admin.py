@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.utils.translation import gettext_lazy as _
 
-from user.models import CollaborationTeam, User
+from user.models import CollaborationTeam, User, UserDataExportLog
 
 
 @admin.register(User)
@@ -89,3 +89,18 @@ class CollaborationTeamAdmin(admin.ModelAdmin):
     list_display = ("name",)
     search_fields = ("name",)
     filter_horizontal = ("members",)
+
+
+@admin.register(UserDataExportLog)
+class UserDataExportLogAdmin(admin.ModelAdmin):
+    list_display = ("user", "outcome", "ip_address", "created_at")
+    list_filter = ("outcome", "created_at")
+    search_fields = ("user__email", "ip_address", "notes")
+    readonly_fields = (
+        "user",
+        "created_at",
+        "ip_address",
+        "user_agent",
+        "outcome",
+        "notes",
+    )
