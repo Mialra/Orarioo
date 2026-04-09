@@ -2,12 +2,14 @@
   const form = document.getElementById("signup-form");
   const submitButton = document.getElementById("signup-submit");
   const alertBox = document.getElementById("auth-alert");
+  const privacyCheckbox = document.getElementById("privacy_policy_accepted");
 
   window.orariooAuth.initBootstrapTooltips();
 
   function setLoadingState(isLoading) {
     submitButton.classList.toggle("is-loading", isLoading);
-    submitButton.disabled = isLoading;
+    submitButton.disabled = isLoading || !privacyCheckbox || !privacyCheckbox.checked;
+    submitButton.setAttribute("aria-disabled", submitButton.disabled ? "true" : "false");
   }
 
   function showAlert(message, type) {
@@ -19,6 +21,22 @@
   function clearAlert() {
     alertBox.textContent = "";
     alertBox.classList.remove("error", "info", "success");
+  }
+
+  function syncPrivacyControls() {
+    if (!privacyCheckbox) {
+      submitButton.disabled = true;
+      submitButton.setAttribute("aria-disabled", "true");
+      return;
+    }
+
+    const accepted = privacyCheckbox.checked;
+    submitButton.disabled = !accepted;
+    submitButton.setAttribute("aria-disabled", accepted ? "false" : "true");
+
+    if (accepted) {
+      privacyCheckbox.classList.remove("is-invalid");
+    }
   }
 
   function normalizeKnownError(message) {
@@ -61,6 +79,10 @@
 
     if (Array.isArray(responseData.family_name) && responseData.family_name.length > 0) {
       return normalizeKnownError(responseData.family_name[0]);
+    }
+
+    if (Array.isArray(responseData.privacy_policy_accepted) && responseData.privacy_policy_accepted.length > 0) {
+      return normalizeKnownError(responseData.privacy_policy_accepted[0]);
     }
 
     if (typeof responseData === "object") {
@@ -108,6 +130,7 @@
       email: document.getElementById("email").value.trim(),
       password: document.getElementById("password").value,
       password_confirm: document.getElementById("password_confirm").value,
+      privacy_policy_accepted: Boolean(privacyCheckbox && privacyCheckbox.checked),
     };
 
     if (
@@ -123,6 +146,15 @@
 
     if (payload.password !== payload.password_confirm) {
       showAlert("Las contraseñas no coinciden.", "error");
+      return;
+    }
+
+    if (!payload.privacy_policy_accepted) {
+      if (privacyCheckbox) {
+        privacyCheckbox.classList.add("is-invalid");
+        privacyCheckbox.focus();
+      }
+      showAlert("Debes aceptar la Política de Privacidad para crear tu cuenta.", "error");
       return;
     }
 
@@ -165,6 +197,11 @@
     buttonId: "password-confirm-toggle",
   });
 
+  if (privacyCheckbox) {
+    privacyCheckbox.addEventListener("change", syncPrivacyControls);
+  }
+
   form.addEventListener("submit", submitSignup);
+  syncPrivacyControls();
   redirectIfAlreadyAuthenticated();
 })();

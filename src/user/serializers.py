@@ -113,6 +113,11 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
     password_confirm = serializers.CharField(
         write_only=True, required=True, help_text="Password confirmation"
     )
+    privacy_policy_accepted = serializers.BooleanField(
+        write_only=True,
+        required=True,
+        help_text="Privacy policy acceptance flag",
+    )
 
     class Meta:
         model = User
@@ -122,12 +127,23 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
             "email",
             "password",
             "password_confirm",
+            "privacy_policy_accepted",
         ]
 
     def validate(self, data):
         """Validates that passwords match"""
         if data["password"] != data["password_confirm"]:
             raise serializers.ValidationError({"password": "Passwords do not match."})
+
+        if not data.get("privacy_policy_accepted"):
+            raise serializers.ValidationError(
+                {
+                    "privacy_policy_accepted": (
+                        "You must accept the privacy policy to complete signup."
+                    )
+                }
+            )
+
         return data
 
     @transaction.atomic
@@ -135,6 +151,7 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
         """Creates a new user"""
         password = validated_data.pop("password")
         validated_data.pop("password_confirm")
+        validated_data.pop("privacy_policy_accepted", None)
 
         user = User.objects.create_user(**validated_data, password=password)
         return user

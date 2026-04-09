@@ -97,9 +97,31 @@
                                     </button>
                                 </div>
                             </div>
+                            <div class="form-check mt-1">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       value="1"
+                                       id="privacy_policy_accepted"
+                                       name="privacy_policy_accepted"
+                                       required
+                                       aria-required="true"
+                                       aria-describedby="privacy-policy-help privacy-policy-error">
+                                <label class="form-check-label" for="privacy_policy_accepted">
+                                    He leído y acepto la
+                                    <a href="{% url 'privacy-policy' %}"
+                                       class="auth-link-btn fw-semibold"
+                                       target="_self">Política de Privacidad</a>.
+                                </label>
+                                <div id="privacy-policy-help" class="form-text">Debes aceptarla para completar el registro.</div>
+                                <div id="privacy-policy-error" class="invalid-feedback">
+                                    Debes aceptar la Política de Privacidad para crear tu cuenta.
+                                </div>
+                            </div>
                             <button id="signup-submit"
                                     class="btn btn-primary btn-lg auth-submit"
-                                    type="submit">
+                                    type="submit"
+                                    disabled
+                                    aria-disabled="true">
                                 <span class="btn-label">Crear cuenta</span>
                                 <span class="btn-loader" aria-hidden="true"></span>
                             </button>
@@ -110,7 +132,8 @@
                             </div>
                         </form>
                         <p class="small text-body-secondary text-center mt-4 mb-0 px-md-4">
-                            Al continuar, aceptas los Términos de Servicio y la Política de Privacidad de Orarioo (Por definir).
+                            Al continuar, aceptas los Términos de Servicio y la
+                            <a href="{% url 'privacy-policy' %}" class="auth-link-btn">Política de Privacidad</a> de Orarioo.
                         </p>
                     </div>
                 </div>

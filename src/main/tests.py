@@ -27,3 +27,15 @@ class MainSmokeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["dashboard_section"], "saved")
         self.assertEqual(response.context["dashboard_saved_timetable_name"], "")
+
+    def test_privacy_policy_route_is_public(self):
+        response = self.client.get(reverse("privacy-policy"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Política de Privacidad")
+
+    def test_footer_is_rendered_on_dashboard_page(self):
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "orarioo-footer")

@@ -164,6 +164,7 @@ def render_admin_dashboard(request, admin_tab, extra_context=None):
         "dashboard_route_template": route_config["template"],
         "dashboard_extra_css": ADMIN_BASE_CSS + route_config["extra_css"],
         "dashboard_extra_scripts": route_config["extra_scripts"],
+        "show_authenticated_footer": True,
     }
 
     if extra_context:
@@ -194,5 +195,10 @@ def dashboard(request, section="schedules", timetable_name=""):
             "dashboard_extra_css": route_config.get("extra_css", []),
             "dashboard_extra_scripts": route_config.get("extra_scripts", []),
             "dashboard_saved_timetable_name": selected_saved_timetable,
+            "show_authenticated_footer": True,
         },
     )
+
+
+def privacy_policy(request):
+    return render(request, "legal/privacy_policy.html")
