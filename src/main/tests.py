@@ -38,7 +38,7 @@ class MainSmokeTests(TestCase):
         response = self.client.get(reverse("terms-and-conditions"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "TÉRMINOS Y CONDICIONES DE USO")
+        self.assertContains(response, "Términos y Condiciones de Uso de la plataforma Orarioo")
 
     def test_footer_is_rendered_on_dashboard_page(self):
         response = self.client.get(reverse("dashboard"))
