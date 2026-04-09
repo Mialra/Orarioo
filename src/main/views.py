@@ -202,3 +202,7 @@ def dashboard(request, section="schedules", timetable_name=""):
 
 def privacy_policy(request):
     return render(request, "legal/privacy_policy.html")
+
+
+def terms_and_conditions(request):
+    return render(request, "legal/terms_and_conditions.html")

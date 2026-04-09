@@ -2,7 +2,7 @@ from django.urls import path
 
 from classroom.views import admin_classrooms
 from group.views import admin_groups
-from main.views import dashboard, privacy_policy, root_redirect
+from main.views import dashboard, privacy_policy, root_redirect, terms_and_conditions
 from subject.views import admin_subjects
 from teacher.views import admin_teachers
 from user.views import admin_users, sign_in, sign_up
@@ -12,6 +12,11 @@ urlpatterns = [
     path("sign-in/", sign_in, name="sign-in"),
     path("sign-up/", sign_up, name="sign-up"),
     path("privacy-policy/", privacy_policy, name="privacy-policy"),
+    path(
+        "terms-and-conditions/",
+        terms_and_conditions,
+        name="terms-and-conditions",
+    ),
     path("dashboard/", dashboard, {"section": "schedules"}, name="dashboard"),
     path(
         "dashboard/schedules/",

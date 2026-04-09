@@ -82,6 +82,7 @@ class AuthenticationApiTests(APITestCase):
             "password": "TestPassword123!",
             "password_confirm": "TestPassword123!",
             "privacy_policy_accepted": True,
+            "terms_conditions_accepted": True,
         }
 
     def test_signup_success(self):
@@ -118,6 +119,15 @@ class AuthenticationApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("privacy_policy_accepted", response.data)
+
+    def test_signup_requires_terms_conditions_acceptance(self):
+        invalid_data = self.user_data.copy()
+        invalid_data["terms_conditions_accepted"] = False
+
+        response = self.client.post(self.signup_url, invalid_data, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("terms_conditions_accepted", response.data)
 
     def test_signup_ignores_administrator_role_when_requested(self):
         payload = self.user_data.copy()

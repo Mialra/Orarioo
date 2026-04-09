@@ -117,6 +117,26 @@
                                     Debes aceptar la Política de Privacidad para crear tu cuenta.
                                 </div>
                             </div>
+                            <div class="form-check mt-1">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       value="1"
+                                       id="terms_conditions_accepted"
+                                       name="terms_conditions_accepted"
+                                       required
+                                       aria-required="true"
+                                       aria-describedby="terms-conditions-help terms-conditions-error">
+                                <label class="form-check-label" for="terms_conditions_accepted">
+                                    He leído y acepto los
+                                    <a href="{% url 'terms-and-conditions' %}"
+                                       class="auth-link-btn fw-semibold"
+                                       target="_self">Términos y Condiciones de Uso</a>.
+                                </label>
+                                <div id="terms-conditions-help" class="form-text">Debes aceptarlos para completar el registro.</div>
+                                <div id="terms-conditions-error" class="invalid-feedback">
+                                    Debes aceptar los Términos y Condiciones para crear tu cuenta.
+                                </div>
+                            </div>
                             <button id="signup-submit"
                                     class="btn btn-primary btn-lg auth-submit"
                                     type="submit"
@@ -132,8 +152,11 @@
                             </div>
                         </form>
                         <p class="small text-body-secondary text-center mt-4 mb-0 px-md-4">
-                            Al continuar, aceptas los Términos de Servicio y la
-                            <a href="{% url 'privacy-policy' %}" class="auth-link-btn">Política de Privacidad</a> de Orarioo.
+                            Al continuar, aceptas la
+                            <a href="{% url 'privacy-policy' %}" class="auth-link-btn">Política de Privacidad</a>
+                            y los
+                            <a href="{% url 'terms-and-conditions' %}" class="auth-link-btn">Términos y Condiciones</a>
+                            de Orarioo.
                         </p>
                     </div>
                 </div>

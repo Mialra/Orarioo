@@ -3,12 +3,15 @@
   const submitButton = document.getElementById("signup-submit");
   const alertBox = document.getElementById("auth-alert");
   const privacyCheckbox = document.getElementById("privacy_policy_accepted");
+  const termsCheckbox = document.getElementById("terms_conditions_accepted");
 
   window.orariooAuth.initBootstrapTooltips();
 
   function setLoadingState(isLoading) {
     submitButton.classList.toggle("is-loading", isLoading);
-    submitButton.disabled = isLoading || !privacyCheckbox || !privacyCheckbox.checked;
+    const legalAccepted =
+      Boolean(privacyCheckbox && privacyCheckbox.checked) && Boolean(termsCheckbox && termsCheckbox.checked);
+    submitButton.disabled = isLoading || !legalAccepted;
     submitButton.setAttribute("aria-disabled", submitButton.disabled ? "true" : "false");
   }
 
@@ -23,19 +26,23 @@
     alertBox.classList.remove("error", "info", "success");
   }
 
-  function syncPrivacyControls() {
-    if (!privacyCheckbox) {
+  function syncLegalControls() {
+    if (!privacyCheckbox || !termsCheckbox) {
       submitButton.disabled = true;
       submitButton.setAttribute("aria-disabled", "true");
       return;
     }
 
-    const accepted = privacyCheckbox.checked;
+    const accepted = privacyCheckbox.checked && termsCheckbox.checked;
     submitButton.disabled = !accepted;
     submitButton.setAttribute("aria-disabled", accepted ? "false" : "true");
 
-    if (accepted) {
+    if (privacyCheckbox.checked) {
       privacyCheckbox.classList.remove("is-invalid");
+    }
+
+    if (termsCheckbox.checked) {
+      termsCheckbox.classList.remove("is-invalid");
     }
   }
 
@@ -85,6 +92,10 @@
       return normalizeKnownError(responseData.privacy_policy_accepted[0]);
     }
 
+    if (Array.isArray(responseData.terms_conditions_accepted) && responseData.terms_conditions_accepted.length > 0) {
+      return normalizeKnownError(responseData.terms_conditions_accepted[0]);
+    }
+
     if (typeof responseData === "object") {
       const firstKey = Object.keys(responseData)[0];
       if (firstKey && Array.isArray(responseData[firstKey]) && responseData[firstKey].length > 0) {
@@ -131,6 +142,7 @@
       password: document.getElementById("password").value,
       password_confirm: document.getElementById("password_confirm").value,
       privacy_policy_accepted: Boolean(privacyCheckbox && privacyCheckbox.checked),
+      terms_conditions_accepted: Boolean(termsCheckbox && termsCheckbox.checked),
     };
 
     if (
@@ -155,6 +167,15 @@
         privacyCheckbox.focus();
       }
       showAlert("Debes aceptar la Política de Privacidad para crear tu cuenta.", "error");
+      return;
+    }
+
+    if (!payload.terms_conditions_accepted) {
+      if (termsCheckbox) {
+        termsCheckbox.classList.add("is-invalid");
+        termsCheckbox.focus();
+      }
+      showAlert("Debes aceptar los Términos y Condiciones para crear tu cuenta.", "error");
       return;
     }
 
@@ -198,10 +219,14 @@
   });
 
   if (privacyCheckbox) {
-    privacyCheckbox.addEventListener("change", syncPrivacyControls);
+    privacyCheckbox.addEventListener("change", syncLegalControls);
+  }
+
+  if (termsCheckbox) {
+    termsCheckbox.addEventListener("change", syncLegalControls);
   }
 
   form.addEventListener("submit", submitSignup);
-  syncPrivacyControls();
+  syncLegalControls();
   redirectIfAlreadyAuthenticated();
 })();

@@ -2,8 +2,13 @@
         role="contentinfo"
         aria-label="Información legal y privacidad">
     <div class="container-xl py-3 d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
-        <p class="mb-0 small text-body-secondary">&copy; {% now "Y" %} Orarioo. Todos los derechos reservados.</p>
-        <a href="{% url 'privacy-policy' %}"
-           class="small fw-semibold auth-link-btn">Política de Privacidad</a>
+        <p class="mb-0 small text-body-secondary">(c) {% now "Y" %} Orarioo. Todos los derechos reservados.</p>
+        <nav class="d-flex flex-wrap align-items-center justify-content-center gap-3"
+             aria-label="Enlaces legales">
+            <a href="{% url 'privacy-policy' %}"
+               class="small fw-semibold auth-link-btn">Política de Privacidad</a>
+            <a href="{% url 'terms-and-conditions' %}"
+               class="small fw-semibold auth-link-btn">Términos y Condiciones</a>
+        </nav>
     </div>
 </footer>

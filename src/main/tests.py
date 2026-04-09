@@ -34,8 +34,16 @@ class MainSmokeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Política de Privacidad")
 
+    def test_terms_conditions_route_is_public(self):
+        response = self.client.get(reverse("terms-and-conditions"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "TÉRMINOS Y CONDICIONES DE USO")
+
     def test_footer_is_rendered_on_dashboard_page(self):
         response = self.client.get(reverse("dashboard"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "orarioo-footer")
+        self.assertContains(response, "Política de Privacidad")
+        self.assertContains(response, "Términos y Condiciones")
