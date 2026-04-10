@@ -107,7 +107,7 @@ class UserAdmin(UserAdmin):
         incident_id = None
         try:
             incident = SecurityIncident.objects.create(
-                user=None, 
+                user=None,
                 description=(
                     f"Security breach notification sent to {len(recipients)} active users. "
                     f"Incident logged by {request.user.email}."
