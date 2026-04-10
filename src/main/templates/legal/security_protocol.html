@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}
+    Orarioo | Protocolo de Seguridad
+{% endblock title %}
+{% block extra_head %}
+    <link rel="stylesheet" href="{% static 'css/privacy-policy.css' %}">
+{% endblock extra_head %}
+{% block content %}
+    <main class="privacy-page py-5" id="security-protocol-content">
+        <div class="container-lg">
+            <div class="card border-0 shadow-sm privacy-card">
+                <div class="card-body p-4 p-md-5">
+                    <header class="mb-4">
+                        <h1 class="h2 mb-3">Protocolo de actuación ante brechas de seguridad</h1>
+                        <p class="text-body-secondary mb-0">
+                            Este protocolo define el procedimiento de actuación ante la detección de una posible brecha de seguridad en la plataforma Orarioo,
+                            con el objetivo de proteger los datos personales, minimizar el impacto del incidente y cumplir con el Reglamento (UE) 2016/679 (RGPD).
+                        </p>
+                    </header>
+                    <section class="mb-4" aria-labelledby="security-definition">
+                        <h2 id="security-definition" class="h5">1. Definición de brecha de seguridad</h2>
+                        <p class="mb-2">
+                            Se considera brecha de seguridad cualquier incidente que afecte o pueda afectar a la confidencialidad, integridad o disponibilidad de los datos personales, incluyendo:
+                        </p>
+                        <ul class="mb-0">
+                            <li>Acceso no autorizado a cuentas o información.</li>
+                            <li>Uso indebido de credenciales de acceso.</li>
+                            <li>Pérdida, alteración o divulgación no autorizada de datos.</li>
+                            <li>Actividad sospechosa detectada por usuarios o administradores.</li>
+                        </ul>
+                    </section>
+                    <section class="mb-4" aria-labelledby="security-detection">
+                        <h2 id="security-detection" class="h5">2. Detección del incidente</h2>
+                        <ul class="mb-0">
+                            <li>Notificación de usuarios o administradores del sistema.</li>
+                            <li>Revisión manual cuando exista sospecha de incidente.</li>
+                        </ul>
+                    </section>
+                    <section class="mb-4" aria-labelledby="security-response">
+                        <h2 id="security-response" class="h5">3. Actuación ante una brecha de seguridad</h2>
+                        <h3 class="h6 mt-3">3.1 Contención</h3>
+                        <ul class="mb-3">
+                            <li>Bloqueo del usuario afectado si procede.</li>
+                            <li>Cierre de sesiones activas.</li>
+                        </ul>
+                        <h3 class="h6">3.2 Evaluación</h3>
+                        <ul class="mb-3">
+                            <li>Análisis del incidente y su origen.</li>
+                            <li>Identificación de posibles datos afectados.</li>
+                        </ul>
+                        <h3 class="h6">3.3 Recuperación</h3>
+                        <ul class="mb-3">
+                            <li>Restablecimiento de credenciales si es necesario.</li>
+                            <li>Corrección de incidencias detectadas.</li>
+                        </ul>
+                        <h3 class="h6">3.4 Notificación</h3>
+                        <ul class="mb-0">
+                            <li>Comunicación al responsable del sistema.</li>
+                            <li>Notificación a usuarios afectados si existe riesgo relevante.</li>
+                            <li>En su caso, notificación a la AEPD en un máximo de 72 horas según RGPD.</li>
+                        </ul>
+                    </section>
+                    <section class="mb-4" aria-labelledby="security-log">
+                        <h2 id="security-log" class="h5">4. Registro del incidente</h2>
+                        <ul class="mb-0">
+                            <li>Fecha y hora del incidente.</li>
+                            <li>Descripción del problema.</li>
+                            <li>Acciones realizadas.</li>
+                            <li>Resultado de la resolución.</li>
+                        </ul>
+                    </section>
+                    <section class="mb-4" aria-labelledby="security-measures">
+                        <h2 id="security-measures" class="h5">5. Medidas técnicas</h2>
+                        <ul class="mb-0">
+                            <li>Bloqueo de usuarios mediante desactivación de cuenta.</li>
+                            <li>Gestión de sesiones activas.</li>
+                            <li>Notificación por correo a los usuarios en caso de incidente.</li>
+                        </ul>
+                    </section>
+                    <section class="mb-4" aria-labelledby="security-owner">
+                        <h2 id="security-owner" class="h5">6. Responsable del sistema</h2>
+                        <p class="mb-0">El responsable de Orarioo será quien gestione los incidentes de seguridad y aplique este protocolo.</p>
+                    </section>
+                    <section class="mb-4" aria-labelledby="security-review">
+                        <h2 id="security-review" class="h5">7. Revisión del protocolo</h2>
+                        <p class="mb-0">Este protocolo podrá actualizarse para adaptarse a cambios técnicos, normativos o de seguridad.</p>
+                    </section>
+                    <section aria-labelledby="security-principle">
+                        <h2 id="security-principle" class="h5">8. Principio general</h2>
+                        <p class="mb-0">
+                            Orarioo aplica medidas técnicas y organizativas razonables y proporcionales para proteger los datos personales y prevenir incidentes de seguridad conforme al RGPD.
+                        </p>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </main>
+{% endblock content %}

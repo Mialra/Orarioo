@@ -42,12 +42,19 @@ class MainSmokeTests(TestCase):
             response, "Términos y Condiciones de Uso de la plataforma Orarioo"
         )
 
+    def test_security_protocol_route_is_public(self):
+        response = self.client.get(reverse("security-protocol"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Protocolo de actuación ante brechas de seguridad")
+
     def test_footer_is_rendered_on_dashboard_page(self):
         response = self.client.get(reverse("dashboard"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "orarioo-footer")
         self.assertContains(response, "Política de Privacidad")
+        self.assertContains(response, "Protocolo de Seguridad")
         self.assertContains(response, "Términos y Condiciones")
 
     def test_dashboard_includes_profile_link(self):

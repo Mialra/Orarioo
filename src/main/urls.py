@@ -2,7 +2,13 @@ from django.urls import path
 
 from classroom.views import admin_classrooms
 from group.views import admin_groups
-from main.views import dashboard, privacy_policy, root_redirect, terms_and_conditions
+from main.views import (
+    dashboard,
+    privacy_policy,
+    root_redirect,
+    security_protocol,
+    terms_and_conditions,
+)
 from subject.views import admin_subjects
 from teacher.views import admin_teachers
 from user.views import ProfileExportDataView, admin_users, profile, sign_in, sign_up
@@ -18,6 +24,7 @@ urlpatterns = [
         name="profile-export-data",
     ),
     path("privacy-policy/", privacy_policy, name="privacy-policy"),
+    path("security-protocol/", security_protocol, name="security-protocol"),
     path(
         "terms-and-conditions/",
         terms_and_conditions,

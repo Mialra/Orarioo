@@ -206,3 +206,7 @@ def privacy_policy(request):
 
 def terms_and_conditions(request):
     return render(request, "legal/terms_and_conditions.html")
+
+
+def security_protocol(request):
+    return render(request, "legal/security_protocol.html")
