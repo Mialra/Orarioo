@@ -1,5 +1,4 @@
-from django.contrib import admin
-from django.contrib import messages
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.utils.translation import gettext_lazy as _
 
@@ -86,7 +85,9 @@ class UserAdmin(UserAdmin):
             return self.readonly_fields + ("email",)
         return self.readonly_fields
 
-    @admin.action(description="Enviar aviso de brecha de seguridad a todos los usuarios")
+    @admin.action(
+        description="Enviar aviso de brecha de seguridad a todos los usuarios"
+    )
     def send_security_breach_notification(self, request, queryset):
         recipients = list(
             User.objects.filter(is_enabled=True)
@@ -138,7 +139,9 @@ class UserAdmin(UserAdmin):
         was_enabled = None
         if change and obj.pk:
             was_enabled = (
-                User.objects.filter(pk=obj.pk).values_list("is_enabled", flat=True).first()
+                User.objects.filter(pk=obj.pk)
+                .values_list("is_enabled", flat=True)
+                .first()
             )
 
         super().save_model(request, obj, form, change)

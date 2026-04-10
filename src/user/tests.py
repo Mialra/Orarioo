@@ -140,7 +140,9 @@ class UserAdminNotificationTests(TestCase):
         mocked_send.assert_called_once()
         kwargs = mocked_send.call_args.kwargs
         recipients = set(kwargs["recipient_list"])
-        self.assertEqual(recipients, {"enabled1@test.com", "enabled2@test.com", "root@test.com"})
+        self.assertEqual(
+            recipients, {"enabled1@test.com", "enabled2@test.com", "root@test.com"}
+        )
         self.assertEqual(
             kwargs["html_message"]["template"],
             "emails/security/security_breach.html",

@@ -29,9 +29,7 @@ def send_security_email(subject, message, recipient_list, html_message=None):
     """Send a security notification email using Django's send_mail."""
     try:
         rendered_html = (
-            _render_email_content(html_message)
-            if html_message is not None
-            else None
+            _render_email_content(html_message) if html_message is not None else None
         )
         rendered_message = _render_email_content(message)
         if not rendered_message and rendered_html:
