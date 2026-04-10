@@ -80,7 +80,7 @@ class UserAdmin(UserAdmin):
     def get_readonly_fields(self, request, obj=None):
         """Makes certain fields read-only"""
         if obj:  # When editing an existing user
-            return self.readonly_fields + ["email"]
+            return self.readonly_fields + ("email",)
         return self.readonly_fields
 
 

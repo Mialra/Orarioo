@@ -46,7 +46,9 @@ class MainSmokeTests(TestCase):
         response = self.client.get(reverse("security-protocol"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Protocolo de actuación ante brechas de seguridad")
+        self.assertContains(
+            response, "Protocolo de actuación ante brechas de seguridad"
+        )
 
     def test_footer_is_rendered_on_dashboard_page(self):
         response = self.client.get(reverse("dashboard"))
