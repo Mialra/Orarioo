@@ -3,6 +3,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.utils.translation import gettext_lazy as _
 
 from common.notifications import send_security_email
+from securityIncident.models import SecurityIncident
 from user.models import CollaborationTeam, User, UserDataExportLog
 
 
@@ -103,6 +104,19 @@ class UserAdmin(UserAdmin):
             )
             return
 
+        incident_id = None
+        try:
+            incident = SecurityIncident.objects.create(
+                user=None, 
+                description=(
+                    f"Security breach notification sent to {len(recipients)} active users. "
+                    f"Incident logged by {request.user.email}."
+                ),
+            )
+            incident_id = incident.id
+        except Exception:
+            incident_id = None
+
         actor = getattr(request.user, "email", "administrador")
         sent = send_security_email(
             subject="Aviso importante de seguridad en Orarioo",
@@ -123,17 +137,15 @@ class UserAdmin(UserAdmin):
             recipient_list=recipients,
         )
         if sent:
-            self.message_user(
-                request,
-                f"Notificación enviada a {len(recipients)} usuario(s).",
-                level=messages.SUCCESS,
-            )
+            msg = f"Notificación enviada a {len(recipients)} usuario(s)."
+            if incident_id:
+                msg += f" Incidente registrado (ID: {incident_id})."
+            self.message_user(request, msg, level=messages.SUCCESS)
         else:
-            self.message_user(
-                request,
-                "No se pudo enviar la notificación de brecha de seguridad.",
-                level=messages.ERROR,
-            )
+            msg = "No se pudo enviar la notificación de brecha de seguridad."
+            if incident_id:
+                msg += f" Sin embargo, el incidente fue registrado (ID: {incident_id})."
+            self.message_user(request, msg, level=messages.ERROR)
 
     def save_model(self, request, obj, form, change):
         was_enabled = None
@@ -147,6 +159,18 @@ class UserAdmin(UserAdmin):
         super().save_model(request, obj, form, change)
 
         if change and was_enabled is True and obj.is_enabled is False and obj.email:
+            reason = (
+                "Tu cuenta ha sido desactivada por el equipo administrador "
+                "de acuerdo con la política de seguridad de Orarioo."
+            )
+            try:
+                SecurityIncident.objects.create(
+                    user=obj,
+                    description=f"User account blocked by {request.user.email}. Reason: Account deactivation.",
+                )
+            except Exception:
+                pass
+
             sent = send_security_email(
                 subject="Aviso de seguridad: cuenta bloqueada temporalmente",
                 message="",
@@ -154,10 +178,7 @@ class UserAdmin(UserAdmin):
                     "template": "emails/security/account_lockout.html",
                     "context": {
                         "user_name": obj.get_full_name() or obj.email,
-                        "reason": (
-                            "Tu cuenta ha sido desactivada por el equipo administrador "
-                            "de acuerdo con la política de seguridad de Orarioo."
-                        ),
+                        "reason": reason,
                     },
                 },
                 recipient_list=[obj.email],
