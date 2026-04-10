@@ -1,14 +1,17 @@
 """Tests for user, authentication and collaboration-team flows."""
 
 import json
+from unittest.mock import patch
 
+from django.contrib.admin.sites import AdminSite
 from django.core.cache import cache
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from namedEntity.models import NamedEntity
+from user.admin import UserAdmin
 from user.models import (
     CollaborationTeam,
     CollaborationTeamInvitation,
@@ -69,6 +72,79 @@ class UserModelTests(TestCase):
     def test_create_user_ignores_legacy_role_field(self):
         user = User.objects.create_user(**self.user_data, role="administrator")
         self.assertEqual(user.email, self.user_data["email"])
+
+
+class UserAdminNotificationTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.admin_site = AdminSite()
+        self.user_admin = UserAdmin(User, self.admin_site)
+        self.superuser = User.objects.create_superuser(
+            email="root@test.com",
+            password="Admin123!",
+            given_name="Root",
+        )
+
+    def test_save_model_sends_lockout_email_when_disabling_user(self):
+        target = User.objects.create_user(
+            email="target@test.com",
+            password="Target123!",
+            given_name="Target",
+            is_enabled=True,
+        )
+        request = self.factory.post("/admin/user/user/{}/change/".format(target.pk))
+        request.user = self.superuser
+
+        target.is_enabled = False
+
+        with patch("user.admin.send_security_email", return_value=True) as mocked_send:
+            with patch.object(self.user_admin, "message_user"):
+                self.user_admin.save_model(request, target, form=None, change=True)
+
+        mocked_send.assert_called_once()
+        kwargs = mocked_send.call_args.kwargs
+        self.assertEqual(kwargs["recipient_list"], ["target@test.com"])
+        self.assertEqual(
+            kwargs["html_message"]["template"],
+            "emails/security/account_lockout.html",
+        )
+
+    def test_admin_action_sends_breach_notification_to_all_enabled_users(self):
+        enabled_1 = User.objects.create_user(
+            email="enabled1@test.com",
+            password="Enabled123!",
+            given_name="Enabled1",
+            is_enabled=True,
+        )
+        User.objects.create_user(
+            email="enabled2@test.com",
+            password="Enabled123!",
+            given_name="Enabled2",
+            is_enabled=True,
+        )
+        User.objects.create_user(
+            email="disabled@test.com",
+            password="Disabled123!",
+            given_name="Disabled",
+            is_enabled=False,
+        )
+
+        request = self.factory.post("/admin/user/user/")
+        request.user = self.superuser
+        queryset = User.objects.filter(pk=enabled_1.pk)
+
+        with patch("user.admin.send_security_email", return_value=True) as mocked_send:
+            with patch.object(self.user_admin, "message_user"):
+                self.user_admin.send_security_breach_notification(request, queryset)
+
+        mocked_send.assert_called_once()
+        kwargs = mocked_send.call_args.kwargs
+        recipients = set(kwargs["recipient_list"])
+        self.assertEqual(recipients, {"enabled1@test.com", "enabled2@test.com", "root@test.com"})
+        self.assertEqual(
+            kwargs["html_message"]["template"],
+            "emails/security/security_breach.html",
+        )
 
 
 class AuthenticationApiTests(APITestCase):
