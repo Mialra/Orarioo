@@ -46,6 +46,13 @@ class User(NamedEntity, AbstractUser):
     """Custom User model."""
 
     username = None
+    password = models.CharField(
+        _("password"),
+        max_length=128,
+        null=True,
+        blank=True,
+        help_text=_("User password hash or NULL after irreversible account deletion"),
+    )
     email = models.EmailField(
         _("email"), unique=True, help_text=_("Unique email address")
     )
@@ -71,6 +78,11 @@ class User(NamedEntity, AbstractUser):
     )
     updated_at = models.DateTimeField(
         auto_now=True, db_column="fecha_actualizacion", help_text=_("Last update date")
+    )
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Permanent account deletion timestamp"),
     )
 
     objects = CustomUserManager()

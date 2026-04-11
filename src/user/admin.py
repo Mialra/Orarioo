@@ -36,7 +36,7 @@ class UserAdmin(UserAdmin):
         ),
         (
             _("Important dates"),
-            {"fields": ("last_login", "created_at", "updated_at")},
+            {"fields": ("last_login", "created_at", "updated_at", "deleted_at")},
         ),
     )
 
@@ -70,12 +70,13 @@ class UserAdmin(UserAdmin):
         "family_name",
         "is_enabled",
         "is_staff",
+        "deleted_at",
         "created_at",
     )
     list_filter = ("is_enabled", "is_staff", "is_superuser", "created_at")
     search_fields = ("email", "name", "family_name")
     ordering = ("-created_at",)
-    readonly_fields = ("created_at", "updated_at", "last_login")
+    readonly_fields = ("created_at", "updated_at", "last_login", "deleted_at")
     actions = ("send_security_breach_notification",)
 
     filter_horizontal = ("groups", "user_permissions")

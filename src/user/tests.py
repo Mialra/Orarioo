@@ -1,16 +1,22 @@
 """Tests for user, authentication and collaboration-team flows."""
 
 import json
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.admin.sites import AdminSite
 from django.core.cache import cache
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
+from auditableEntity.models import AuditEntry
+from classroom.models import Classroom
+from group.models import EducationalStage as GroupEducationalStage, Group
 from namedEntity.models import NamedEntity
+from schedule.models import Schedule
 from user.admin import UserAdmin
 from user.models import (
     CollaborationTeam,
@@ -19,6 +25,8 @@ from user.models import (
     User,
     UserDataExportLog,
 )
+from subject.models import Subject
+from teacher.models import Teacher
 
 
 class UserModelTests(TestCase):
@@ -424,6 +432,175 @@ class UserApiTests(APITestCase):
         self.assertIn("team_id", response.data)
 
 
+class AccountDeletionTests(APITestCase):
+    """Tests for irreversible self-service account deletion."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+        self.password = "DeleteMe123!"
+        self.user = User.objects.create_user(
+            email="delete-me@test.com",
+            password=self.password,
+            given_name="Delete",
+            family_name="Me",
+        )
+
+        self.team = CollaborationTeam.objects.create(name="Equipo RGPD")
+        self.team.members.add(self.user)
+        self.user.active_team = self.team
+        self.user.save(update_fields=["active_team"])
+
+        self.teacher = Teacher.objects.create(
+            name="Profesor RGPD",
+            team=self.team,
+            max_weekly_hours=20,
+            working_hours=10,
+            time_preferences={},
+        )
+        self.classroom = Classroom.objects.create(
+            name="Aula RGPD",
+            team=self.team,
+            is_shared=True,
+        )
+        self.group = Group.objects.create(
+            name="Grupo RGPD",
+            team=self.team,
+            stage=GroupEducationalStage.PRIMARY,
+        )
+        self.subject = Subject.objects.create(
+            name="Asignatura RGPD",
+            team=self.team,
+            weekly_hours=2,
+            teacher=self.teacher,
+            group=self.group,
+        )
+        now = timezone.now()
+        self.schedule = Schedule.objects.create(
+            name="Horario RGPD",
+            team=self.team,
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=self.group,
+            subject=self.subject,
+            start_time=now,
+            end_time=now + timedelta(hours=1),
+        )
+        self.schedule.users.add(self.user)
+
+        for entity in [
+            self.teacher,
+            self.classroom,
+            self.group,
+            self.subject,
+            self.schedule,
+        ]:
+            entity.created_by = self.user.email
+            entity.updated_by = self.user.email
+            entity.save(update_fields=["created_by", "updated_by"])
+
+        self.login_url = reverse("token_obtain_pair")
+        self.delete_url = reverse("user-delete-account")
+        self.me_url = reverse("user-me")
+        self.profile_url = reverse("profile")
+
+    def authenticate(self):
+        response = self.client.post(
+            self.login_url,
+            {"email": self.user.email, "password": self.password},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
+
+    def test_profile_page_exposes_account_deletion_ui(self):
+        response = self.client.get(self.profile_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertContains(response, "Eliminar cuenta")
+        self.assertContains(response, "profileDeleteAccountModal")
+        self.assertContains(response, "correo electrónico")
+
+    def test_delete_account_rejects_invalid_confirmation_text(self):
+        self.authenticate()
+
+        response = self.client.post(
+            self.delete_url,
+            {
+                "confirmation_text": "BORRAR",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("confirmation_text", response.data)
+
+    def test_delete_account_anonymizes_user_and_related_records(self):
+        self.authenticate()
+
+        response = self.client.post(
+            self.delete_url,
+            {
+                "confirmation_text": self.user.email,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+
+        self.assertEqual(self.user.name, "Usuario eliminado")
+        self.assertEqual(self.user.family_name, "")
+        self.assertTrue(self.user.email.startswith("deleted-"))
+        self.assertIsNone(self.user.password)
+        self.assertIsNotNone(self.user.deleted_at)
+        self.assertFalse(self.user.is_enabled)
+        self.assertIsNone(self.user.active_team)
+        self.assertFalse(self.team.members.filter(pk=self.user.pk).exists())
+        self.assertFalse(self.schedule.users.filter(pk=self.user.pk).exists())
+        self.assertFalse(UserDataExportLog.objects.filter(user=self.user).exists())
+
+        self.teacher.refresh_from_db()
+        self.classroom.refresh_from_db()
+        self.group.refresh_from_db()
+        self.subject.refresh_from_db()
+        self.schedule.refresh_from_db()
+
+        self.assertEqual(self.teacher.created_by, self.user.email)
+        self.assertEqual(self.teacher.updated_by, self.user.email)
+        self.assertEqual(self.classroom.created_by, self.user.email)
+        self.assertEqual(self.classroom.updated_by, self.user.email)
+        self.assertEqual(self.group.created_by, self.user.email)
+        self.assertEqual(self.group.updated_by, self.user.email)
+        self.assertEqual(self.subject.created_by, self.user.email)
+        self.assertEqual(self.subject.updated_by, self.user.email)
+        self.assertEqual(self.schedule.created_by, self.user.email)
+        self.assertEqual(self.schedule.updated_by, self.user.email)
+
+        self.assertTrue(
+            AuditEntry.objects.filter(
+                entity_type="user",
+                entity_id=self.user.pk,
+                action_type="DELETE",
+            ).exists()
+        )
+
+    def test_deleted_account_cannot_keep_using_old_jwt(self):
+        self.authenticate()
+
+        delete_response = self.client.post(
+            self.delete_url,
+            {
+                "confirmation_text": self.user.email,
+            },
+            format="json",
+        )
+        self.assertEqual(delete_response.status_code, status.HTTP_200_OK)
+
+        follow_up = self.client.get(self.me_url)
+        self.assertEqual(follow_up.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
 class CollaborationTeamApiTests(APITestCase):
     """Tests for collaboration team creation/invitations/membership flows."""
 
@@ -688,7 +865,7 @@ class DataPortabilityTests(TestCase):
     def test_profile_page_is_accessible_shell(self):
         response = self.client.get(self.profile_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertContains(response, "Tus datos personales")
+        self.assertContains(response, "Eliminar cuenta")
 
     def test_export_requires_authentication(self):
         response = self.client.post(self.export_url)

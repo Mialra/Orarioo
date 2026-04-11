@@ -20,6 +20,9 @@
   const personalAlertEl = document.getElementById("profile-personal-alert");
   const passwordAlertEl = document.getElementById("profile-password-alert");
   const exportAlertEl = document.getElementById("profile-export-alert");
+  const deletePageAlertEl = document.getElementById("profile-delete-page-alert");
+  const deleteModalAlertEl = document.getElementById("profile-delete-modal-alert");
+  const deleteConfirmationEmailLabelEl = document.getElementById("profile-delete-confirmation-email-label");
 
   const currentPasswordEl = document.getElementById("profile-current-password");
   const newPasswordEl = document.getElementById("profile-new-password");
@@ -27,6 +30,11 @@
   const passwordSubmitBtn = document.getElementById("profile-password-submit");
 
   const exportButton = document.getElementById("profile-export-btn");
+  const deleteAccountForm = document.getElementById("profile-delete-account-form");
+  const deleteConfirmationEl = document.getElementById("profile-delete-confirmation");
+  const deleteConfirmationFeedbackEl = document.getElementById("profile-delete-confirmation-feedback");
+  const deleteAccountSubmitBtn = document.getElementById("profile-delete-account-submit");
+  const deleteAccountModalEl = document.getElementById("profileDeleteAccountModal");
 
   let currentUser = null;
 
@@ -117,6 +125,75 @@
     exportButton.textContent = isLoading ? "Preparando descarga..." : "Descargar mis datos (JSON)";
   }
 
+  function setDeleteLoading(isLoading) {
+    if (deleteAccountSubmitBtn) {
+      deleteAccountSubmitBtn.disabled = isLoading;
+      deleteAccountSubmitBtn.textContent = isLoading ? "Eliminando..." : "Eliminar cuenta";
+    }
+    if (deleteConfirmationEl) {
+      deleteConfirmationEl.disabled = isLoading;
+    }
+  }
+
+  function setDeleteFeedback(message) {
+    if (!deleteConfirmationFeedbackEl) {
+      return;
+    }
+    if (!message) {
+      deleteConfirmationFeedbackEl.textContent = "";
+      deleteConfirmationFeedbackEl.classList.add("d-none");
+      if (deleteConfirmationEl) {
+        deleteConfirmationEl.classList.remove("is-invalid");
+      }
+      return;
+    }
+
+    deleteConfirmationFeedbackEl.textContent = message;
+    deleteConfirmationFeedbackEl.classList.remove("d-none");
+    if (deleteConfirmationEl) {
+      deleteConfirmationEl.classList.add("is-invalid");
+    }
+  }
+
+  function syncDeleteButtonState() {
+    if (!deleteAccountSubmitBtn || !deleteConfirmationEl) {
+      return;
+    }
+
+    const expectedEmail = (
+      deleteConfirmationEmailLabelEl && deleteConfirmationEmailLabelEl.textContent
+        ? deleteConfirmationEmailLabelEl.textContent
+        : currentUser && currentUser.email
+          ? currentUser.email
+          : ""
+    ).trim();
+    const confirmation = deleteConfirmationEl.value.trim();
+    const isExact = confirmation.toLowerCase() === expectedEmail.toLowerCase();
+    deleteAccountSubmitBtn.disabled = !isExact;
+
+    if (!confirmation) {
+      setDeleteFeedback("");
+      return;
+    }
+
+    if (!isExact) {
+      setDeleteFeedback("Debes escribir exactamente tu correo electrónico para confirmar la eliminación.");
+      return;
+    }
+
+    setDeleteFeedback("");
+  }
+
+  function resetDeleteModalState() {
+    resetAlert(deleteModalAlertEl);
+    if (deleteAccountForm) {
+      deleteAccountForm.reset();
+    }
+    setDeleteFeedback("");
+    setDeleteLoading(false);
+    syncDeleteButtonState();
+  }
+
   async function ensureAuthenticatedProfile() {
     const tokens = window.orariooAuth.getTokens();
     if (!tokens.access && !tokens.refresh) {
@@ -150,6 +227,13 @@
     const familyName = userData.family_name || "";
     const email = userData.email || "";
 
+    if (deleteConfirmationEmailLabelEl) {
+      deleteConfirmationEmailLabelEl.textContent = email || "tu correo electrónico";
+    }
+    if (deleteConfirmationEl) {
+      deleteConfirmationEl.placeholder = email || "usuario@dominio.com";
+    }
+
     if (givenNameEl) {
       givenNameEl.value = givenName;
     }
@@ -172,6 +256,8 @@
     if (roleBadgeEl) {
       roleBadgeEl.textContent = userData.is_superuser ? "Administrador" : "Usuario";
     }
+
+    syncDeleteButtonState();
   }
 
   function resetPersonalFields() {
@@ -363,6 +449,73 @@
     }
   }
 
+  async function deleteAccount(event) {
+    event.preventDefault();
+    resetAlert(deleteModalAlertEl);
+    resetAlert(deletePageAlertEl);
+
+    const expectedEmail = (
+      deleteConfirmationEmailLabelEl && deleteConfirmationEmailLabelEl.textContent
+        ? deleteConfirmationEmailLabelEl.textContent
+        : currentUser && currentUser.email
+          ? currentUser.email
+          : ""
+    ).trim();
+    const confirmationText = deleteConfirmationEl ? deleteConfirmationEl.value.trim() : "";
+
+    if (confirmationText.toLowerCase() !== expectedEmail.toLowerCase()) {
+      setDeleteFeedback("Debes escribir exactamente tu correo electrónico para confirmar la eliminación.");
+      showAlert(deleteModalAlertEl, "Revisa la confirmación antes de continuar.", "alert-danger");
+      return;
+    }
+
+    setDeleteLoading(true);
+
+    try {
+      const response = await window.orariooAuth.apiFetch("/api/users/me/delete-account/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          confirmation_text: confirmationText,
+        }),
+      });
+
+      const payload = await response.json().catch(function () {
+        return null;
+      });
+
+      if (!response.ok) {
+        const message = parseErrorDetail(payload, "No se pudo eliminar la cuenta.");
+        showAlert(deleteModalAlertEl, message, "alert-danger");
+        return;
+      }
+
+      const modalInstance =
+        window.bootstrap && typeof window.bootstrap.Modal === "function"
+          ? window.bootstrap.Modal.getInstance(deleteAccountModalEl) || new window.bootstrap.Modal(deleteAccountModalEl)
+          : null;
+      if (modalInstance) {
+        modalInstance.hide();
+      }
+
+      showAlert(
+        deletePageAlertEl,
+        "Tu cuenta ha sido eliminada correctamente. Se cerrará la sesión en unos segundos.",
+        "alert-success",
+      );
+      window.orariooAuth.clearAuthSession();
+      window.setTimeout(function () {
+        window.location.assign("/sign-in/");
+      }, 1800);
+    } catch (_error) {
+      showAlert(deleteModalAlertEl, "No se pudo eliminar la cuenta. Inténtalo de nuevo.", "alert-danger");
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
   async function initializeProfilePage() {
     resetAlert(personalAlertEl);
     resetAlert(passwordAlertEl);
@@ -432,6 +585,30 @@
 
     if (exportButton) {
       exportButton.addEventListener("click", exportData);
+    }
+
+    if (deleteConfirmationEl) {
+      deleteConfirmationEl.addEventListener("input", syncDeleteButtonState);
+      deleteConfirmationEl.addEventListener("change", syncDeleteButtonState);
+      deleteConfirmationEl.addEventListener("keyup", syncDeleteButtonState);
+      deleteConfirmationEl.addEventListener("paste", function () {
+        window.setTimeout(syncDeleteButtonState, 0);
+      });
+    }
+
+    if (deleteAccountForm) {
+      deleteAccountForm.addEventListener("submit", deleteAccount);
+    }
+
+    if (deleteAccountModalEl) {
+      deleteAccountModalEl.addEventListener("show.bs.modal", function () {
+        resetAlert(deletePageAlertEl);
+        resetDeleteModalState();
+        if (deleteConfirmationEl) {
+          deleteConfirmationEl.focus();
+        }
+      });
+      deleteAccountModalEl.addEventListener("hidden.bs.modal", resetDeleteModalState);
     }
   }
 

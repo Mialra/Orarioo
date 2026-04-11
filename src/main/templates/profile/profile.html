@@ -281,6 +281,31 @@
                              aria-live="polite"></div>
                     </div>
                 </article>
+                <article class="card border-0 profile-card shadow-sm mb-4 profile-danger-card">
+                    <div class="card-body p-4 p-lg-5">
+                        <div class="dash-panel-header mb-3">
+                            <div>
+                                <h2 class="dash-panel-title">Eliminar cuenta</h2>
+                                <p class="dash-panel-copy">Cierra tu cuenta de forma irreversible y borra tus datos personales de la plataforma.</p>
+                            </div>
+                        </div>
+                        <p class="profile-danger-copy mb-4">
+                            Esta acción eliminará permanentemente tu cuenta y todos tus datos personales. Esta acción no se puede deshacer.
+                        </p>
+                        <button id="profile-delete-account-trigger"
+                                type="button"
+                                class="btn btn-danger d-inline-flex align-items-center gap-2"
+                                data-bs-toggle="modal"
+                                data-bs-target="#profileDeleteAccountModal">
+                            <i data-lucide="trash-2" class="profile-icon-sm" aria-hidden="true"></i>
+                            Eliminar cuenta
+                        </button>
+                        <div id="profile-delete-page-alert"
+                             class="alert d-none mt-3 mb-0"
+                             role="status"
+                             aria-live="polite"></div>
+                    </div>
+                </article>
                 <article class="card border-0 profile-card shadow-sm">
                     <div class="card-body p-4 p-lg-5">
                         <div class="dash-panel-header mb-3">
@@ -399,9 +424,65 @@
                 </div>
             </div>
         </div>
+        <div class="modal fade"
+             id="profileDeleteAccountModal"
+             tabindex="-1"
+             aria-labelledby="profileDeleteAccountModalLabel"
+             aria-hidden="true"
+             data-bs-backdrop="static"
+             data-bs-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header border-0 pb-0">
+                        <div>
+                            <h5 class="modal-title" id="profileDeleteAccountModalLabel">Eliminar cuenta</h5>
+                            <p class="modal-subtitle mb-0">Confirma tu identidad escribiendo exactamente tu correo electrónico.</p>
+                        </div>
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                    </div>
+                    <form id="profile-delete-account-form" novalidate>
+                        <div class="modal-body pt-3">
+                            <div class="alert alert-danger" role="alert">
+                                Esta acción eliminará permanentemente tu cuenta y todos tus datos personales. Esta acción no se puede deshacer.
+                            </div>
+                            <div class="mb-2">
+                                <label for="profile-delete-confirmation" class="form-label">
+                                    Escribe <strong>{{ user.email }}</strong> para confirmar
+                                </label>
+                                <input id="profile-delete-confirmation"
+                                       type="text"
+                                       class="form-control profile-control"
+                                       maxlength="255"
+                                       placeholder="usuario@dominio.com"
+                                       autocomplete="off"
+                                       required>
+                                <div id="profile-delete-confirmation-feedback"
+                                     class="invalid-feedback d-block d-none"></div>
+                            </div>
+                            <div id="profile-delete-modal-alert"
+                                 class="alert d-none mt-3 mb-0"
+                                 role="status"
+                                 aria-live="polite"></div>
+                        </div>
+                        <div class="modal-footer border-0 pt-0">
+                            <button type="button"
+                                    class="btn btn-outline-secondary"
+                                    data-bs-dismiss="modal">Cancelar</button>
+                            <button id="profile-delete-account-submit"
+                                    type="submit"
+                                    class="btn btn-danger"
+                                    disabled>Eliminar cuenta</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
 {% endblock content %}
 {% block extra_scripts %}
     <script src="{% static 'js/dashboard.js' %}"></script>
-    <script src="{% static 'js/profile.js' %}"></script>
+    <script src="{% static 'js/profile.js' %}?v=20260411_email_confirm_btn"></script>
 {% endblock extra_scripts %}

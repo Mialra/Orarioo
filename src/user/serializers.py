@@ -83,6 +83,7 @@ class UserSerializer(serializers.ModelSerializer):
     given_name = serializers.CharField(source="name")
     active_team = CollaborationTeamSerializer(read_only=True)
     collaboration_teams = CollaborationTeamSerializer(many=True, read_only=True)
+    deleted_at = serializers.DateTimeField(read_only=True, allow_null=True)
 
     class Meta:
         model = User
@@ -91,6 +92,7 @@ class UserSerializer(serializers.ModelSerializer):
             "given_name",
             "family_name",
             "email",
+            "deleted_at",
             "active_team",
             "collaboration_teams",
             "is_enabled",
@@ -232,6 +234,31 @@ class UserChangePasswordSerializer(serializers.Serializer):
         return user
 
 
+class UserAccountDeletionSerializer(serializers.Serializer):
+    """Validates the self-service account deletion payload."""
+
+    confirmation_text = serializers.CharField(
+        write_only=True,
+        required=True,
+        help_text="Type the user's email address to confirm permanent deletion.",
+    )
+
+    def validate(self, data):
+        user = self.context["request"].user
+        expected_confirmation = (user.email or "").strip().lower()
+        provided_confirmation = (data.get("confirmation_text") or "").strip().lower()
+
+        if provided_confirmation != expected_confirmation:
+            raise serializers.ValidationError(
+                {
+                    "confirmation_text": (
+                        "Debes escribir exactamente tu correo electrónico para eliminar la cuenta."
+                    )
+                }
+            )
+        return data
+
+
 class LoginSerializer(serializers.Serializer):
     """Serializer for authenticating users"""
 
@@ -251,7 +278,7 @@ class LoginSerializer(serializers.Serializer):
         if not user.check_password(password):
             raise serializers.ValidationError("Incorrect email or password.")
 
-        if not user.is_enabled:
+        if not user.is_enabled or getattr(user, "deleted_at", None):
             raise serializers.ValidationError("This user has been deactivated.")
 
         data["user"] = user
