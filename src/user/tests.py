@@ -14,9 +14,12 @@ from rest_framework.test import APIClient, APITestCase
 
 from auditableEntity.models import AuditEntry
 from classroom.models import Classroom
-from group.models import EducationalStage as GroupEducationalStage, Group
+from group.models import EducationalStage as GroupEducationalStage
+from group.models import Group
 from namedEntity.models import NamedEntity
 from schedule.models import Schedule
+from subject.models import Subject
+from teacher.models import Teacher
 from user.admin import UserAdmin
 from user.models import (
     CollaborationTeam,
@@ -25,8 +28,6 @@ from user.models import (
     User,
     UserDataExportLog,
 )
-from subject.models import Subject
-from teacher.models import Teacher
 
 
 class UserModelTests(TestCase):

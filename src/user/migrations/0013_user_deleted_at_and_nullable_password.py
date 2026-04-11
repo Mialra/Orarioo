@@ -7,7 +7,10 @@ from django.utils.translation import gettext_lazy as _
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("user", "0012_rename_user_data_ex_user_id_2fc8a9_idx_user_data_e_user_id_d43bf6_idx_and_more"),
+        (
+            "user",
+            "0012_rename_user_data_ex_user_id_2fc8a9_idx_user_data_e_user_id_d43bf6_idx_and_more",
+        ),
     ]
 
     operations = [
@@ -16,7 +19,9 @@ class Migration(migrations.Migration):
             name="password",
             field=models.CharField(
                 blank=True,
-                help_text=_("User password hash or NULL after irreversible account deletion"),
+                help_text=_(
+                    "User password hash or NULL after irreversible account deletion"
+                ),
                 max_length=128,
                 null=True,
                 verbose_name=_("password"),

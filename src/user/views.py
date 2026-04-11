@@ -5,12 +5,12 @@ import time
 
 from django.apps import apps
 from django.conf import settings
-from django.core.cache import cache
 from django.contrib.sessions.models import Session
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import render
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Q
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, status, viewsets
@@ -20,11 +20,18 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from auditableEntity.audit import AuditActionType, create_audit_entry, suppress_audit_events
+from auditableEntity.audit import (
+    AuditActionType,
+    create_audit_entry,
+    suppress_audit_events,
+)
 from auditableEntity.models import AuditEntry
 from common.drf import AuditActorViewMixin
 from common.permissions import IsManagementUser
@@ -44,11 +51,11 @@ from user.serializers import (
     CollaborationTeamInvitationSerializer,
     CollaborationTeamInviteSerializer,
     LoginSerializer,
+    UserAccountDeletionSerializer,
     UserChangePasswordSerializer,
     UserCreateSerializer,
     UserSerializer,
     UserUpdateSerializer,
-    UserAccountDeletionSerializer,
 )
 
 logger = logging.getLogger(__name__)
