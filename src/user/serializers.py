@@ -83,6 +83,7 @@ class UserSerializer(serializers.ModelSerializer):
     given_name = serializers.CharField(source="name")
     active_team = CollaborationTeamSerializer(read_only=True)
     collaboration_teams = CollaborationTeamSerializer(many=True, read_only=True)
+    deleted_at = serializers.DateTimeField(read_only=True, allow_null=True)
 
     class Meta:
         model = User
@@ -91,6 +92,7 @@ class UserSerializer(serializers.ModelSerializer):
             "given_name",
             "family_name",
             "email",
+            "deleted_at",
             "active_team",
             "collaboration_teams",
             "is_enabled",
@@ -113,6 +115,16 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
     password_confirm = serializers.CharField(
         write_only=True, required=True, help_text="Password confirmation"
     )
+    privacy_policy_accepted = serializers.BooleanField(
+        write_only=True,
+        required=True,
+        help_text="Privacy policy acceptance flag",
+    )
+    terms_conditions_accepted = serializers.BooleanField(
+        write_only=True,
+        required=True,
+        help_text="Terms and conditions acceptance flag",
+    )
 
     class Meta:
         model = User
@@ -122,12 +134,33 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
             "email",
             "password",
             "password_confirm",
+            "privacy_policy_accepted",
+            "terms_conditions_accepted",
         ]
 
     def validate(self, data):
         """Validates that passwords match"""
         if data["password"] != data["password_confirm"]:
             raise serializers.ValidationError({"password": "Passwords do not match."})
+
+        if not data.get("privacy_policy_accepted"):
+            raise serializers.ValidationError(
+                {
+                    "privacy_policy_accepted": (
+                        "You must accept the privacy policy to complete signup."
+                    )
+                }
+            )
+
+        if not data.get("terms_conditions_accepted"):
+            raise serializers.ValidationError(
+                {
+                    "terms_conditions_accepted": (
+                        "You must accept the terms and conditions to complete signup."
+                    )
+                }
+            )
+
         return data
 
     @transaction.atomic
@@ -135,6 +168,8 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
         """Creates a new user"""
         password = validated_data.pop("password")
         validated_data.pop("password_confirm")
+        validated_data.pop("privacy_policy_accepted", None)
+        validated_data.pop("terms_conditions_accepted", None)
 
         user = User.objects.create_user(**validated_data, password=password)
         return user
@@ -199,6 +234,31 @@ class UserChangePasswordSerializer(serializers.Serializer):
         return user
 
 
+class UserAccountDeletionSerializer(serializers.Serializer):
+    """Validates the self-service account deletion payload."""
+
+    confirmation_text = serializers.CharField(
+        write_only=True,
+        required=True,
+        help_text="Type the user's email address to confirm permanent deletion.",
+    )
+
+    def validate(self, data):
+        user = self.context["request"].user
+        expected_confirmation = (user.email or "").strip().lower()
+        provided_confirmation = (data.get("confirmation_text") or "").strip().lower()
+
+        if provided_confirmation != expected_confirmation:
+            raise serializers.ValidationError(
+                {
+                    "confirmation_text": (
+                        "Debes escribir exactamente tu correo electrónico para eliminar la cuenta."
+                    )
+                }
+            )
+        return data
+
+
 class LoginSerializer(serializers.Serializer):
     """Serializer for authenticating users"""
 
@@ -218,7 +278,7 @@ class LoginSerializer(serializers.Serializer):
         if not user.check_password(password):
             raise serializers.ValidationError("Incorrect email or password.")
 
-        if not user.is_enabled:
+        if not user.is_enabled or getattr(user, "deleted_at", None):
             raise serializers.ValidationError("This user has been deactivated.")
 
         data["user"] = user

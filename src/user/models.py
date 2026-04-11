@@ -46,6 +46,13 @@ class User(NamedEntity, AbstractUser):
     """Custom User model."""
 
     username = None
+    password = models.CharField(
+        _("password"),
+        max_length=128,
+        null=True,
+        blank=True,
+        help_text=_("User password hash or NULL after irreversible account deletion"),
+    )
     email = models.EmailField(
         _("email"), unique=True, help_text=_("Unique email address")
     )
@@ -71,6 +78,11 @@ class User(NamedEntity, AbstractUser):
     )
     updated_at = models.DateTimeField(
         auto_now=True, db_column="fecha_actualizacion", help_text=_("Last update date")
+    )
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Permanent account deletion timestamp"),
     )
 
     objects = CustomUserManager()
@@ -160,3 +172,36 @@ class CollaborationTeamInvitation(models.Model):
 
     def __str__(self):
         return f"{self.invited_user.email} -> {self.team.name} ({self.status})"
+
+
+class UserDataExportLog(models.Model):
+    class Outcome(models.TextChoices):
+        SUCCESS = "success", _("Success")
+        RATE_LIMITED = "rate_limited", _("Rate limited")
+        ERROR = "error", _("Error")
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="data_export_logs",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=512, blank=True)
+    outcome = models.CharField(
+        max_length=20,
+        choices=Outcome.choices,
+        default=Outcome.SUCCESS,
+    )
+    notes = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = "user_data_export_log"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["outcome", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.outcome} - {self.created_at.isoformat()}"
