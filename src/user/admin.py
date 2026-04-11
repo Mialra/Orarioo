@@ -169,8 +169,12 @@ class UserAdmin(UserAdmin):
                     user=obj,
                     description=f"User account blocked by {request.user.email}. Reason: Account deactivation.",
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                self.message_user(
+                    request,
+                    f"No se pudo registrar el incidente de seguridad para {obj.email}: {exc}",
+                    level=messages.WARNING,
+                )
 
             sent = send_security_email(
                 subject="Aviso de seguridad: cuenta bloqueada temporalmente",
