@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "namedEntity",
     "auditableEntity",
+    "securityIncident",
     "teacher",
     "classroom",
     "group",
@@ -168,7 +169,7 @@ if not DEBUG:
 # REST Framework Configuration
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "common.authentication.ActiveUserJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -199,6 +200,32 @@ SIMPLE_JWT = {
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
 }
+
+# GDPR data portability export throttling (session-based profile download endpoint).
+# Uses Django cache backend (default: local-memory cache if not overridden).
+DATA_EXPORT_RATE_LIMIT_MAX_REQUESTS = config(
+    "DATA_EXPORT_RATE_LIMIT_MAX_REQUESTS", default=1, cast=int
+)
+DATA_EXPORT_RATE_LIMIT_WINDOW_SECONDS = config(
+    "DATA_EXPORT_RATE_LIMIT_WINDOW_SECONDS", default=600, cast=int
+)
+
+# Email configuration (SMTP)
+EMAIL_BACKEND = config(
+    "EMAIL_BACKEND",
+    default="django.core.mail.backends.smtp.EmailBackend",
+)
+EMAIL_HOST = config("EMAIL_HOST", default="localhost")
+EMAIL_PORT = config("EMAIL_PORT", default=25, cast=int)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
+EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
+EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=20, cast=int)
+DEFAULT_FROM_EMAIL = config(
+    "DEFAULT_FROM_EMAIL",
+    default=(EMAIL_HOST_USER),
+)
 
 # Custom User Model
 AUTH_USER_MODEL = "user.User"

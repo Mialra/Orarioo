@@ -1,83 +1,87 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% load static %}
-
-{% block title %}Orarioo | Iniciar Sesión{% endblock %}
-{% block body_class %}auth-page{% endblock %}
-
+{% block title %}
+    Orarioo | Iniciar Sesión
+{% endblock title %}
+{% block body_class %}
+    auth-page
+{% endblock body_class %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/auth.css' %}">
-{% endblock %}
-
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock extra_head %}
 {% block content %}
-<main class="auth-shell container-fluid px-0">
-    <div class="row g-0 min-vh-100">
-        {% include 'auth/auth_branding.html' %}
-
-        <section class="col-12 col-lg-6 d-flex align-items-center justify-content-center p-3 p-md-4 p-xl-5">
-            <div class="card shadow-sm border-0 auth-card w-100">
-                <div class="card-body p-4 p-md-5">
-                    <header class="mb-4">
-                        <p class="text-uppercase fw-semibold small text-body-secondary mb-2">Acceso</p>
-                        <h2 class="h3 mb-1">Bienvenido de vuelta</h2>
-                        <p class="text-body-secondary mb-0">Inicia sesión para continuar</p>
-                    </header>
-
-                    <div id="auth-alert" class="auth-alert alert" role="status" aria-live="polite"></div>
-
-                    <form id="login-form" class="d-grid gap-3" novalidate>
-                        <div>
-                            <label class="form-label fw-semibold" for="email">Correo electrónico</label>
-                            <input
-                                id="email"
-                                name="email"
-                                class="form-control form-control-lg"
-                                type="email"
-                                inputmode="email"
-                                autocomplete="email"
-                                placeholder="director@escuela.edu"
-                                required
-                            >
-                        </div>
-
-                        <div>
-                            <label class="form-label fw-semibold" for="password">Contraseña</label>
-                            <div class="input-group input-group-lg">
-                                <input
-                                    id="password"
-                                    name="password"
-                                    class="form-control"
-                                    type="password"
-                                    autocomplete="current-password"
-                                    placeholder="Tu contraseña segura"
-                                    required
-                                >
-                                <button type="button" class="btn btn-outline-secondary password-toggle-btn" id="password-toggle" aria-label="Mostrar contraseña" title="Mostrar contraseña">
-                                    <span class="password-toggle-icon-slot" aria-hidden="true"></span>
-                                </button>
+    <main class="auth-shell container-fluid px-0">
+        <div class="auth-layout min-vh-100 d-flex flex-column flex-lg-row">
+            {% include "auth/auth_branding.html" %}
+            <section class="auth-form-section flex-grow-1 d-flex align-items-center justify-content-center p-3 p-md-4 p-xl-5">
+                <div class="card shadow-sm border-0 auth-card w-100">
+                    <div class="card-body p-4 p-md-5">
+                        <header class="mb-4">
+                            <p class="text-uppercase fw-semibold small text-body-secondary mb-2">Acceso</p>
+                            <h2 class="h3 mb-1">Bienvenido de vuelta</h2>
+                            <p class="text-body-secondary mb-0">Inicia sesión para continuar</p>
+                        </header>
+                        <div id="auth-alert"
+                             class="auth-alert alert"
+                             role="status"
+                             aria-live="polite"></div>
+                        <form id="login-form" class="d-grid gap-3" novalidate>
+                            <div>
+                                <label class="form-label fw-semibold" for="email">Correo electrónico</label>
+                                <input id="email"
+                                       name="email"
+                                       class="form-control form-control-lg"
+                                       type="email"
+                                       inputmode="email"
+                                       autocomplete="email"
+                                       placeholder="director@escuela.edu"
+                                       required>
                             </div>
-                        </div>
-
-                        <button id="login-submit" class="btn btn-primary btn-lg auth-submit" type="submit">
-                            <span class="btn-label">Iniciar sesión</span>
-                            <span class="btn-loader" aria-hidden="true"></span>
-                        </button>
-
-                        <div class="text-center border-top pt-3 mt-1">
-                            <p class="mb-1">¿No tienes cuenta? <a class="fw-semibold auth-link-btn" href="{% url 'sign-up' %}">Regístrate</a></p>
-                            <p class="small text-body-secondary mb-0">DEMO: usuario: admin@test.com, contraseña: admin123</p>
-                        </div>
-                    </form>
-
-                    <p class="small text-body-secondary text-center mt-4 mb-0 px-md-4">
-                        Al continuar, aceptas los Términos de Servicio y la Política de Privacidad de Orarioo (Por definir).
-                    </p>
+                            <div>
+                                <label class="form-label fw-semibold" for="password">Contraseña</label>
+                                <div class="input-group input-group-lg">
+                                    <input id="password"
+                                           name="password"
+                                           class="form-control"
+                                           type="password"
+                                           autocomplete="current-password"
+                                           placeholder="Tu contraseña segura"
+                                           required>
+                                    <button type="button"
+                                            class="btn btn-outline-secondary password-toggle-btn"
+                                            id="password-toggle"
+                                            aria-label="Mostrar contraseña"
+                                            title="Mostrar contraseña">
+                                        <span class="password-toggle-icon-slot" aria-hidden="true"></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <button id="login-submit"
+                                    class="btn btn-primary btn-lg auth-submit"
+                                    type="submit">
+                                <span class="btn-label">Iniciar sesión</span>
+                                <span class="btn-loader" aria-hidden="true"></span>
+                            </button>
+                            <div class="text-center border-top pt-3 mt-1">
+                                <p class="mb-1">
+                                    ¿No tienes cuenta? <a class="fw-semibold auth-link-btn" href="{% url 'sign-up' %}">Regístrate</a>
+                                </p>
+                                <p class="small text-body-secondary mb-0">DEMO: usuario: admin@test.com, contraseña: admin123</p>
+                            </div>
+                        </form>
+                        <p class="small text-body-secondary text-center mt-4 mb-0 px-md-4">
+                            Al acceder, aceptas los
+                            <a href="{% url 'terms-and-conditions' %}" class="auth-link-btn">Términos y Condiciones</a>
+                            y la
+                            <a href="{% url 'privacy-policy' %}" class="auth-link-btn">Política de Privacidad</a>
+                            de Orarioo.
+                        </p>
+                    </div>
                 </div>
-            </div>
-        </section>
-    </div>
-</main>
-{% endblock %}
-
+            </section>
+        </div>
+    </main>
+{% endblock content %}
 {% block extra_scripts %}
-<script src="{% static 'js/login.js' %}"></script>
-{% endblock %}
+    <script src="{% static 'js/login.js' %}"></script>
+{% endblock extra_scripts %}

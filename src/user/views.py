@@ -1,3 +1,15 @@
+import hashlib
+import json
+import logging
+import time
+
+from django.apps import apps
+from django.conf import settings
+from django.contrib.sessions.models import Session
+from django.core.cache import cache
+from django.db import transaction
+from django.db.models import Q
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -8,19 +20,30 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from auditableEntity.audit import (
+    AuditActionType,
+    create_audit_entry,
+    suppress_audit_events,
+)
+from auditableEntity.models import AuditEntry
 from common.drf import AuditActorViewMixin
 from common.permissions import IsManagementUser
 from common.tenancy import get_active_team
 from main.views import render_admin_dashboard
+from securityIncident.models import SecurityIncident
 from user.models import (
     CollaborationTeam,
     CollaborationTeamInvitation,
     CollaborationTeamInvitationStatus,
-    RoleChoices,
     User,
+    UserDataExportLog,
 )
 from user.serializers import (
     CollaborationTeamCreateSerializer,
@@ -28,12 +51,14 @@ from user.serializers import (
     CollaborationTeamInvitationSerializer,
     CollaborationTeamInviteSerializer,
     LoginSerializer,
+    UserAccountDeletionSerializer,
     UserChangePasswordSerializer,
     UserCreateSerializer,
-    UserManagementCreateSerializer,
     UserSerializer,
     UserUpdateSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def sign_in(request):
@@ -45,12 +70,10 @@ def sign_up(request):
 
 
 def admin_users(request):
-    users = User.objects.filter(is_enabled=True).order_by("-created_at")
     state = {
-        "title": "Gestión de Usuarios",
-        "description": "Administra el personal del centro, sus accesos y sus roles.",
-        "empty_message": "No hay usuarios registrados. Añade el primero para comenzar.",
-        "add_cta": "Añadir Usuario",
+        "title": "Usuarios del equipo",
+        "description": "Consulta los usuarios de tu equipo activo.",
+        "empty_message": "No hay usuarios en el equipo activo.",
     }
 
     return render_admin_dashboard(
@@ -58,19 +81,353 @@ def admin_users(request):
         "users",
         {
             "dashboard_admin_state": state,
-            "dashboard_admin_users": users,
         },
     )
 
 
-class IsAdministratorOrSelf(permissions.BasePermission):
-    """Permission for administrators or the user themselves to access"""
+def _extract_client_ip(request):
+    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "")
 
-    def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated)
 
-    def has_object_permission(self, request, view, obj):
-        return request.user.is_administrator() or obj.id == request.user.id
+def _get_export_rate_limit_config():
+    max_requests = int(getattr(settings, "DATA_EXPORT_RATE_LIMIT_MAX_REQUESTS", 3))
+    window_seconds = int(
+        getattr(settings, "DATA_EXPORT_RATE_LIMIT_WINDOW_SECONDS", 3600)
+    )
+    return max(1, max_requests), max(60, window_seconds)
+
+
+def _consume_export_rate_limit(user_id):
+    """Consume one export token from a per-user fixed window bucket."""
+    max_requests, window_seconds = _get_export_rate_limit_config()
+    now = int(time.time())
+    window_id = now // window_seconds
+    key = f"gdpr_export:{user_id}:{window_id}"
+
+    if cache.add(key, 1, timeout=window_seconds):
+        return False, max_requests - 1, window_seconds
+
+    try:
+        current_count = cache.incr(key)
+    except ValueError:
+        cache.set(key, 1, timeout=window_seconds)
+        current_count = 1
+
+    remaining = max(0, max_requests - current_count)
+    limited = current_count > max_requests
+    retry_after = window_seconds - (now % window_seconds)
+    return limited, remaining, retry_after
+
+
+def _build_export_payload(user):
+    activity_items = []
+    audit_entries = AuditEntry.objects.filter(actor=user).order_by("-occurred_at")[:100]
+
+    for entry in audit_entries:
+        action_text = entry.detail.strip() if entry.detail else ""
+        if not action_text:
+            entity_label = entry.entity_name or entry.entity_type
+            action_text = f"{entry.action_type} {entity_label}".strip()
+
+        activity_items.append(
+            {
+                "action": action_text,
+                "date": entry.occurred_at.isoformat(),
+                "detail": entry.detail or "",
+            }
+        )
+
+    return {
+        "metadata": {
+            "exported_at": timezone.now().isoformat(),
+        },
+        "personal_data": {
+            "username": user.name,
+            "email": user.email,
+            "family_name": user.family_name,
+            "active_team": user.active_team.name if user.active_team else None,
+        },
+        "activity": activity_items,
+    }
+
+
+def _safe_create_export_log(*, user, request, outcome, notes=""):
+    try:
+        UserDataExportLog.objects.create(
+            user=user,
+            ip_address=_extract_client_ip(request),
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:512],
+            outcome=outcome,
+            notes=notes,
+        )
+    except Exception:
+        logger.exception("Could not persist user data export audit log")
+
+
+def _build_deleted_account_email(user):
+    payload = f"{settings.SECRET_KEY}:{user.pk}:{user.email}".encode("utf-8")
+    digest = hashlib.sha256(payload).hexdigest()
+    return f"deleted-{digest[:24]}@deleted.invalid"
+
+
+def _clear_user_sessions(user_id):
+    for session in Session.objects.all().iterator():
+        try:
+            decoded = session.get_decoded()
+        except Exception:
+            continue
+        if str(decoded.get("_auth_user_id")) == str(user_id):
+            session.delete()
+
+
+def _blacklist_user_refresh_tokens(user):
+    for token in OutstandingToken.objects.filter(user=user):
+        BlacklistedToken.objects.get_or_create(token=token)
+
+
+def _anonymize_authorship_fields(*, original_email, anonymized_email):
+    original_email = (original_email or "").strip()
+    anonymized_email = (anonymized_email or "").strip()
+    if not original_email or not anonymized_email:
+        return
+
+    for model in apps.get_models():
+        field_names = {field.name for field in model._meta.concrete_fields}
+        if "created_by" in field_names:
+            model.objects.filter(created_by__iexact=original_email).update(
+                created_by=anonymized_email
+            )
+        if "updated_by" in field_names:
+            model.objects.filter(updated_by__iexact=original_email).update(
+                updated_by=anonymized_email
+            )
+
+
+def _cleanup_related_user_records(user, *, original_email, anonymized_email):
+    schedule_ids = list(user.schedules.values_list("id", flat=True))
+    if schedule_ids:
+        with suppress_audit_events(("schedule", AuditActionType.UPDATE)):
+            user.schedules.clear()
+
+    _anonymize_authorship_fields(
+        original_email=original_email,
+        anonymized_email=anonymized_email,
+    )
+
+    collaboration_teams = list(user.collaboration_teams.all())
+    for team in collaboration_teams:
+        team.members.remove(user)
+
+    UserDataExportLog.objects.filter(user=user).delete()
+    CollaborationTeamInvitation.objects.filter(
+        Q(invited_user=user) | Q(invited_by=user)
+    ).delete()
+
+    SecurityIncident.objects.filter(user=user).update(
+        user=None,
+        description="Registro anonimizado tras la eliminación de la cuenta.",
+    )
+
+    AuditEntry.objects.filter(actor=user).update(
+        actor=None,
+        actor_name="Usuario eliminado",
+    )
+    AuditEntry.objects.filter(entity_type="user", entity_id=user.pk).update(
+        entity_name="Usuario eliminado",
+        detail="Registro anonimizado tras la eliminación de la cuenta.",
+        changed_fields=[],
+    )
+
+
+def _erase_user_account(request, user, serializer):
+    serializer.is_valid(raise_exception=True)
+
+    if user.deleted_at is not None:
+        return Response(
+            {"detail": "This account has already been deleted."},
+            status=status.HTTP_410_GONE,
+        )
+
+    original_team = user.active_team
+
+    with transaction.atomic():
+        user = User.objects.select_for_update().get(pk=user.pk)
+        if user.deleted_at is not None:
+            return Response(
+                {"detail": "This account has already been deleted."},
+                status=status.HTTP_410_GONE,
+            )
+
+        original_email = user.email
+        anonymized_email = _build_deleted_account_email(user)
+
+        _cleanup_related_user_records(
+            user,
+            original_email=original_email,
+            anonymized_email=anonymized_email,
+        )
+
+        user.name = "Usuario eliminado"
+        user.family_name = ""
+        user.email = anonymized_email
+        user.password = None
+        user.is_enabled = False
+        user.active_team = None
+        user.deleted_at = timezone.now()
+
+        with suppress_audit_events(("user", AuditActionType.UPDATE)):
+            user.save(
+                update_fields=[
+                    "name",
+                    "family_name",
+                    "email",
+                    "password",
+                    "is_enabled",
+                    "active_team",
+                    "deleted_at",
+                    "updated_at",
+                ]
+            )
+
+        create_audit_entry(
+            model=User,
+            entity_id=user.pk,
+            entity_name="Usuario eliminado",
+            action_type=AuditActionType.DELETE,
+            detail="Se eliminó y anonimizó la cuenta de usuario.",
+            changed_fields=[
+                {"campo": "Cuenta", "valor_nuevo": "anonimizada"},
+                {"campo": "Eliminada en", "valor_nuevo": user.deleted_at.isoformat()},
+            ],
+            team=original_team,
+        )
+
+        _blacklist_user_refresh_tokens(user)
+        _clear_user_sessions(user.pk)
+
+    logger.info("User account deleted", extra={"user_id": user.pk})
+    return Response(
+        {
+            "detail": "Your account has been permanently deleted.",
+            "deleted_at": user.deleted_at,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+def profile(request):
+    return render(
+        request,
+        "profile/profile.html",
+        {
+            "show_authenticated_footer": True,
+            "export_rate_limit_max_requests": _get_export_rate_limit_config()[0],
+            "export_rate_limit_window_minutes": _get_export_rate_limit_config()[1]
+            // 60,
+        },
+    )
+
+
+class ProfileExportDataView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user = User.objects.get(pk=request.user.pk)
+        except User.DoesNotExist:
+            return JsonResponse(
+                {"detail": "Authenticated user not found."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Explicit ownership verification (defense in depth), even with token auth.
+        if user.pk != request.user.pk:
+            return JsonResponse(
+                {"detail": "You can only export your own personal data."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        limited, _remaining, retry_after = _consume_export_rate_limit(user.pk)
+        if limited:
+            _safe_create_export_log(
+                user=user,
+                request=request,
+                outcome=UserDataExportLog.Outcome.RATE_LIMITED,
+                notes="Rate limit exceeded while requesting personal data export.",
+            )
+            response = JsonResponse(
+                {
+                    "detail": (
+                        "Rate limit exceeded for data export. "
+                        "Please wait before requesting again."
+                    )
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+            response["Retry-After"] = str(max(1, retry_after))
+            return response
+
+        try:
+            payload = _build_export_payload(user)
+            body = json.dumps(payload, ensure_ascii=False, indent=2)
+            filename = (
+                f"orarioo-personal-data-{user.pk}-{timezone.now():%Y%m%dT%H%M%SZ}.json"
+            )
+
+            response = HttpResponse(
+                body, content_type="application/json; charset=utf-8"
+            )
+            response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            response["Cache-Control"] = "no-store, private"
+            response["Pragma"] = "no-cache"
+            response["X-Content-Type-Options"] = "nosniff"
+
+            _safe_create_export_log(
+                user=user,
+                request=request,
+                outcome=UserDataExportLog.Outcome.SUCCESS,
+                notes="Personal data exported successfully.",
+            )
+            return response
+        except Exception:
+            _safe_create_export_log(
+                user=user,
+                request=request,
+                outcome=UserDataExportLog.Outcome.ERROR,
+                notes="Unexpected server error during export generation.",
+            )
+            return JsonResponse(
+                {"detail": "Unable to generate export file at this time."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class UserAccountDeletionView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = UserAccountDeletionSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        return _erase_user_account(request, request.user, serializer)
+
+
+class UserSelfUpdateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = UserUpdateSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -192,7 +549,7 @@ class CollaborationTeamInviteView(APIView):
                 {
                     "email": (
                         "No active user exists with that email. "
-                        "Create the user first from Administracion > Usuarios."
+                        "Ask that person to sign up first."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -354,11 +711,8 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
 
     Available operations:
     - GET /api/users/ - List all users
-    - POST /api/users/ - Create new user
+    - POST /api/users/ - Create new user (signup)
     - GET /api/users/{id}/ - Get user details
-    - PUT /api/users/{id}/ - Update complete user
-    - PATCH /api/users/{id}/ - Partially update
-    - DELETE /api/users/{id}/ - Delete user
     - POST /api/users/change_password/ - Change password
     - POST /api/users/me/ - Get current user data
     """
@@ -371,11 +725,9 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
     queryset = User.objects.filter(is_enabled=True).order_by("-created_at")
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = UserPagination
+    http_method_names = ["get", "post", "head", "options"]
     serializer_action_classes = {
         "create": UserCreateSerializer,
-        "managed_create": UserManagementCreateSerializer,
-        "partial_update": UserUpdateSerializer,
-        "update": UserUpdateSerializer,
         "change_password": UserChangePasswordSerializer,
     }
 
@@ -394,15 +746,9 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
         if self.action == "create":
             # Allow creating users (signup)
             return [permissions.AllowAny()]
-        if self.action == "managed_create":
-            # Authenticated staff (administrator/direccion) can create managed users
+        if self.action in ["list", "retrieve"]:
+            # Team-scoped management is available to authenticated users.
             return [IsManagementUser()]
-        if self.action in ["list", "destroy", "update", "partial_update"]:
-            # Administrator and direccion have the same management scope.
-            return [IsManagementUser()]
-        if self.action == "retrieve":
-            # User can see their own profile, administrator can see any
-            return [IsAdministratorOrSelf()]
         if self.action in ["change_password", "me"]:
             # Authenticated user can change their password
             return [permissions.IsAuthenticated()]
@@ -410,39 +756,20 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
         return super().get_permissions()
 
     def get_queryset(self):
-        """Filters users based on permissions"""
-        user = self.request.user
+        """Return enabled users from the authenticated user's active team."""
+        try:
+            active_team = get_active_team(self.request)
+        except PermissionDenied:
+            return User.objects.none()
 
-        if user.role in [RoleChoices.ADMINISTRATOR, RoleChoices.DIRECCION]:
-            try:
-                active_team = get_active_team(self.request)
-            except PermissionDenied:
-                return User.objects.none()
-
-            return (
-                User.objects.filter(
-                    is_enabled=True,
-                    collaboration_teams=active_team,
-                )
-                .distinct()
-                .order_by("-created_at")
+        return (
+            User.objects.filter(
+                is_enabled=True,
+                collaboration_teams=active_team,
             )
-
-        # Other users only see their own profile.
-        return User.objects.filter(id=user.id, is_enabled=True).order_by("-created_at")
-
-    @action(
-        detail=False,
-        methods=["post"],
-        permission_classes=[IsManagementUser],
-        url_path="managed_create",
-    )
-    def managed_create(self, request):
-        """Creates users for audit/assignment flows with optional login access."""
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+            .distinct()
+            .order_by("-created_at")
+        )
 
     @action(
         detail=False,
@@ -511,15 +838,6 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
             {"message": _("Session closed successfully")},
             status=status.HTTP_200_OK,
         )
-
-    def perform_update(self, serializer):
-        """Updates an existing user"""
-        serializer.save()
-
-    def perform_destroy(self, instance):
-        """Deletes a user (soft delete - marks as inactive)"""
-        instance.is_enabled = False
-        instance.save()
 
     def create(self, request, *args, **kwargs):
         """Allows creating users without authentication (signup)"""

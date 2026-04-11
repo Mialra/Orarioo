@@ -1,4 +1,4 @@
-﻿from datetime import timedelta
+﻿from datetime import datetime, timedelta
 from io import BytesIO
 from unittest import skipIf
 
@@ -23,7 +23,6 @@ from schedule.views import REPORTLAB_AVAILABLE
 from subject.models import EducationalStage as SubjectEducationalStage
 from subject.models import Subject, SubjectTimePreferenceState, SubjectType
 from teacher.models import Teacher, TeacherTimePreferenceState
-from user.models import RoleChoices
 
 try:
     from openpyxl import load_workbook
@@ -38,7 +37,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.authenticate_admin(email_prefix="schedule-api")
         self.other_user = self.create_user(
             email="schedule-api-2@test.com",
-            role=RoleChoices.DIRECCION,
             given_name="Api2",
             family_name="Tester2",
         )
@@ -148,6 +146,26 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "start": local_start.strftime("%H:%M"),
             "end": local_end.strftime("%H:%M"),
         }
+
+    @staticmethod
+    def minutes_for_teacher_from_serialized_schedules(items, teacher_id):
+        total_minutes = 0
+        for item in items or []:
+            if int(item.get("teacher") or 0) != int(teacher_id):
+                continue
+
+            start_time = item.get("start_time")
+            end_time = item.get("end_time")
+            if not start_time or not end_time:
+                continue
+
+            start_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+            end_dt = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+            duration_minutes = int(round((end_dt - start_dt).total_seconds() / 60))
+            if duration_minutes > 0:
+                total_minutes += duration_minutes
+
+        return total_minutes
 
     def test_create_schedule(self):
         response = self.client.post(
@@ -479,6 +497,28 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("schedules", response.data)
         self.assertEqual(response.data["generated_count"], self.subject.weekly_hours)
+        self.assertIn("teacher_workloads", response.data)
+
+        teacher_workload = next(
+            (
+                item
+                for item in response.data["teacher_workloads"]
+                if item.get("teacher_id") == self.teacher.id
+            ),
+            None,
+        )
+        self.assertIsNotNone(teacher_workload)
+        expected_minutes = self.minutes_for_teacher_from_serialized_schedules(
+            response.data["schedules"],
+            self.teacher.id,
+        )
+        self.assertEqual(teacher_workload["total_minutes"], expected_minutes)
+        self.assertAlmostEqual(
+            teacher_workload["total_hours"],
+            expected_minutes / 60,
+            places=2,
+        )
+
         self.assertEqual(Schedule.objects.count(), self.subject.weekly_hours)
 
         schedule = Schedule.objects.first()
@@ -749,6 +789,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["mode"], "move")
         self.assertFalse(response.data["no_changes"])
+        self.assertIn("teacher_workloads", response.data)
+        self.assertTrue(
+            any(
+                item.get("teacher_id") == self.teacher.id
+                for item in response.data["teacher_workloads"]
+            )
+        )
 
         source_schedule.refresh_from_db()
         self.assertEqual(source_schedule.start_time, primary_slots[2]["start"])
@@ -1124,6 +1171,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["id"], saved_schedule.id)
+        self.assertIn("teacher_workloads", response.data)
+        self.assertTrue(
+            any(
+                item.get("teacher_id") == self.teacher.id
+                for item in response.data["teacher_workloads"]
+            )
+        )
 
     def test_saved_summary_endpoint_returns_lightweight_items(self):
         start_time = timezone.now() + timedelta(days=1)
@@ -1204,6 +1258,18 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertTrue(
             all(item["name"] == "Horario A" for item in response.data["results"])
         )
+        self.assertIn("teacher_workloads", response.data)
+        teacher_workload = next(
+            (
+                item
+                for item in response.data["teacher_workloads"]
+                if item.get("teacher_id") == self.teacher.id
+            ),
+            None,
+        )
+        self.assertIsNotNone(teacher_workload)
+        self.assertEqual(teacher_workload["total_minutes"], 120)
+        self.assertAlmostEqual(teacher_workload["total_hours"], 2.0, places=2)
 
     def test_delete_saved_timetable_creates_single_audit_entry(self):
         start_time = timezone.now() + timedelta(days=1)

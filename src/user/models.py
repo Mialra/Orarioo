@@ -5,11 +5,6 @@ from django.utils.translation import gettext_lazy as _
 from namedEntity.models import NamedEntity
 
 
-class RoleChoices(models.TextChoices):
-    ADMINISTRATOR = "administrator", _("Administrator")
-    DIRECCION = "direccion", _("Direccion")
-
-
 class CustomUserManager(BaseUserManager):
     """Custom manager for User model"""
 
@@ -21,6 +16,9 @@ class CustomUserManager(BaseUserManager):
         # Backward compatibility while moving from given_name to name.
         if "name" not in extra_fields and "given_name" in extra_fields:
             extra_fields["name"] = extra_fields.pop("given_name")
+
+        # Backward compatibility while removing role-based user management.
+        extra_fields.pop("role", None)
 
         if not extra_fields.get("name"):
             raise ValueError(_("Name is required"))
@@ -35,7 +33,6 @@ class CustomUserManager(BaseUserManager):
         """Creates and saves a superuser"""
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
-        extra_fields.setdefault("role", RoleChoices.ADMINISTRATOR)
 
         if extra_fields.get("is_staff") is not True:
             raise ValueError(_("Superuser must have is_staff=True"))
@@ -46,9 +43,16 @@ class CustomUserManager(BaseUserManager):
 
 
 class User(NamedEntity, AbstractUser):
-    """Custom User model with differentiated roles"""
+    """Custom User model."""
 
     username = None
+    password = models.CharField(
+        _("password"),
+        max_length=128,
+        null=True,
+        blank=True,
+        help_text=_("User password hash or NULL after irreversible account deletion"),
+    )
     email = models.EmailField(
         _("email"), unique=True, help_text=_("Unique email address")
     )
@@ -57,12 +61,6 @@ class User(NamedEntity, AbstractUser):
         blank=True,
         db_column="apellidos",
         help_text=_("User's family name"),
-    )
-    role = models.CharField(
-        max_length=20,
-        choices=RoleChoices.choices,
-        default=RoleChoices.DIRECCION,
-        help_text=_("User role in the system"),
     )
     active_team = models.ForeignKey(
         "user.CollaborationTeam",
@@ -81,6 +79,11 @@ class User(NamedEntity, AbstractUser):
     updated_at = models.DateTimeField(
         auto_now=True, db_column="fecha_actualizacion", help_text=_("Last update date")
     )
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Permanent account deletion timestamp"),
+    )
 
     objects = CustomUserManager()
 
@@ -93,7 +96,6 @@ class User(NamedEntity, AbstractUser):
         db_table = "user"
         indexes = [
             models.Index(fields=["email"]),
-            models.Index(fields=["role"]),
             models.Index(fields=["is_enabled"]),
         ]
 
@@ -111,14 +113,6 @@ class User(NamedEntity, AbstractUser):
     def get_full_name(self):
         """Returns the user's full name"""
         return f"{self.name} {self.family_name}".strip()
-
-    def is_administrator(self):
-        """Checks if the user is an administrator"""
-        return self.role == RoleChoices.ADMINISTRATOR
-
-    def is_direccion(self):
-        """Checks if the user is direccion"""
-        return self.role == RoleChoices.DIRECCION
 
 
 class CollaborationTeam(NamedEntity):
@@ -178,3 +172,36 @@ class CollaborationTeamInvitation(models.Model):
 
     def __str__(self):
         return f"{self.invited_user.email} -> {self.team.name} ({self.status})"
+
+
+class UserDataExportLog(models.Model):
+    class Outcome(models.TextChoices):
+        SUCCESS = "success", _("Success")
+        RATE_LIMITED = "rate_limited", _("Rate limited")
+        ERROR = "error", _("Error")
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="data_export_logs",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=512, blank=True)
+    outcome = models.CharField(
+        max_length=20,
+        choices=Outcome.choices,
+        default=Outcome.SUCCESS,
+    )
+    notes = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = "user_data_export_log"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["outcome", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.outcome} - {self.created_at.isoformat()}"

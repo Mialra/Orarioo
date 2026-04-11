@@ -44,18 +44,23 @@
         dom.clearElement(container);
         container.appendChild(
             dom.createElement("div", {
-                className: "card border-0 bg-light-subtle",
+                className: "col-12",
                 children: [
                     dom.createElement("div", {
-                        className: "card-body py-5 text-center",
+                        className: "card border-0 bg-light-subtle",
                         children: [
                             dom.createElement("div", {
-                                className: "spinner-border text-primary mb-3",
-                                attrs: { role: "status", "aria-hidden": "true" },
-                            }),
-                            dom.createElement("p", {
-                                className: "text-body-secondary mb-0",
-                                text: message || "Cargando...",
+                                className: "card-body py-5 text-center",
+                                children: [
+                                    dom.createElement("div", {
+                                        className: "spinner-border text-primary mb-3",
+                                        attrs: { role: "status", "aria-hidden": "true" },
+                                    }),
+                                    dom.createElement("p", {
+                                        className: "text-body-secondary mb-0",
+                                        text: message || "Cargando...",
+                                    }),
+                                ],
                             }),
                         ],
                     }),
@@ -72,22 +77,27 @@
         dom.clearElement(container);
         container.appendChild(
             dom.createElement("div", {
-                className: "card border-0 bg-light-subtle",
+                className: "col-12",
                 children: [
                     dom.createElement("div", {
-                        className: "card-body py-5 text-center",
+                        className: "card border-0 bg-light-subtle",
                         children: [
                             dom.createElement("div", {
-                                className: "admin-list-state-icon mx-auto mb-3",
-                                children: [dom.createLucideIcon(config.icon || "inbox")],
-                            }),
-                            dom.createElement("h3", {
-                                className: "h6 mb-1",
-                                text: config.title || "Sin datos",
-                            }),
-                            dom.createElement("p", {
-                                className: "text-body-secondary mb-0",
-                                text: config.message || "No hay elementos para mostrar.",
+                                className: "card-body py-5 text-center",
+                                children: [
+                                    dom.createElement("div", {
+                                        className: "admin-list-state-icon mx-auto mb-3",
+                                        children: [dom.createLucideIcon(config.icon || "inbox")],
+                                    }),
+                                    dom.createElement("h3", {
+                                        className: "h6 mb-1",
+                                        text: config.title || "Sin datos",
+                                    }),
+                                    dom.createElement("p", {
+                                        className: "text-body-secondary mb-0",
+                                        text: config.message || "No hay elementos para mostrar.",
+                                    }),
+                                ],
                             }),
                         ],
                     }),

@@ -6,7 +6,6 @@ from user.models import (
     CollaborationTeam,
     CollaborationTeamInvitation,
     CollaborationTeamInvitationStatus,
-    RoleChoices,
     User,
 )
 
@@ -82,9 +81,9 @@ class UserSerializer(serializers.ModelSerializer):
     """Serializer for displaying user information"""
 
     given_name = serializers.CharField(source="name")
-    role_display = serializers.SerializerMethodField()
     active_team = CollaborationTeamSerializer(read_only=True)
     collaboration_teams = CollaborationTeamSerializer(many=True, read_only=True)
+    deleted_at = serializers.DateTimeField(read_only=True, allow_null=True)
 
     class Meta:
         model = User
@@ -93,8 +92,7 @@ class UserSerializer(serializers.ModelSerializer):
             "given_name",
             "family_name",
             "email",
-            "role",
-            "role_display",
+            "deleted_at",
             "active_team",
             "collaboration_teams",
             "is_enabled",
@@ -102,10 +100,6 @@ class UserSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
-
-    def get_role_display(self, obj):
-        """Returns the readable representation of the role"""
-        return obj.get_role_display()
 
 
 class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerializer):
@@ -121,10 +115,15 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
     password_confirm = serializers.CharField(
         write_only=True, required=True, help_text="Password confirmation"
     )
-    role = serializers.ChoiceField(
-        choices=RoleChoices.choices,
-        default=RoleChoices.DIRECCION,
-        help_text="User role (administrator, direccion)",
+    privacy_policy_accepted = serializers.BooleanField(
+        write_only=True,
+        required=True,
+        help_text="Privacy policy acceptance flag",
+    )
+    terms_conditions_accepted = serializers.BooleanField(
+        write_only=True,
+        required=True,
+        help_text="Terms and conditions acceptance flag",
     )
 
     class Meta:
@@ -133,15 +132,35 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
             "given_name",
             "family_name",
             "email",
-            "role",
             "password",
             "password_confirm",
+            "privacy_policy_accepted",
+            "terms_conditions_accepted",
         ]
 
     def validate(self, data):
         """Validates that passwords match"""
         if data["password"] != data["password_confirm"]:
             raise serializers.ValidationError({"password": "Passwords do not match."})
+
+        if not data.get("privacy_policy_accepted"):
+            raise serializers.ValidationError(
+                {
+                    "privacy_policy_accepted": (
+                        "You must accept the privacy policy to complete signup."
+                    )
+                }
+            )
+
+        if not data.get("terms_conditions_accepted"):
+            raise serializers.ValidationError(
+                {
+                    "terms_conditions_accepted": (
+                        "You must accept the terms and conditions to complete signup."
+                    )
+                }
+            )
+
         return data
 
     @transaction.atomic
@@ -149,59 +168,9 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
         """Creates a new user"""
         password = validated_data.pop("password")
         validated_data.pop("password_confirm")
+        validated_data.pop("privacy_policy_accepted", None)
+        validated_data.pop("terms_conditions_accepted", None)
 
-        user = User.objects.create_user(**validated_data, password=password)
-        return user
-
-
-class UserManagementCreateSerializer(
-    UserNameEmailValidationMixin,
-    serializers.ModelSerializer,
-):
-    """Serializer for creating users from admin/direction panel with optional login."""
-
-    given_name = serializers.CharField(source="name")
-    role = serializers.ChoiceField(
-        choices=RoleChoices.choices,
-        default=RoleChoices.DIRECCION,
-        help_text="User role (administrator, direccion)",
-    )
-    can_login = serializers.BooleanField(default=False)
-    password = serializers.CharField(
-        write_only=True,
-        required=False,
-        allow_blank=True,
-        validators=[validate_password],
-        help_text="Optional password. Required only if can_login=true.",
-    )
-
-    class Meta:
-        model = User
-        fields = [
-            "given_name",
-            "family_name",
-            "email",
-            "role",
-            "can_login",
-            "password",
-            "is_enabled",
-        ]
-
-    def validate(self, data):
-        can_login = data.get("can_login", False)
-        password = data.get("password", "")
-        if can_login and not password:
-            raise serializers.ValidationError(
-                {"password": "Password is required when can_login is true."}
-            )
-        return data
-
-    @transaction.atomic
-    def create(self, validated_data):
-        can_login = validated_data.pop("can_login", False)
-        password = validated_data.pop("password", "")
-        if not can_login:
-            password = None
         user = User.objects.create_user(**validated_data, password=password)
         return user
 
@@ -210,7 +179,6 @@ class UserUpdateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
     """Serializer for updating user information"""
 
     given_name = serializers.CharField(source="name")
-    role = serializers.ChoiceField(choices=RoleChoices.choices, help_text="User role")
 
     class Meta:
         model = User
@@ -218,7 +186,6 @@ class UserUpdateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
             "given_name",
             "family_name",
             "email",
-            "role",
             "is_enabled",
         ]
 
@@ -267,6 +234,31 @@ class UserChangePasswordSerializer(serializers.Serializer):
         return user
 
 
+class UserAccountDeletionSerializer(serializers.Serializer):
+    """Validates the self-service account deletion payload."""
+
+    confirmation_text = serializers.CharField(
+        write_only=True,
+        required=True,
+        help_text="Type the user's email address to confirm permanent deletion.",
+    )
+
+    def validate(self, data):
+        user = self.context["request"].user
+        expected_confirmation = (user.email or "").strip().lower()
+        provided_confirmation = (data.get("confirmation_text") or "").strip().lower()
+
+        if provided_confirmation != expected_confirmation:
+            raise serializers.ValidationError(
+                {
+                    "confirmation_text": (
+                        "Debes escribir exactamente tu correo electrónico para eliminar la cuenta."
+                    )
+                }
+            )
+        return data
+
+
 class LoginSerializer(serializers.Serializer):
     """Serializer for authenticating users"""
 
@@ -286,7 +278,7 @@ class LoginSerializer(serializers.Serializer):
         if not user.check_password(password):
             raise serializers.ValidationError("Incorrect email or password.")
 
-        if not user.is_enabled:
+        if not user.is_enabled or getattr(user, "deleted_at", None):
             raise serializers.ValidationError("This user has been deactivated.")
 
         data["user"] = user

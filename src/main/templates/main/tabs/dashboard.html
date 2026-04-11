@@ -1,193 +1,254 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% load static %}
-
-{% block title %}Orarioo | Dashboard{% endblock %}
-
+{% block title %}
+    Orarioo | Dashboard
+{% endblock title %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
-{% if dashboard_section == 'audit' %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-{% endif %}
-{% for stylesheet in dashboard_extra_css %}
-{% if stylesheet == 'css/schedules.css' %}
-<link rel="stylesheet" href="{% static stylesheet %}?v=20260405_saved_dragdrop_3">
-{% else %}
-<link rel="stylesheet" href="{% static stylesheet %}">
-{% endif %}
-{% endfor %}
-{% endblock %}
-
+    <link rel="stylesheet"
+          href="{% static 'css/dashboard.css' %}?v=20260406_dashboard_nav_2">
+    <link rel="stylesheet"
+          href="{% static 'css/dashboard-selects.css' %}?v=20260406_dashboard_selects_1">
+    {% if dashboard_section == 'audit' %}
+        <link rel="stylesheet"
+              href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    {% endif %}
+    {% for stylesheet in dashboard_extra_css %}
+        {% if stylesheet == 'css/schedules.css' %}
+            <link rel="stylesheet"
+                  href="{% static stylesheet %}?v=20260406_schedule_filters_1">
+        {% else %}
+            <link rel="stylesheet" href="{% static stylesheet %}">
+        {% endif %}
+    {% endfor %}
+{% endblock extra_head %}
 {% block content %}
-<div class="dashboard-page">
-    <nav class="navbar navbar-expand-lg bg-white border-bottom shadow-sm sticky-top dash-navbar">
-        <div class="container-fluid px-3 px-lg-4">
-            <div class="dash-brand me-3">
-                <div class="dash-brand-icon" aria-hidden="true">
-                    <i data-lucide="calendar-days" class="dash-brand-lucide"></i>
+    <div class="dashboard-page">
+        <nav class="navbar navbar-expand-lg bg-white border-bottom shadow-sm sticky-top dash-navbar">
+            <div class="container-fluid px-3 px-lg-4">
+                <div class="dash-brand me-3">
+                    <div class="dash-brand-icon" aria-hidden="true">
+                        <i data-lucide="calendar-days" class="dash-brand-lucide"></i>
+                    </div>
+                    <div>
+                        <h1>Orarioo</h1>
+                        <p>Gestión escolar</p>
+                    </div>
                 </div>
-                <div>
-                    <h1>Orarioo</h1>
-                    <p>Gestión escolar</p>
+                <button class="navbar-toggler"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#dashboardNav"
+                        aria-controls="dashboardNav"
+                        aria-expanded="false"
+                        aria-label="Mostrar navegación">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse dash-navbar-content"
+                     id="dashboardNav">
+                    <ul class="nav nav-pills dash-tabs mx-auto gap-2 py-3 py-lg-0"
+                        aria-label="Navegación principal">
+                        <li class="nav-item dash-tab-item">
+                            <a class="nav-link dash-tab {% if dashboard_section == 'schedules' %}active{% endif %}"
+                               href="{% url 'dashboard-schedules' %}">
+                                <i data-lucide="calendar-days" class="dash-nav-icon" aria-hidden="true"></i>
+                                Generador
+                            </a>
+                        </li>
+                        <li class="nav-item dash-tab-item">
+                            <a class="nav-link dash-tab {% if dashboard_section == 'saved' %}active{% endif %}"
+                               href="{% url 'dashboard-saved' %}">
+                                <i data-lucide="folder-open" class="dash-nav-icon" aria-hidden="true"></i>
+                                Guardados
+                            </a>
+                        </li>
+                        <li class="nav-item dash-tab-item">
+                            <a class="nav-link dash-tab {% if dashboard_section == 'administration' %}active{% endif %}"
+                               href="{% url 'dashboard-administration' %}">
+                                <i data-lucide="settings" class="dash-nav-icon" aria-hidden="true"></i>
+                                Administración
+                            </a>
+                        </li>
+                        <li class="nav-item dash-tab-item">
+                            <a class="nav-link dash-tab {% if dashboard_section == 'audit' %}active{% endif %}"
+                               href="{% url 'dashboard-audit' %}">
+                                <i data-lucide="history" class="dash-nav-icon" aria-hidden="true"></i>
+                                Registro de cambios
+                            </a>
+                        </li>
+                    </ul>
+                    <div class="d-flex align-items-center gap-2 ms-lg-3 pb-3 pb-lg-0 dash-profile-section">
+                        <div class="dropdown dash-profile-dropdown">
+                            <button id="dashboard-profile-menu-button"
+                                    class="btn d-inline-flex align-items-center gap-2 px-2 py-1 dash-profile-trigger"
+                                    type="button"
+                                    data-bs-toggle="dropdown"
+                                    data-bs-auto-close="outside"
+                                    aria-expanded="false">
+                                <span id="dashboard-user-initials" class="dash-avatar" aria-hidden="true">AP</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end p-2 dash-profile-menu"
+                                aria-labelledby="dashboard-profile-menu-button">
+                                <li class="px-2 py-1">
+                                    <div class="small text-uppercase text-secondary fw-semibold">Equipo actual</div>
+                                    <div id="dashboard-current-team-name" class="fw-semibold">-</div>
+                                </li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li class="px-2 py-1">
+                                    <div class="small text-uppercase text-secondary fw-semibold mb-1">Cambiar de equipo</div>
+                                    <div id="dashboard-team-switch-list" class="d-grid gap-1"></div>
+                                </li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li>
+                                    <button id="dashboard-create-team" class="dropdown-item" type="button">Crear equipo</button>
+                                </li>
+                                <li>
+                                    <button id="dashboard-invite-team-member" class="dropdown-item" type="button">Invitar usuarios</button>
+                                </li>
+                                <li>
+                                    <button id="dashboard-view-pending-invitations"
+                                            class="dropdown-item d-flex justify-content-between align-items-center"
+                                            type="button">
+                                        <span>Ver invitaciones pendientes</span>
+                                        <span id="dashboard-pending-invitations-badge"
+                                              class="badge text-bg-primary">0</span>
+                                    </button>
+                                </li>
+                                <li>
+                                    <button id="dashboard-leave-team"
+                                            class="dropdown-item text-danger"
+                                            type="button">Salir del equipo</button>
+                                </li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'profile' %}">Mi perfil</a>
+                                </li>
+                                <li>
+                                    <button id="logout-button" class="dropdown-item" type="button">Cerrar sesión</button>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#dashboardNav" aria-controls="dashboardNav" aria-expanded="false" aria-label="Mostrar navegación">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-
-            <div class="collapse navbar-collapse" id="dashboardNav">
-                <ul class="nav nav-pills mx-auto gap-2 py-3 py-lg-0" aria-label="Navegación principal">
-                    <li class="nav-item">
-                        <a class="nav-link dash-tab {% if dashboard_section == 'schedules' %}active{% endif %}" href="{% url 'dashboard-schedules' %}">
-                            <i data-lucide="calendar-days" class="dash-nav-icon" aria-hidden="true"></i>
-                            Generador
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link dash-tab {% if dashboard_section == 'saved' %}active{% endif %}" href="{% url 'dashboard-saved' %}">
-                            <i data-lucide="folder-open" class="dash-nav-icon" aria-hidden="true"></i>
-                            Guardados
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link dash-tab {% if dashboard_section == 'administration' %}active{% endif %}" href="{% url 'dashboard-administration' %}">
-                            <i data-lucide="settings" class="dash-nav-icon" aria-hidden="true"></i>
-                            Administración
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link dash-tab {% if dashboard_section == 'audit' %}active{% endif %}" href="{% url 'dashboard-audit' %}">
-                            <i data-lucide="file-text" class="dash-nav-icon" aria-hidden="true"></i>
-                            Registro de cambios
-                        </a>
-                    </li>
-                </ul>
-
-                <div class="d-flex align-items-center gap-2 ms-lg-3 pb-3 pb-lg-0">
-                    <div class="dropdown">
-                        <button
-                            id="dashboard-profile-menu-button"
-                            class="btn btn-light d-inline-flex align-items-center gap-2 px-2 py-1 border"
-                            type="button"
-                            data-bs-toggle="dropdown"
-                            data-bs-auto-close="outside"
-                            aria-expanded="false"
-                        >
-                            <span id="dashboard-user-initials" class="dash-avatar" aria-hidden="true">AP</span>
-                            <span class="small fw-semibold text-secondary">Perfil</span>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end p-2 dash-profile-menu" aria-labelledby="dashboard-profile-menu-button">
-                            <li class="px-2 py-1">
-                                <div class="small text-uppercase text-secondary fw-semibold">Equipo actual</div>
-                                <div id="dashboard-current-team-name" class="fw-semibold">-</div>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li class="px-2 py-1">
-                                <div class="small text-uppercase text-secondary fw-semibold mb-1">Cambiar de equipo</div>
-                                <div id="dashboard-team-switch-list" class="d-grid gap-1"></div>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <button id="dashboard-create-team" class="dropdown-item" type="button">Crear equipo</button>
-                            </li>
-                            <li>
-                                <button id="dashboard-invite-team-member" class="dropdown-item" type="button">Invitar usuarios</button>
-                            </li>
-                            <li>
-                                <button id="dashboard-view-pending-invitations" class="dropdown-item d-flex justify-content-between align-items-center" type="button">
-                                    <span>Ver invitaciones pendientes</span>
-                                    <span id="dashboard-pending-invitations-badge" class="badge text-bg-primary">0</span>
-                                </button>
-                            </li>
-                            <li>
-                                <button id="dashboard-leave-team" class="dropdown-item text-danger" type="button">Salir del equipo</button>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <button id="logout-button" class="dropdown-item" type="button">Cerrar sesión</button>
-                            </li>
-                        </ul>
+        </nav>
+        <main class="container-xl py-4 py-lg-5">
+            {% include dashboard_route_template %}
+        </main>
+        <div class="modal fade"
+             id="dashboardCreateTeamModal"
+             tabindex="-1"
+             aria-labelledby="dashboardCreateTeamModalLabel"
+             aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="dashboardCreateTeamModalLabel">Crear equipo</h5>
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label for="dashboard-new-team-name" class="form-label">Nombre del equipo</label>
+                        <input id="dashboard-new-team-name"
+                               type="text"
+                               class="form-control"
+                               maxlength="150"
+                               placeholder="Ej: Equipo de Jefatura" />
+                        <div id="dashboard-create-team-error"
+                             class="text-danger small mt-2 d-none"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                data-bs-dismiss="modal">Cancelar</button>
+                        <button id="dashboard-create-team-submit"
+                                type="button"
+                                class="btn btn-primary">Crear</button>
                     </div>
                 </div>
             </div>
         </div>
-    </nav>
-
-    <main class="container-xl py-4 py-lg-5">
-        {% include dashboard_route_template %}
-    </main>
-
-    <div class="modal fade" id="dashboardCreateTeamModal" tabindex="-1" aria-labelledby="dashboardCreateTeamModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="dashboardCreateTeamModalLabel">Crear equipo</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        <div class="modal fade"
+             id="dashboardInviteTeamModal"
+             tabindex="-1"
+             aria-labelledby="dashboardInviteTeamModalLabel"
+             aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="dashboardInviteTeamModalLabel">Invitar usuario</h5>
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label for="dashboard-invite-email" class="form-label">Email del usuario existente</label>
+                        <input id="dashboard-invite-email"
+                               type="email"
+                               class="form-control"
+                               placeholder="usuario@centro.com" />
+                        <div id="dashboard-invite-team-error"
+                             class="text-danger small mt-2 d-none"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                data-bs-dismiss="modal">Cancelar</button>
+                        <button id="dashboard-invite-team-submit"
+                                type="button"
+                                class="btn btn-primary">Enviar invitación</button>
+                    </div>
                 </div>
-                <div class="modal-body">
-                    <label for="dashboard-new-team-name" class="form-label">Nombre del equipo</label>
-                    <input id="dashboard-new-team-name" type="text" class="form-control" maxlength="150" placeholder="Ej: Equipo de Jefatura" />
-                    <div id="dashboard-create-team-error" class="text-danger small mt-2 d-none"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button id="dashboard-create-team-submit" type="button" class="btn btn-primary">Crear</button>
+            </div>
+        </div>
+        <div class="modal fade"
+             id="dashboardInvitationsModal"
+             tabindex="-1"
+             aria-labelledby="dashboardInvitationsModalLabel"
+             aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="dashboardInvitationsModalLabel">Invitaciones pendientes</h5>
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="dashboard-invitations-empty" class="text-secondary">No tienes invitaciones.</div>
+                        <div id="dashboard-invitations-list" class="d-grid gap-2"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                data-bs-dismiss="modal">Cerrar</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <div class="modal fade" id="dashboardInviteTeamModal" tabindex="-1" aria-labelledby="dashboardInviteTeamModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="dashboardInviteTeamModalLabel">Invitar usuario</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <div class="modal-body">
-                    <label for="dashboard-invite-email" class="form-label">Email del usuario existente</label>
-                    <input id="dashboard-invite-email" type="email" class="form-control" placeholder="usuario@centro.com" />
-                    <div id="dashboard-invite-team-error" class="text-danger small mt-2 d-none"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button id="dashboard-invite-team-submit" type="button" class="btn btn-primary">Enviar invitación</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="dashboardInvitationsModal" tabindex="-1" aria-labelledby="dashboardInvitationsModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="dashboardInvitationsModalLabel">Invitaciones pendientes</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="dashboard-invitations-empty" class="text-secondary">No tienes invitaciones.</div>
-                    <div id="dashboard-invitations-list" class="d-grid gap-2"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
+{% endblock content %}
 {% block extra_scripts %}
-{% if dashboard_section == 'audit' %}
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
-{% endif %}
-<script src="{% static 'js/dashboard.js' %}"></script>
-{% for script in dashboard_extra_scripts %}
-{% if script == 'js/schedules.js' %}
-<script src="{% static script %}?v=20260405_saved_dragdrop_3"></script>
-{% else %}
-<script src="{% static script %}"></script>
-{% endif %}
-{% endfor %}
-{% endblock %}
+    {% if dashboard_section == 'audit' %}
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+    {% endif %}
+    <script src="{% static 'js/dashboard-selects.js' %}?v=20260406_dashboard_selects_1"></script>
+    <script src="{% static 'js/dashboard.js' %}"></script>
+    {% for script in dashboard_extra_scripts %}
+        {% if script == 'js/schedules.js' %}
+            <script src="{% static script %}?v=20260406_schedule_filters_2"></script>
+        {% else %}
+            <script src="{% static script %}"></script>
+        {% endif %}
+    {% endfor %}
+{% endblock extra_scripts %}

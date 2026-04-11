@@ -1,80 +1,89 @@
 <section class="card border-0 shadow-sm admin-shell">
-    {% include 'main/tabs/_admin_tabs.html' %}
-
-    <div class="card-body p-4 p-lg-5">
-        <div class="admin-header border-bottom pb-3 mb-3">
-            <div>
-                <h2 class="h4 fw-bold mb-1">{{ dashboard_admin_state.title }}</h2>
-                <p class="admin-description mb-0">{{ dashboard_admin_state.description }}</p>
-            </div>
-            <button class="btn btn-primary fw-bold admin-add-btn" type="button" id="admin-add-teacher-btn" data-bs-toggle="modal" data-bs-target="#admin-teacher-modal">
-                <i data-lucide="plus" class="admin-add-icon" aria-hidden="true"></i>
-                {{ dashboard_admin_state.add_cta }}
-            </button>
-        </div>
-
-        <div id="admin-teachers-alert" class="alert d-none mb-3" role="status" aria-live="polite"></div>
+    {% include "main/tabs/_admin_tabs.html" %}
+    <div class="card-body admin-shell-body">
+        {% include "main/tabs/_admin_section_header.html" with button_id="admin-add-teacher-btn" modal_target="#admin-teacher-modal" %}
+        <div id="admin-teachers-alert"
+             class="alert d-none mb-3"
+             role="status"
+             aria-live="polite"></div>
         <p id="admin-teachers-empty-message" class="d-none text-center">{{ dashboard_admin_state.empty_message }}</p>
-
-        <div id="admin-teachers-list" class="admin-grid pt-1" aria-busy="false" aria-live="polite"></div>
-
+        <div id="admin-teachers-list"
+             class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3 pt-1 admin-list-grid"
+             aria-busy="false"
+             aria-live="polite"></div>
         <div id="admin-teachers-pagination" class="mt-3"></div>
     </div>
-
-    <div class="modal fade" id="admin-teacher-modal" tabindex="-1" aria-labelledby="admin-teacher-modal-title" aria-hidden="true">
+    <div class="modal fade"
+         id="admin-teacher-modal"
+         tabindex="-1"
+         aria-labelledby="admin-teacher-modal-title"
+         aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
             <div class="modal-content shadow-lg">
                 <div class="modal-header">
                     <div>
                         <h3 class="modal-title h4 mb-0" id="admin-teacher-modal-title">Añadir profesor</h3>
-                        <p class="text-body-secondary small mb-0">Completa los datos para crear o editar un profesor.</p>
+                        <p class="admin-modal-note">Completa los datos para crear o editar un profesor.</p>
                     </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
                 </div>
-
                 <div class="modal-body">
                     <form id="admin-teacher-form" class="row g-3" novalidate>
                         <input type="hidden" id="admin-teacher-id" value="">
                         <input type="hidden" id="admin-teacher-mode" value="create">
-
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold" for="admin-teacher-name">Nombre*</label>
-                            <input class="form-control" id="admin-teacher-name" type="text" placeholder="Ej: Juan" required>
+                            <input class="form-control"
+                                   id="admin-teacher-name"
+                                   type="text"
+                                   placeholder="Ej: Juan"
+                                   required>
                             <div class="invalid-feedback" id="admin-teacher-name-error"></div>
                         </div>
-
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold" for="admin-teacher-surnames">Apellidos</label>
-                            <input class="form-control" id="admin-teacher-surnames" type="text" placeholder="Ej: Garcia Perez">
+                            <input class="form-control"
+                                   id="admin-teacher-surnames"
+                                   type="text"
+                                   placeholder="Ej: Garcia Perez">
                         </div>
-
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold" for="admin-teacher-max-weekly-hours">Máximo horas semanales*</label>
-                            <input class="form-control" id="admin-teacher-max-weekly-hours" type="number" min="1" step="1" placeholder="20" value="20" required>
+                            <input class="form-control"
+                                   id="admin-teacher-max-weekly-hours"
+                                   type="number"
+                                   min="1"
+                                   step="1"
+                                   placeholder="20"
+                                   value="20"
+                                   required>
                             <div class="invalid-feedback" id="admin-teacher-max-weekly-hours-error"></div>
                         </div>
-
                         <input type="hidden" id="admin-teacher-working-hours" value="0">
-
                         <div class="col-12">
                             <input type="hidden" id="admin-teacher-time-preferences" value="{}">
-                            <div class="admin-availability-card">
-                                <div class="admin-availability-header">
+                            <div class="admin-preferences-panel">
+                                <div class="admin-preferences-header">
                                     <h6 class="mb-0">Disponibilidad semanal</h6>
-                                    <div class="admin-availability-controls">
+                                    <div class="admin-preferences-toolbar">
                                         <label class="mb-0" for="admin-teacher-preference-brush">Estado a pintar</label>
-                                        <select id="admin-teacher-preference-brush" class="form-select form-select-sm" style="max-width: 220px;">
-                                        <option value="PREFER_YES" selected>Preferiblemente sí</option>
-                                        <option value="AVAILABLE">Disponible</option>
-                                        <option value="PREFER_NO">Preferiblemente no</option>
-                                        <option value="UNAVAILABLE">No disponible</option>
+                                        <select id="admin-teacher-preference-brush"
+                                                class="form-select form-select-sm">
+                                            <option value="PREFER_YES" selected>Preferiblemente sí</option>
+                                            <option value="AVAILABLE">Disponible</option>
+                                            <option value="PREFER_NO">Preferiblemente no</option>
+                                            <option value="UNAVAILABLE">No disponible</option>
                                         </select>
-                                        <button class="btn btn-outline-secondary btn-sm" id="admin-teacher-preference-clear-btn" type="button">Reiniciar cuadrícula</button>
+                                        <button class="btn btn-outline-secondary btn-sm admin-preferences-clear"
+                                                id="admin-teacher-preference-clear-btn"
+                                                type="button">Reiniciar cuadrícula</button>
                                     </div>
                                 </div>
-
                                 <div class="subject-pref-grid-wrap" id="admin-teacher-preferences-grid"></div>
-                                <div class="admin-legend">
+                                <div class="admin-preferences-legend">
                                     <span><i class="dot dot-strong"></i> Preferiblemente sí</span>
                                     <span><i class="dot dot-soft"></i> Disponible</span>
                                     <span><i class="dot dot-warn"></i> Preferiblemente no</span>
@@ -83,35 +92,56 @@
                             </div>
                             <div class="invalid-feedback" id="admin-teacher-time-preferences-error"></div>
                         </div>
-
-                        <div class="col-12 d-flex justify-content-center gap-3 mt-3">
-                            <button type="submit" class="btn btn-primary px-4 admin-modal-action-btn" id="admin-teacher-submit-btn">
-                                <span id="admin-teacher-submit-spinner" class="spinner-border spinner-border-sm d-none me-2" aria-hidden="true"></span>
+                        <div class="col-12 admin-form-actions">
+                            <button type="submit"
+                                    class="btn btn-primary px-4 admin-modal-action-btn"
+                                    id="admin-teacher-submit-btn">
+                                <span id="admin-teacher-submit-spinner"
+                                      class="spinner-border spinner-border-sm d-none me-2"
+                                      aria-hidden="true"></span>
                                 <span id="admin-teacher-submit-text">Crear</span>
                             </button>
-                            <button type="button" class="btn btn-light border px-4 admin-modal-action-btn" id="admin-teacher-cancel-btn" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button"
+                                    class="btn btn-light border px-4 admin-modal-action-btn"
+                                    id="admin-teacher-cancel-btn"
+                                    data-bs-dismiss="modal">Cancelar</button>
                         </div>
                     </form>
                 </div>
             </div>
         </div>
     </div>
-
-    <div class="modal fade" id="admin-teacher-delete-modal" tabindex="-1" aria-labelledby="admin-teacher-delete-title" aria-hidden="true">
+    <div class="modal fade"
+         id="admin-teacher-delete-modal"
+         tabindex="-1"
+         aria-labelledby="admin-teacher-delete-title"
+         aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
                     <h3 class="modal-title h5 mb-0" id="admin-teacher-delete-title">Confirmar eliminación</h3>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body py-4">
-                    <p class="mb-2 text-center fw-semibold">¿Está seguro de que quiere eliminar al profesor <strong id="admin-teacher-delete-name">seleccionado</strong>?</p>
+                    <p class="mb-2 text-center fw-semibold">
+                        ¿Está seguro de que quiere eliminar al profesor <strong id="admin-teacher-delete-name">seleccionado</strong>?
+                    </p>
                     <p class="mb-0 text-center text-body-secondary">Esta acción no se puede deshacer.</p>
                 </div>
                 <div class="modal-footer justify-content-center gap-2">
-                    <button type="button" class="btn btn-light border" id="admin-teacher-delete-cancel-btn" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-danger" id="admin-teacher-delete-confirm-btn">
-                        <span id="admin-teacher-delete-spinner" class="spinner-border spinner-border-sm d-none me-2" aria-hidden="true"></span>
+                    <button type="button"
+                            class="btn btn-light border"
+                            id="admin-teacher-delete-cancel-btn"
+                            data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button"
+                            class="btn btn-danger"
+                            id="admin-teacher-delete-confirm-btn">
+                        <span id="admin-teacher-delete-spinner"
+                              class="spinner-border spinner-border-sm d-none me-2"
+                              aria-hidden="true"></span>
                         <span id="admin-teacher-delete-text">Eliminar</span>
                     </button>
                 </div>

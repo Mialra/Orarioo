@@ -100,7 +100,7 @@ def create_users():
 
     users = []
 
-    # Create superuser/administrator for timetable generation ownership.
+    # Create superuser for timetable generation ownership.
     admin = User.objects.create_superuser(
         email="admin@test.com",
         password="admin123",
@@ -108,24 +108,23 @@ def create_users():
         family_name="Centro",
     )
     users.append(admin)
-    print(f"  ✓ Created administrator: {admin.email}")
+    print(f"  ✓ Created superuser: {admin.email}")
 
-    # Direccion users for audit/review flow.
-    direccion_data = [
+    # Additional users for audit/review flow.
+    collaboration_data = [
         ("direccion.academica@test.com", "María", "García López"),
         ("jefatura.estudios@test.com", "Juan", "Martínez Ruiz"),
     ]
 
-    for email, name, family_name in direccion_data:
-        direccion_user = User.objects.create_user(
+    for email, name, family_name in collaboration_data:
+        collaboration_user = User.objects.create_user(
             email=email,
             password="direccion123",
             name=name,
             family_name=family_name,
-            role="direccion",
         )
-        users.append(direccion_user)
-        print(f"  ✓ Created direccion user: {direccion_user.email}")
+        users.append(collaboration_user)
+        print(f"  ✓ Created collaboration user: {collaboration_user.email}")
 
     admin_team = CollaborationTeam.objects.create(name=f"Equipo {admin.email}")
     admin_team.members.set(users)

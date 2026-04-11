@@ -26,7 +26,7 @@ SECTION_CONFIG = {
 ADMIN_ROUTE_CONFIG = {
     "users": {
         "template": "administration_users.html",
-        "extra_css": ["css/users.css"],
+        "extra_css": [],
         "extra_scripts": [
             "js/admin-core/dom-helpers.js",
             "js/admin-core/api.js",
@@ -42,7 +42,7 @@ ADMIN_ROUTE_CONFIG = {
     },
     "teachers": {
         "template": "administration_teachers.html",
-        "extra_css": ["css/teachers-admin.css", "css/preferences-grid.css"],
+        "extra_css": ["css/preferences-grid.css"],
         "extra_scripts": [
             "js/admin-core/dom-helpers.js",
             "js/admin-core/api.js",
@@ -58,7 +58,7 @@ ADMIN_ROUTE_CONFIG = {
     },
     "groups": {
         "template": "administration_groups.html",
-        "extra_css": ["css/groups-admin.css"],
+        "extra_css": [],
         "extra_scripts": [
             "js/admin-core/dom-helpers.js",
             "js/admin-core/api.js",
@@ -74,11 +74,7 @@ ADMIN_ROUTE_CONFIG = {
     },
     "subjects": {
         "template": "administration_subjects.html",
-        "extra_css": [
-            "css/teachers-admin.css",
-            "css/preferences-grid.css",
-            "css/subjects-admin.css",
-        ],
+        "extra_css": ["css/preferences-grid.css"],
         "extra_scripts": [
             "js/admin-core/dom-helpers.js",
             "js/admin-core/api.js",
@@ -94,7 +90,7 @@ ADMIN_ROUTE_CONFIG = {
     },
     "classrooms": {
         "template": "administration_classrooms.html",
-        "extra_css": ["css/classrooms-admin.css"],
+        "extra_css": [],
         "extra_scripts": [
             "js/admin-core/dom-helpers.js",
             "js/admin-core/api.js",
@@ -117,11 +113,10 @@ ADMIN_BASE_CSS = [
 
 ADMIN_TAB_CONFIG = {
     "users": {
-        "title": "Gestión de Usuarios",
-        "description": "Administra el personal del centro, sus accesos y sus roles.",
-        "count_label": "0 usuarios registrados",
-        "empty_message": "No hay usuarios registrados. Añade el primero para comenzar.",
-        "add_cta": "Añadir Usuario",
+        "title": "Usuarios del equipo",
+        "description": "Consulta los usuarios de tu equipo activo.",
+        "count_label": "0 usuarios en el equipo activo",
+        "empty_message": "No hay usuarios en el equipo activo.",
     },
     "teachers": {
         "title": "Gestión de Profesores",
@@ -169,6 +164,7 @@ def render_admin_dashboard(request, admin_tab, extra_context=None):
         "dashboard_route_template": route_config["template"],
         "dashboard_extra_css": ADMIN_BASE_CSS + route_config["extra_css"],
         "dashboard_extra_scripts": route_config["extra_scripts"],
+        "show_authenticated_footer": True,
     }
 
     if extra_context:
@@ -199,5 +195,18 @@ def dashboard(request, section="schedules", timetable_name=""):
             "dashboard_extra_css": route_config.get("extra_css", []),
             "dashboard_extra_scripts": route_config.get("extra_scripts", []),
             "dashboard_saved_timetable_name": selected_saved_timetable,
+            "show_authenticated_footer": True,
         },
     )
+
+
+def privacy_policy(request):
+    return render(request, "legal/privacy_policy.html")
+
+
+def terms_and_conditions(request):
+    return render(request, "legal/terms_and_conditions.html")
+
+
+def security_protocol(request):
+    return render(request, "legal/security_protocol.html")

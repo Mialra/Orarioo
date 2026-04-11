@@ -1,0 +1,21 @@
+.privacy-page {
+    min-height: 100vh;
+    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 280px);
+}
+
+.privacy-card {
+    border-radius: 1rem;
+}
+
+.privacy-card h1,
+.privacy-card h2 {
+    color: var(--orarioo-text);
+}
+
+.privacy-card ul {
+    padding-left: 1.2rem;
+}
+
+.privacy-card li + li {
+    margin-top: 0.35rem;
+}

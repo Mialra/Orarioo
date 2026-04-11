@@ -6,8 +6,7 @@
     return;
   }
 
-  const AUTO_GENERATED_OBSERVATION =
-    "Auto-generated with CP-SAT basic constraints.";
+  const AUTO_GENERATED_OBSERVATION = "Auto-generated with CP-SAT basic constraints.";
   const WORK_CENTER_SUBJECT = "Trabajo de Centro";
   const BOARD_DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
   const BOARD_DAY_INDEX = {
@@ -33,12 +32,14 @@
   const generatedFilterIds = {
     courseId: "generatedWorkspaceCourseFilter",
     teacherId: "generatedWorkspaceTeacherFilter",
+    classroomId: "generatedWorkspaceClassroomFilter",
     subjectId: "generatedWorkspaceSubjectFilter",
   };
 
   const savedFilterIds = {
     courseId: "savedWorkspaceCourseFilter",
     teacherId: "savedWorkspaceTeacherFilter",
+    classroomId: "savedWorkspaceClassroomFilter",
     subjectId: "savedWorkspaceSubjectFilter",
   };
 
@@ -53,6 +54,8 @@
     detailPageSize: 20,
     generatedSaved: false,
     generatedSavedName: "",
+    generatedTeacherWorkloadsByName: {},
+    savedTeacherWorkloadsByName: {},
     generatedMoveInFlight: false,
     savedMoveInFlight: false,
     generatedDragState: {
@@ -74,6 +77,7 @@
     selectedSavedTimetableName: null,
     currentExportSource: "generated",
     currentExportSavedName: "",
+    generateModalMode: "generate",
     initialSavedRouteName: "",
     exportEntityState: {
       group: false,
@@ -81,6 +85,355 @@
       classroom: false,
     },
   };
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function getModalInstance(element) {
+    if (!element || !window.bootstrap || !window.bootstrap.Modal) {
+      return null;
+    }
+    return window.bootstrap.Modal.getOrCreateInstance(element);
+  }
+
+  function showModalElement(element, onShown) {
+    if (!element) {
+      return;
+    }
+
+    if (typeof onShown === "function") {
+      element.addEventListener(
+        "shown.bs.modal",
+        function handleShown() {
+          onShown();
+        },
+        { once: true },
+      );
+    }
+
+    const instance = getModalInstance(element);
+    if (instance) {
+      instance.show();
+      return;
+    }
+
+    element.classList.add("show");
+    element.style.display = "block";
+    element.removeAttribute("aria-hidden");
+    document.body.classList.add("modal-open");
+    if (typeof onShown === "function") {
+      onShown();
+    }
+  }
+
+  function hideModalElement(element) {
+    if (!element) {
+      return;
+    }
+
+    const instance = getModalInstance(element);
+    if (instance) {
+      instance.hide();
+      return;
+    }
+
+    element.classList.remove("show");
+    element.style.display = "none";
+    element.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("modal-open");
+  }
+
+  function closeScheduleFilterDropdown(dropdown) {
+    if (!dropdown) {
+      return;
+    }
+
+    dropdown.classList.remove("is-open");
+    const trigger = dropdown.querySelector(".schedule-filter-trigger");
+    if (trigger) {
+      trigger.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function closeAllScheduleFilterDropdowns(exceptDropdown) {
+    document.querySelectorAll(".schedule-filter-dropdown.is-open").forEach(function (dropdown) {
+      if (exceptDropdown && dropdown === exceptDropdown) {
+        return;
+      }
+      closeScheduleFilterDropdown(dropdown);
+    });
+  }
+
+  function getScheduleFilterOptionButtons(dropdown) {
+    if (!dropdown) {
+      return [];
+    }
+
+    return Array.from(dropdown.querySelectorAll(".schedule-filter-option:not(:disabled)"));
+  }
+
+  function focusScheduleFilterOption(dropdown, index) {
+    const options = getScheduleFilterOptionButtons(dropdown);
+    if (!options.length) {
+      return;
+    }
+
+    const boundedIndex = Math.max(0, Math.min(index, options.length - 1));
+    options[boundedIndex].focus();
+  }
+
+  function focusSelectedScheduleFilterOption(dropdown) {
+    if (!dropdown) {
+      return;
+    }
+
+    const selectedOption = dropdown.querySelector(".schedule-filter-option.is-selected");
+    if (selectedOption) {
+      selectedOption.focus();
+      return;
+    }
+
+    focusScheduleFilterOption(dropdown, 0);
+  }
+
+  function ensureScheduleFilterMenuVisible(dropdown) {
+    if (!dropdown) {
+      return;
+    }
+
+    const menu = dropdown.querySelector(".schedule-filter-menu");
+    if (!menu) {
+      return;
+    }
+
+    const menuRect = menu.getBoundingClientRect();
+    const viewportBottom = window.innerHeight || document.documentElement.clientHeight || 0;
+    const overflowBottom = menuRect.bottom - viewportBottom;
+
+    if (overflowBottom > 0) {
+      window.scrollBy({
+        top: overflowBottom + 12,
+        left: 0,
+        behavior: "smooth",
+      });
+    }
+  }
+
+  function openScheduleFilterDropdown(dropdown) {
+    if (!dropdown) {
+      return;
+    }
+
+    closeAllScheduleFilterDropdowns(dropdown);
+    dropdown.classList.add("is-open");
+
+    const trigger = dropdown.querySelector(".schedule-filter-trigger");
+    if (trigger) {
+      trigger.setAttribute("aria-expanded", "true");
+    }
+
+    window.requestAnimationFrame(function () {
+      ensureScheduleFilterMenuVisible(dropdown);
+    });
+  }
+
+  function toggleScheduleFilterDropdown(dropdown) {
+    if (!dropdown) {
+      return;
+    }
+
+    if (dropdown.classList.contains("is-open")) {
+      closeScheduleFilterDropdown(dropdown);
+      return;
+    }
+
+    openScheduleFilterDropdown(dropdown);
+  }
+
+  function syncScheduleFilterDropdown(select) {
+    if (!select) {
+      return;
+    }
+
+    const dropdown = select.closest(".schedule-filter-dropdown");
+    if (!dropdown) {
+      return;
+    }
+
+    const triggerLabel = dropdown.querySelector(".schedule-filter-trigger-label");
+    const menu = dropdown.querySelector(".schedule-filter-menu");
+    if (!triggerLabel || !menu) {
+      return;
+    }
+
+    const selectedOption = select.options[select.selectedIndex >= 0 ? select.selectedIndex : 0] || null;
+    const selectedLabel = selectedOption ? String(selectedOption.textContent || "").trim() : "";
+
+    triggerLabel.textContent = selectedLabel || "Selecciona una opción";
+
+    menu.innerHTML = Array.from(select.options)
+      .map(function (option) {
+        const label = String(option.textContent || "").trim();
+        const selectedClass = option.selected ? " is-selected" : "";
+        const selectedAttr = option.selected ? "true" : "false";
+        const disabledAttr = option.disabled ? " disabled" : "";
+
+        return (
+          '<button type="button" class="schedule-filter-option' +
+          selectedClass +
+          '" role="option" aria-selected="' +
+          selectedAttr +
+          '" data-filter-value="' +
+          escapeHtml(option.value) +
+          '"' +
+          disabledAttr +
+          ">" +
+          escapeHtml(label) +
+          "</button>"
+        );
+      })
+      .join("");
+  }
+
+  function enhanceScheduleFilterSelect(select) {
+    if (!select || select.dataset.customFilterReady === "true") {
+      return;
+    }
+
+    const wrapper = document.createElement("div");
+    const trigger = document.createElement("button");
+    const triggerLabel = document.createElement("span");
+    const triggerIcon = document.createElement("span");
+    const menu = document.createElement("div");
+
+    wrapper.className = "schedule-filter-dropdown";
+    trigger.type = "button";
+    trigger.className = "schedule-filter-trigger";
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.setAttribute("aria-haspopup", "listbox");
+    triggerLabel.className = "schedule-filter-trigger-label";
+    triggerIcon.className = "schedule-filter-trigger-icon";
+    triggerIcon.setAttribute("aria-hidden", "true");
+    triggerIcon.textContent = "▾";
+    menu.className = "schedule-filter-menu";
+    menu.setAttribute("role", "listbox");
+
+    trigger.appendChild(triggerLabel);
+    trigger.appendChild(triggerIcon);
+    wrapper.appendChild(trigger);
+    wrapper.appendChild(menu);
+
+    select.parentNode.insertBefore(wrapper, select);
+    wrapper.appendChild(select);
+
+    select.classList.add("schedule-toolbar-select-native");
+    select.tabIndex = -1;
+    select.setAttribute("aria-hidden", "true");
+    select.dataset.customFilterReady = "true";
+
+    trigger.addEventListener("click", function () {
+      toggleScheduleFilterDropdown(wrapper);
+    });
+
+    trigger.addEventListener("keydown", function (event) {
+      if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openScheduleFilterDropdown(wrapper);
+        focusSelectedScheduleFilterOption(wrapper);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        closeScheduleFilterDropdown(wrapper);
+      }
+    });
+
+    menu.addEventListener("click", function (event) {
+      const optionButton = event.target.closest(".schedule-filter-option[data-filter-value]");
+      if (!optionButton) {
+        return;
+      }
+
+      const nextValue = optionButton.dataset.filterValue || "";
+      const hasChanged = select.value !== nextValue;
+      select.value = nextValue;
+      syncScheduleFilterDropdown(select);
+      closeScheduleFilterDropdown(wrapper);
+      trigger.focus();
+
+      if (hasChanged) {
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+
+    menu.addEventListener("keydown", function (event) {
+      const activeElement = document.activeElement;
+      if (!(activeElement instanceof HTMLElement)) {
+        return;
+      }
+
+      const options = getScheduleFilterOptionButtons(wrapper);
+      const currentIndex = options.indexOf(activeElement);
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeScheduleFilterDropdown(wrapper);
+        trigger.focus();
+        return;
+      }
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        focusScheduleFilterOption(wrapper, currentIndex + 1);
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        if (currentIndex <= 0) {
+          trigger.focus();
+          return;
+        }
+        focusScheduleFilterOption(wrapper, currentIndex - 1);
+      }
+    });
+
+    select.addEventListener("change", function () {
+      syncScheduleFilterDropdown(select);
+    });
+
+    syncScheduleFilterDropdown(select);
+  }
+
+  function initScheduleFilterDropdowns() {
+    document.querySelectorAll(".schedule-toolbar-select").forEach(function (select) {
+      enhanceScheduleFilterSelect(select);
+    });
+
+    document.addEventListener("click", function (event) {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest(".schedule-filter-dropdown")) {
+        return;
+      }
+      closeAllScheduleFilterDropdowns();
+    });
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        closeAllScheduleFilterDropdowns();
+      }
+    });
+
+    window.addEventListener("resize", function () {
+      closeAllScheduleFilterDropdowns();
+    });
+  }
 
   function getSavedListUrl() {
     if (savedSection && savedSection.dataset.savedListUrl) {
@@ -97,9 +450,7 @@
 
     const encodedName = encodeURIComponent(name);
     const template =
-      savedSection && savedSection.dataset.savedDetailUrlTemplate
-        ? savedSection.dataset.savedDetailUrlTemplate
-        : "";
+      savedSection && savedSection.dataset.savedDetailUrlTemplate ? savedSection.dataset.savedDetailUrlTemplate : "";
 
     if (template && template.indexOf("__SAVED_NAME__") >= 0) {
       return template.replace("__SAVED_NAME__", encodedName);
@@ -293,11 +644,7 @@
   }
 
   function toUtcHM(date) {
-    return (
-      String(date.getUTCHours()).padStart(2, "0") +
-      ":" +
-      String(date.getUTCMinutes()).padStart(2, "0")
-    );
+    return String(date.getUTCHours()).padStart(2, "0") + ":" + String(date.getUTCMinutes()).padStart(2, "0");
   }
 
   function toIsoDateDisplay(value) {
@@ -323,6 +670,88 @@
     }
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  }
+
+  function formatTeacherWorkloadHours(rawHours) {
+    const numericHours = Number(rawHours);
+    if (!Number.isFinite(numericHours) || numericHours <= 0) {
+      return "0 h";
+    }
+
+    const rounded = Math.round(numericHours * 100) / 100;
+    if (Number.isInteger(rounded)) {
+      return String(rounded) + " h";
+    }
+
+    const text = rounded
+      .toFixed(2)
+      .replace(/\.00$/, "")
+      .replace(/(\.[1-9])0$/, "$1")
+      .replace(".", ",");
+    return text + " h";
+  }
+
+  function buildTeacherWorkloadsByNameFromApi(workloads) {
+    const byName = {};
+
+    (workloads || []).forEach(function (item) {
+      const teacherName = String((item && item.teacher_name) || "").trim();
+      if (!teacherName) {
+        return;
+      }
+
+      const totalHours = Number(item.total_hours);
+      if (!Number.isFinite(totalHours) || totalHours <= 0) {
+        return;
+      }
+
+      byName[teacherName] = totalHours;
+    });
+
+    return byName;
+  }
+
+  function buildTeacherWorkloadsByNameFromSessions(sessions) {
+    const minutesByName = {};
+
+    (sessions || []).forEach(function (session) {
+      const teacherName = String((session && session.teacher_name) || "").trim();
+      if (!teacherName) {
+        return;
+      }
+
+      const startTime = new Date(session.start_time);
+      const endTime = new Date(session.end_time);
+      if (Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) {
+        return;
+      }
+
+      const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
+      if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+        return;
+      }
+
+      minutesByName[teacherName] = (minutesByName[teacherName] || 0) + durationMinutes;
+    });
+
+    return Object.keys(minutesByName).reduce(function (acc, teacherName) {
+      acc[teacherName] = minutesByName[teacherName] / 60;
+      return acc;
+    }, {});
+  }
+
+  function resolveTeacherLabelWithWorkload(teacherName, workloadsByName) {
+    const normalizedName = String(teacherName || "").trim();
+    if (!normalizedName) {
+      return "-";
+    }
+
+    const totalHours = workloadsByName && workloadsByName[normalizedName];
+    if (!Number.isFinite(Number(totalHours)) || Number(totalHours) <= 0) {
+      return normalizedName;
+    }
+
+    return normalizedName + " (" + formatTeacherWorkloadHours(totalHours) + ")";
   }
 
   function createEmptyDayCells() {
@@ -376,8 +805,7 @@
       return null;
     }
 
-    const forceWorkCenterLabel =
-      options && options.forceWorkCenterSubjectLabel === true;
+    const forceWorkCenterLabel = options && options.forceWorkCenterSubjectLabel === true;
     const displaySubjectName =
       forceWorkCenterLabel && getSessionSubjectType(session) === "TC"
         ? WORK_CENTER_SUBJECT
@@ -461,9 +889,7 @@
       return false;
     }
 
-    return (
-      leftStartMinutes < rightEndMinutes && rightStartMinutes < leftEndMinutes
-    );
+    return leftStartMinutes < rightEndMinutes && rightStartMinutes < leftEndMinutes;
   }
 
   function renderSessionCard(session, options) {
@@ -715,6 +1141,7 @@
       "<tbody>" +
       rowHtml +
       "</tbody></table></div>" +
+      '<p class="schedule-board-scroll-hint">Desliza lateralmente para ver todo el horario.</p>' +
       detail.html;
     output.style.display = "block";
 
@@ -727,10 +1154,7 @@
   function buildGeneratedMappedSessions() {
     const selectedSubject = getFilterValue(generatedFilterIds.subjectId);
     const forceWorkCenterLabel = isWorkCenterSubjectValue(selectedSubject);
-    const filtered = getFilteredSessions(
-      state.latestGeneratedSchedules,
-      generatedFilterIds,
-    );
+    const filtered = getFilteredSessions(state.latestGeneratedSchedules, generatedFilterIds);
 
     return filtered
       .map(function (session) {
@@ -847,9 +1271,7 @@
     });
 
     uniqueSlotKeys.forEach(function (slotKey) {
-      const cell = output.querySelector(
-        '.schedule-board-cell[data-board-key="' + slotKey + '"]',
-      );
+      const cell = output.querySelector('.schedule-board-cell[data-board-key="' + slotKey + '"]');
       if (!cell) {
         return;
       }
@@ -858,7 +1280,10 @@
       cell.innerHTML = entries.length
         ? entries
             .map(function (entry) {
-              return renderSessionCard(entry, { enableDragDrop: true });
+              return renderSessionCard(entry, {
+                enableDragDrop: true,
+                teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
+              });
             })
             .join("")
         : renderEmptyCell();
@@ -870,9 +1295,7 @@
 
     window.setTimeout(function () {
       uniqueSlotKeys.forEach(function (slotKey) {
-        const cell = output.querySelector(
-          '.schedule-board-cell[data-board-key="' + slotKey + '"]',
-        );
+        const cell = output.querySelector('.schedule-board-cell[data-board-key="' + slotKey + '"]');
         if (cell) {
           cell.classList.remove("schedule-board-cell-updated");
         }
@@ -902,19 +1325,10 @@
     let targetScheduleId = Number.parseInt(forcedTargetScheduleId || "", 10);
     if (!Number.isInteger(targetScheduleId) || targetScheduleId <= 0) {
       targetScheduleId = null;
-      const fallbackCard = targetCell.querySelector(
-        ".schedule-board-card[data-schedule-id]",
-      );
+      const fallbackCard = targetCell.querySelector(".schedule-board-card[data-schedule-id]");
       if (fallbackCard) {
-        const parsedFallback = Number.parseInt(
-          fallbackCard.dataset.scheduleId || "",
-          10,
-        );
-        if (
-          Number.isInteger(parsedFallback) &&
-          parsedFallback > 0 &&
-          parsedFallback !== sourceScheduleId
-        ) {
+        const parsedFallback = Number.parseInt(fallbackCard.dataset.scheduleId || "", 10);
+        if (Number.isInteger(parsedFallback) && parsedFallback > 0 && parsedFallback !== sourceScheduleId) {
           targetScheduleId = parsedFallback;
         }
       }
@@ -990,30 +1404,15 @@
           continue;
         }
 
-        if (
-          !hmRangesOverlap(
-            candidate.startHm,
-            candidate.endHm,
-            otherCandidate.startHm,
-            otherCandidate.endHm,
-          )
-        ) {
+        if (!hmRangesOverlap(candidate.startHm, candidate.endHm, otherCandidate.startHm, otherCandidate.endHm)) {
           continue;
         }
 
-        if (
-          candidate.teacherId &&
-          otherCandidate.teacherId &&
-          candidate.teacherId === otherCandidate.teacherId
-        ) {
+        if (candidate.teacherId && otherCandidate.teacherId && candidate.teacherId === otherCandidate.teacherId) {
           return { valid: false, reason: "teacher_conflict" };
         }
 
-        if (
-          candidate.groupId &&
-          otherCandidate.groupId &&
-          candidate.groupId === otherCandidate.groupId
-        ) {
+        if (candidate.groupId && otherCandidate.groupId && candidate.groupId === otherCandidate.groupId) {
           return { valid: false, reason: "group_conflict" };
         }
 
@@ -1071,10 +1470,7 @@
     state.generatedMoveInFlight = false;
 
     if (!result.ok) {
-      showAlert(
-        "error",
-        extractApiErrorMessage(result.data, "No se pudo aplicar el cambio manual."),
-      );
+      showAlert("error", extractApiErrorMessage(result.data, "No se pudo aplicar el cambio manual."));
       return;
     }
 
@@ -1084,6 +1480,14 @@
     }
 
     upsertGeneratedSchedules(result.data && result.data.affected_schedules);
+    if (result.data && Array.isArray(result.data.teacher_workloads)) {
+      state.generatedTeacherWorkloadsByName = buildTeacherWorkloadsByNameFromApi(result.data.teacher_workloads);
+    } else {
+      state.generatedTeacherWorkloadsByName = buildTeacherWorkloadsByNameFromSessions(state.latestGeneratedSchedules);
+    }
+    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds, {
+      teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
+    });
 
     const affectedKeys = [candidate.sourceSlotKey, candidate.targetSlotKey];
     if (Array.isArray(result.data && result.data.affected_slots)) {
@@ -1100,9 +1504,7 @@
     refreshGeneratedDetailBlock(mappedVisible);
 
     const successMessage =
-      candidate.mode === "swap"
-        ? "Intercambio aplicado correctamente."
-        : "Sesión movida correctamente.";
+      candidate.mode === "swap" ? "Intercambio aplicado correctamente." : "Sesión movida correctamente.";
     showAlert("success", successMessage);
   }
 
@@ -1114,9 +1516,7 @@
 
     const selectedSubject = getFilterValue(savedFilterIds.subjectId);
     const forceWorkCenterLabel = isWorkCenterSubjectValue(selectedSubject);
-    const sourceSessions = Array.isArray(selectedGroup.sessions)
-      ? selectedGroup.sessions
-      : [];
+    const sourceSessions = Array.isArray(selectedGroup.sessions) ? selectedGroup.sessions : [];
     const filtered = getFilteredSessions(sourceSessions, savedFilterIds);
 
     return filtered
@@ -1137,9 +1537,7 @@
       return [];
     }
 
-    const sourceSessions = Array.isArray(selectedGroup.sessions)
-      ? selectedGroup.sessions
-      : [];
+    const sourceSessions = Array.isArray(selectedGroup.sessions) ? selectedGroup.sessions : [];
     return sourceSessions
       .map(function (session) {
         return mapSessionForBoard(session, {});
@@ -1201,9 +1599,7 @@
       if (!session || !session.updated_at) {
         return latest;
       }
-      return toDateMillis(session.updated_at) > toDateMillis(latest)
-        ? session.updated_at
-        : latest;
+      return toDateMillis(session.updated_at) > toDateMillis(latest) ? session.updated_at : latest;
     }, selectedGroup.updated_at || "");
 
     if (updatedAt) {
@@ -1260,9 +1656,7 @@
     });
 
     uniqueSlotKeys.forEach(function (slotKey) {
-      const cell = output.querySelector(
-        '.schedule-board-cell[data-board-key="' + slotKey + '"]',
-      );
+      const cell = output.querySelector('.schedule-board-cell[data-board-key="' + slotKey + '"]');
       if (!cell) {
         return;
       }
@@ -1271,7 +1665,10 @@
       cell.innerHTML = entries.length
         ? entries
             .map(function (entry) {
-              return renderSessionCard(entry, { enableDragDrop: true });
+              return renderSessionCard(entry, {
+                enableDragDrop: true,
+                teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
+              });
             })
             .join("")
         : renderEmptyCell();
@@ -1283,9 +1680,7 @@
 
     window.setTimeout(function () {
       uniqueSlotKeys.forEach(function (slotKey) {
-        const cell = output.querySelector(
-          '.schedule-board-cell[data-board-key="' + slotKey + '"]',
-        );
+        const cell = output.querySelector('.schedule-board-cell[data-board-key="' + slotKey + '"]');
         if (cell) {
           cell.classList.remove("schedule-board-cell-updated");
         }
@@ -1320,19 +1715,10 @@
     let targetScheduleId = Number.parseInt(forcedTargetScheduleId || "", 10);
     if (!Number.isInteger(targetScheduleId) || targetScheduleId <= 0) {
       targetScheduleId = null;
-      const fallbackCard = targetCell.querySelector(
-        ".schedule-board-card[data-schedule-id]",
-      );
+      const fallbackCard = targetCell.querySelector(".schedule-board-card[data-schedule-id]");
       if (fallbackCard) {
-        const parsedFallback = Number.parseInt(
-          fallbackCard.dataset.scheduleId || "",
-          10,
-        );
-        if (
-          Number.isInteger(parsedFallback) &&
-          parsedFallback > 0 &&
-          parsedFallback !== sourceScheduleId
-        ) {
+        const parsedFallback = Number.parseInt(fallbackCard.dataset.scheduleId || "", 10);
+        if (Number.isInteger(parsedFallback) && parsedFallback > 0 && parsedFallback !== sourceScheduleId) {
           targetScheduleId = parsedFallback;
         }
       }
@@ -1408,30 +1794,15 @@
           continue;
         }
 
-        if (
-          !hmRangesOverlap(
-            candidate.startHm,
-            candidate.endHm,
-            otherCandidate.startHm,
-            otherCandidate.endHm,
-          )
-        ) {
+        if (!hmRangesOverlap(candidate.startHm, candidate.endHm, otherCandidate.startHm, otherCandidate.endHm)) {
           continue;
         }
 
-        if (
-          candidate.teacherId &&
-          otherCandidate.teacherId &&
-          candidate.teacherId === otherCandidate.teacherId
-        ) {
+        if (candidate.teacherId && otherCandidate.teacherId && candidate.teacherId === otherCandidate.teacherId) {
           return { valid: false, reason: "teacher_conflict" };
         }
 
-        if (
-          candidate.groupId &&
-          otherCandidate.groupId &&
-          candidate.groupId === otherCandidate.groupId
-        ) {
+        if (candidate.groupId && otherCandidate.groupId && candidate.groupId === otherCandidate.groupId) {
           return { valid: false, reason: "group_conflict" };
         }
 
@@ -1489,10 +1860,7 @@
     state.savedMoveInFlight = false;
 
     if (!result.ok) {
-      showAlert(
-        "error",
-        extractApiErrorMessage(result.data, "No se pudo aplicar el cambio manual."),
-      );
+      showAlert("error", extractApiErrorMessage(result.data, "No se pudo aplicar el cambio manual."));
       return;
     }
 
@@ -1502,6 +1870,20 @@
     }
 
     upsertSelectedSavedSchedules(result.data && result.data.affected_schedules);
+    if (result.data && Array.isArray(result.data.teacher_workloads)) {
+      state.savedTeacherWorkloadsByName = buildTeacherWorkloadsByNameFromApi(result.data.teacher_workloads);
+    } else {
+      const selectedGroup = getSelectedSavedGroup();
+      state.savedTeacherWorkloadsByName = buildTeacherWorkloadsByNameFromSessions(
+        selectedGroup && Array.isArray(selectedGroup.sessions) ? selectedGroup.sessions : [],
+      );
+    }
+    const selectedSavedGroup = getSelectedSavedGroup();
+    if (selectedSavedGroup && Array.isArray(selectedSavedGroup.sessions)) {
+      populateWorkspaceFiltersFromSessions(selectedSavedGroup.sessions, savedFilterIds, {
+        teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
+      });
+    }
 
     state.savedTimetableGroups.sort(function (left, right) {
       const updatedDiff = toDateMillis(right.updated_at) - toDateMillis(left.updated_at);
@@ -1528,9 +1910,7 @@
     refreshSavedDetailBlock(mappedVisible);
 
     const successMessage =
-      candidate.mode === "swap"
-        ? "Intercambio aplicado correctamente."
-        : "Sesión movida correctamente.";
+      candidate.mode === "swap" ? "Intercambio aplicado correctamente." : "Sesión movida correctamente.";
     showAlert("success", successMessage);
   }
 
@@ -1539,7 +1919,7 @@
     return select ? select.value : "";
   }
 
-  function setSelectOptions(selectId, optionValues, emptyLabel) {
+  function setSelectOptions(selectId, optionValues, emptyLabel, labelsByValue) {
     const select = document.getElementById(selectId);
     if (!select) {
       return;
@@ -1559,16 +1939,20 @@
       "</option>" +
       values
         .map(function (value) {
-          return '<option value="' + value + '">' + value + "</option>";
+          const label = labelsByValue && labelsByValue[value] ? labelsByValue[value] : value;
+          return '<option value="' + value + '">' + label + "</option>";
         })
         .join("");
 
     if (currentValue && values.indexOf(currentValue) >= 0) {
       select.value = currentValue;
     }
+
+    syncScheduleFilterDropdown(select);
   }
 
-  function populateWorkspaceFiltersFromSessions(sessions, filterIds) {
+  function populateWorkspaceFiltersFromSessions(sessions, filterIds, options) {
+    const safeOptions = options || {};
     const courseNames = Array.from(
       new Set(
         (sessions || [])
@@ -1589,6 +1973,23 @@
       ),
     );
 
+    const teacherWorkloadsByName =
+      safeOptions.teacherWorkloadsByName || buildTeacherWorkloadsByNameFromSessions(sessions);
+    const teacherLabelsByName = teacherNames.reduce(function (acc, teacherName) {
+      acc[teacherName] = resolveTeacherLabelWithWorkload(teacherName, teacherWorkloadsByName);
+      return acc;
+    }, {});
+
+    const classroomNames = Array.from(
+      new Set(
+        (sessions || [])
+          .map(function (session) {
+            return session.classroom_name;
+          })
+          .filter(Boolean),
+      ),
+    );
+
     const subjectNames = Array.from(
       new Set(
         (sessions || [])
@@ -1599,36 +2000,34 @@
       ),
     );
 
-    if (
-      hasWorkCenterSubjects(sessions) &&
-      subjectNames.indexOf(WORK_CENTER_SUBJECT) < 0
-    ) {
+    if (hasWorkCenterSubjects(sessions) && subjectNames.indexOf(WORK_CENTER_SUBJECT) < 0) {
       subjectNames.push(WORK_CENTER_SUBJECT);
     }
 
     setSelectOptions(filterIds.courseId, courseNames, "Todos los cursos");
-    setSelectOptions(filterIds.teacherId, teacherNames, "Todos los profesores");
+    setSelectOptions(filterIds.teacherId, teacherNames, "Todos los profesores", teacherLabelsByName);
+    setSelectOptions(filterIds.classroomId, classroomNames, "Todas las aulas");
     setSelectOptions(filterIds.subjectId, subjectNames, "Todas las asignaturas");
   }
 
   function getFilteredSessions(sessions, filterIds) {
     const selectedCourse = getFilterValue(filterIds.courseId);
     const selectedTeacher = getFilterValue(filterIds.teacherId);
+    const selectedClassroom = getFilterValue(filterIds.classroomId);
     const selectedSubject = getFilterValue(filterIds.subjectId);
 
     return (sessions || []).filter(function (session) {
-      if (
-        selectedCourse &&
-        normalizeForCompare(session.group_name) !==
-          normalizeForCompare(selectedCourse)
-      ) {
+      if (selectedCourse && normalizeForCompare(session.group_name) !== normalizeForCompare(selectedCourse)) {
+        return false;
+      }
+
+      if (selectedTeacher && normalizeForCompare(session.teacher_name) !== normalizeForCompare(selectedTeacher)) {
         return false;
       }
 
       if (
-        selectedTeacher &&
-        normalizeForCompare(session.teacher_name) !==
-          normalizeForCompare(selectedTeacher)
+        selectedClassroom &&
+        normalizeForCompare(session.classroom_name) !== normalizeForCompare(selectedClassroom)
       ) {
         return false;
       }
@@ -1641,17 +2040,12 @@
         return getSessionSubjectType(session) === "TC";
       }
 
-      return (
-        normalizeForCompare(session.subject_name) ===
-        normalizeForCompare(selectedSubject)
-      );
+      return normalizeForCompare(session.subject_name) === normalizeForCompare(selectedSubject);
     });
   }
 
   function updateGeneratedWorkspaceHeader() {
-    const count = state.latestGeneratedSchedules.length;
-    setText("generatedWorkspaceCount", count + " sesiones programadas");
-
+    const count = Array.isArray(state.latestGeneratedSchedules) ? state.latestGeneratedSchedules.length : 0;
     const badge = document.getElementById("generatedWorkspaceStateBadge");
     if (badge) {
       badge.textContent = state.generatedSaved ? "Guardado" : "Borrador";
@@ -1672,15 +2066,8 @@
   function updateSavedWorkspaceHeader(selectedGroup) {
     const title = document.getElementById("savedWorkspaceTitle");
     if (title) {
-      title.textContent = selectedGroup
-        ? "Horario Escolar - " + selectedGroup.name
-        : "Horario Guardado";
+      title.textContent = selectedGroup ? "Horario Escolar - " + selectedGroup.name : "Horario Guardado";
     }
-
-    const totalCount = selectedGroup && Array.isArray(selectedGroup.sessions)
-      ? selectedGroup.sessions.length
-      : 0;
-    setText("savedWorkspaceCount", totalCount + " sesiones programadas");
   }
 
   function toggleSection(sectionId, shouldShow) {
@@ -1717,10 +2104,7 @@
     updateGeneratedWorkspaceHeader();
 
     const selectedSubject = getFilterValue(generatedFilterIds.subjectId);
-    const filtered = getFilteredSessions(
-      state.latestGeneratedSchedules,
-      generatedFilterIds,
-    );
+    const filtered = getFilteredSessions(state.latestGeneratedSchedules, generatedFilterIds);
 
     const detail = renderScheduleBoard(filtered, "generatedWorkspaceOutput", {
       forceWorkCenterSubjectLabel: isWorkCenterSubjectValue(selectedSubject),
@@ -1728,6 +2112,7 @@
       detailPage: state.generatedDetailPage,
       detailPageSize: state.detailPageSize,
       enableDragDrop: true,
+      teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
     });
 
     state.generatedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
@@ -1783,9 +2168,7 @@
     }
 
     const selectedSubject = getFilterValue(savedFilterIds.subjectId);
-    const sourceSessions = Array.isArray(selectedGroup.sessions)
-      ? selectedGroup.sessions
-      : [];
+    const sourceSessions = Array.isArray(selectedGroup.sessions) ? selectedGroup.sessions : [];
     const filtered = getFilteredSessions(sourceSessions, savedFilterIds);
 
     const detail = renderScheduleBoard(filtered, "savedWorkspaceOutput", {
@@ -1794,6 +2177,7 @@
       detailPage: state.savedDetailPage,
       detailPageSize: state.detailPageSize,
       enableDragDrop: true,
+      teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
     });
 
     state.savedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
@@ -1818,10 +2202,7 @@
       }
 
       const group = byName.get(name);
-      if (
-        item.updated_at &&
-        toDateMillis(item.updated_at) > toDateMillis(group.updated_at)
-      ) {
+      if (item.updated_at && toDateMillis(item.updated_at) > toDateMillis(group.updated_at)) {
         group.updated_at = item.updated_at;
       }
     });
@@ -1843,14 +2224,14 @@
 
     if (!state.savedTimetableGroups.length) {
       container.innerHTML =
-        '<article class="saved-card-placeholder"><p class="text-secondary mb-0">No hay horarios guardados todavía.</p></article>';
+        '<div class="col"><article class="saved-card-placeholder"><p class="text-secondary mb-0">No hay horarios guardados todavía.</p></article></div>';
       return;
     }
 
     container.innerHTML = state.savedTimetableGroups
       .map(function (group, index) {
         return (
-          '<article class="saved-card" data-action="open" data-index="' +
+          '<div class="col"><article class="saved-card" data-action="open" data-index="' +
           index +
           '" tabindex="0" role="button" aria-label="Abrir horario guardado ' +
           group.name +
@@ -1871,15 +2252,12 @@
           '">' +
           '<i data-lucide="trash-2" class="saved-card-delete-icon" aria-hidden="true"></i></button>' +
           "</div>" +
-          "</article>"
+          "</article></div>"
         );
       })
       .join("");
 
-    if (
-      window.orariooAuth &&
-      typeof window.orariooAuth.initLucideIcons === "function"
-    ) {
+    if (window.orariooAuth && typeof window.orariooAuth.initLucideIcons === "function") {
       window.orariooAuth.initLucideIcons();
     }
   }
@@ -1890,18 +2268,16 @@
       return null;
     }
 
-    const result = await apiJson(
-      SAVED_DETAIL_API_PATH + "?timetable_name=" + encodeURIComponent(name),
-    );
+    const result = await apiJson(SAVED_DETAIL_API_PATH + "?timetable_name=" + encodeURIComponent(name));
     if (!result.ok) {
-      showAlert(
-        "error",
-        extractApiErrorMessage(result.data, "No se pudo cargar el horario guardado."),
-      );
+      showAlert("error", extractApiErrorMessage(result.data, "No se pudo cargar el horario guardado."));
       return null;
     }
 
-    return listFromPayload(result.data);
+    return {
+      sessions: listFromPayload(result.data),
+      teacherWorkloadsByName: buildTeacherWorkloadsByNameFromApi(result.data && result.data.teacher_workloads),
+    };
   }
 
   async function openSavedWorkspace(index) {
@@ -1925,22 +2301,26 @@
           '<article class="saved-card-placeholder"><p class="text-secondary mb-0">Cargando sesiones...</p></article>';
       }
 
-      const sessions = await fetchSavedSessionsByName(selected.name);
-      if (sessions === null) {
+      const savedDetail = await fetchSavedSessionsByName(selected.name);
+      if (savedDetail === null) {
         showSavedPicker();
         return false;
       }
 
+      const sessions = savedDetail.sessions;
+
       selected.sessions = sessions;
       selected.sessionsLoaded = true;
+      state.savedTeacherWorkloadsByName =
+        savedDetail.teacherWorkloadsByName && Object.keys(savedDetail.teacherWorkloadsByName).length
+          ? savedDetail.teacherWorkloadsByName
+          : buildTeacherWorkloadsByNameFromSessions(sessions);
 
       const latestUpdatedAt = sessions.reduce(function (latest, session) {
         if (!session || !session.updated_at) {
           return latest;
         }
-        return toDateMillis(session.updated_at) > toDateMillis(latest)
-          ? session.updated_at
-          : latest;
+        return toDateMillis(session.updated_at) > toDateMillis(latest) ? session.updated_at : latest;
       }, selected.updated_at || "");
 
       if (latestUpdatedAt) {
@@ -1949,7 +2329,13 @@
       renderSavedCards();
     }
 
-    populateWorkspaceFiltersFromSessions(selected.sessions, savedFilterIds);
+    if (!state.savedTeacherWorkloadsByName || !Object.keys(state.savedTeacherWorkloadsByName).length) {
+      state.savedTeacherWorkloadsByName = buildTeacherWorkloadsByNameFromSessions(selected.sessions);
+    }
+
+    populateWorkspaceFiltersFromSessions(selected.sessions, savedFilterIds, {
+      teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
+    });
     renderSavedWorkspace();
     return true;
   }
@@ -1978,11 +2364,7 @@
       return;
     }
 
-    if (
-      !window.confirm(
-        '¿Eliminar el horario guardado "' + selected.name + '"?',
-      )
-    ) {
+    if (!window.confirm('¿Eliminar el horario guardado "' + selected.name + '"?')) {
       return;
     }
 
@@ -1991,17 +2373,11 @@
     });
 
     if (!result.ok) {
-      showAlert(
-        "error",
-        extractApiErrorMessage(result.data, "No se pudo eliminar el horario guardado."),
-      );
+      showAlert("error", extractApiErrorMessage(result.data, "No se pudo eliminar el horario guardado."));
       return;
     }
 
-    if (
-      normalizeForCompare(state.selectedSavedTimetableName) ===
-      normalizeForCompare(selected.name)
-    ) {
+    if (normalizeForCompare(state.selectedSavedTimetableName) === normalizeForCompare(selected.name)) {
       state.selectedSavedTimetableIndex = null;
       state.selectedSavedTimetableName = null;
       showSavedPicker();
@@ -2018,10 +2394,7 @@
       state.selectedSavedTimetableIndex = null;
       state.selectedSavedTimetableName = null;
       renderSavedCards();
-      showAlert(
-        "error",
-        extractApiErrorMessage(result.data, "No se pudieron cargar los horarios guardados."),
-      );
+      showAlert("error", extractApiErrorMessage(result.data, "No se pudieron cargar los horarios guardados."));
       return;
     }
 
@@ -2043,18 +2416,12 @@
       state.initialSavedRouteName = "";
       if (!(await openSavedWorkspaceByName(routeRequestedName))) {
         showSavedPicker();
-        showAlert(
-          "warning",
-          'No se encontró el horario guardado "' + routeRequestedName + '".',
-        );
+        showAlert("warning", 'No se encontró el horario guardado "' + routeRequestedName + '".');
       }
       return;
     }
 
-    if (
-      savedSection &&
-      !document.getElementById("savedWorkspaceSection")?.classList.contains("d-none")
-    ) {
+    if (savedSection && !document.getElementById("savedWorkspaceSection")?.classList.contains("d-none")) {
       const currentName = state.selectedSavedTimetableName;
       if (!currentName) {
         showSavedPicker();
@@ -2101,11 +2468,9 @@
     }
 
     const checkedValues = new Set(
-      Array.from(container.querySelectorAll("input[type='checkbox']:checked")).map(
-        function (input) {
-          return input.value;
-        },
-      ),
+      Array.from(container.querySelectorAll("input[type='checkbox']:checked")).map(function (input) {
+        return input.value;
+      }),
     );
 
     container.innerHTML = getEntitiesByType(entityType)
@@ -2194,8 +2559,7 @@
     state.currentExportSavedName = String(safeConfig.savedName || "").trim();
 
     if (state.currentExportSource === "saved") {
-      const activeName =
-        state.currentExportSavedName || state.selectedSavedTimetableName || state.generatedSavedName;
+      const activeName = state.currentExportSavedName || state.selectedSavedTimetableName || state.generatedSavedName;
       state.currentExportSavedName = activeName || "";
       contextText.textContent = activeName
         ? 'Exportar sesiones de "' + activeName + '"'
@@ -2213,22 +2577,18 @@
 
     populateAllExportEntitySelects();
 
-    ["exportGroupSelect", "exportTeacherSelect", "exportClassroomSelect"].forEach(
-      function (id) {
-        const container = document.getElementById(id);
-        if (!container) {
-          return;
-        }
-        Array.from(container.querySelectorAll("input[type='checkbox']")).forEach(
-          function (checkbox) {
-            checkbox.checked = false;
-          },
-        );
-      },
-    );
+    ["exportGroupSelect", "exportTeacherSelect", "exportClassroomSelect"].forEach(function (id) {
+      const container = document.getElementById(id);
+      if (!container) {
+        return;
+      }
+      Array.from(container.querySelectorAll("input[type='checkbox']")).forEach(function (checkbox) {
+        checkbox.checked = false;
+      });
+    });
 
     renderExportEntityCards();
-    modal.classList.add("show");
+    showModalElement(modal);
   }
 
   function closeExportModal() {
@@ -2237,9 +2597,7 @@
     if (exportFormat) {
       exportFormat.disabled = false;
     }
-    if (modal) {
-      modal.classList.remove("show");
-    }
+    hideModalElement(modal);
   }
 
   function openSaveGeneratedModal() {
@@ -2261,19 +2619,51 @@
     }
 
     input.value = state.generatedSavedName || buildDefaultTimetableName();
-    modal.classList.add("show");
-
-    window.setTimeout(function () {
+    showModalElement(modal, function () {
       input.focus();
       input.select();
-    }, 0);
+    });
   }
 
   function closeSaveGeneratedModal() {
-    const modal = document.getElementById("saveGeneratedModal");
-    if (modal) {
-      modal.classList.remove("show");
+    hideModalElement(document.getElementById("saveGeneratedModal"));
+  }
+
+  function openGenerateModal(mode) {
+    const modal = document.getElementById("scheduleGenerateModal");
+    const title = document.getElementById("scheduleGenerateModalTitle");
+    const text = document.getElementById("scheduleGenerateModalText");
+    const hint = document.getElementById("scheduleGenerateModalHint");
+    const confirmButton = document.getElementById("confirmScheduleGenerateBtn");
+
+    if (!modal || !title || !text || !hint || !confirmButton) {
+      handleGenerate();
+      return;
     }
+
+    state.generateModalMode = mode === "regenerate" ? "regenerate" : "generate";
+
+    if (state.generateModalMode === "regenerate") {
+      title.textContent = "Regenerar horario";
+      text.textContent = state.generatedSaved
+        ? "Se generará una nueva propuesta en borrador. El horario guardado actual seguirá disponible."
+        : "Se generará una nueva propuesta y reemplazará el borrador actual que estás viendo.";
+      hint.textContent = "Usará las restricciones actuales y puede tardar unos segundos si el problema es complejo.";
+      confirmButton.textContent = "Regenerar horario";
+    } else {
+      title.textContent = "Generar horario";
+      text.textContent = "Se lanzará una nueva generación automática del horario con las restricciones actuales.";
+      hint.textContent = "Este proceso puede tardar unos segundos si el problema es complejo.";
+      confirmButton.textContent = "Generar horario";
+    }
+
+    showModalElement(modal, function () {
+      confirmButton.focus();
+    });
+  }
+
+  function closeGenerateModal() {
+    hideModalElement(document.getElementById("scheduleGenerateModal"));
   }
 
   function hasSavedTimetableNameCollision(timetableName) {
@@ -2315,10 +2705,7 @@
 
   async function handleExportConfirm() {
     if (!hasAnyExportSelection()) {
-      showAlert(
-        "error",
-        "Marca al menos una entidad o selecciona objetos concretos para exportar.",
-      );
+      showAlert("error", "Marca al menos una entidad o selecciona objetos concretos para exportar.");
       return;
     }
 
@@ -2435,10 +2822,7 @@
     }
 
     if (!result.ok) {
-      showAlert(
-        "error",
-        extractApiErrorMessage(result.data, "No se pudo guardar el horario generado."),
-      );
+      showAlert("error", extractApiErrorMessage(result.data, "No se pudo guardar el horario generado."));
       if (nameInput) {
         nameInput.focus();
         nameInput.select();
@@ -2450,13 +2834,15 @@
 
     state.generatedSaved = true;
     state.generatedSavedName = timetableName;
-    state.latestGeneratedSchedules =
-      (result.data && result.data.schedules) || state.latestGeneratedSchedules;
+    state.latestGeneratedSchedules = (result.data && result.data.schedules) || state.latestGeneratedSchedules;
+    state.generatedTeacherWorkloadsByName =
+      result.data && Array.isArray(result.data.teacher_workloads)
+        ? buildTeacherWorkloadsByNameFromApi(result.data.teacher_workloads)
+        : buildTeacherWorkloadsByNameFromSessions(state.latestGeneratedSchedules);
 
-    populateWorkspaceFiltersFromSessions(
-      state.latestGeneratedSchedules,
-      generatedFilterIds,
-    );
+    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds, {
+      teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
+    });
     renderGeneratedWorkspace();
     await loadSavedSchedules();
 
@@ -2467,20 +2853,24 @@
     openSaveGeneratedModal();
   }
 
+  function setGenerateActionButtonsDisabled(disabled) {
+    ["generateBtn", "generatedWorkspaceRegenerateBtn", "confirmScheduleGenerateBtn"].forEach(function (id) {
+      const button = document.getElementById(id);
+      if (button) {
+        button.disabled = disabled;
+      }
+    });
+  }
+
   async function handleGenerate() {
-    const button = document.getElementById("generateBtn");
-    if (button) {
-      button.disabled = true;
-    }
+    setGenerateActionButtonsDisabled(true);
 
     clearGeneratedDropFeedback();
     resetGeneratedDragState();
 
     const result = await apiJson("/schedules/generate/", "POST", {});
 
-    if (button) {
-      button.disabled = false;
-    }
+    setGenerateActionButtonsDisabled(false);
 
     if (!result.ok) {
       state.latestGeneratedSchedules = [];
@@ -2488,46 +2878,42 @@
       state.generatedSavedName = "";
       state.generatedMoveInFlight = false;
       showGeneratedLanding();
-      showAlert(
-        "error",
-        extractApiErrorMessage(result.data, "No se pudo generar el horario."),
-      );
+      showAlert("error", extractApiErrorMessage(result.data, "No se pudo generar el horario."));
       return;
     }
 
-    state.latestGeneratedSchedules =
-      (result.data && result.data.schedules) || [];
+    state.latestGeneratedSchedules = (result.data && result.data.schedules) || [];
     state.generatedDetailPage = 1;
     state.generatedSaved = false;
     state.generatedSavedName = "";
+    state.generatedTeacherWorkloadsByName =
+      result.data && Array.isArray(result.data.teacher_workloads)
+        ? buildTeacherWorkloadsByNameFromApi(result.data.teacher_workloads)
+        : buildTeacherWorkloadsByNameFromSessions(state.latestGeneratedSchedules);
     state.generatedMoveInFlight = false;
 
-    populateWorkspaceFiltersFromSessions(
-      state.latestGeneratedSchedules,
-      generatedFilterIds,
-    );
+    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds, {
+      teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
+    });
     showGeneratedWorkspace();
     renderGeneratedWorkspace();
 
     const generatedCount =
-      result.data && result.data.generated_count
-        ? result.data.generated_count
-        : state.latestGeneratedSchedules.length;
+      result.data && result.data.generated_count ? result.data.generated_count : state.latestGeneratedSchedules.length;
     showAlert("success", "Se generaron " + generatedCount + " sesiones.");
   }
 
-  async function handleRegenerate() {
+  async function handleGenerateModalConfirm() {
+    closeGenerateModal();
     await handleGenerate();
   }
 
-  function openGeneratedExport(format) {
+  function openGeneratedExport() {
     const source = state.generatedSaved ? "saved" : "generated";
     const savedName = state.generatedSaved ? state.generatedSavedName : "";
     openExportModal({
       source: source,
       savedName: savedName,
-      format: format,
-      lockFormat: true,
     });
   }
 
@@ -2556,28 +2942,23 @@
 
     populateAllExportEntitySelects();
 
-    if (
-      !teachersResponse.ok ||
-      !classroomsResponse.ok ||
-      !groupsResponse.ok ||
-      !subjectsResponse.ok
-    ) {
-      showAlert(
-        "warning",
-        "Algunos datos administrativos no se pudieron cargar completamente.",
-      );
+    if (!teachersResponse.ok || !classroomsResponse.ok || !groupsResponse.ok || !subjectsResponse.ok) {
+      showAlert("warning", "Algunos datos administrativos no se pudieron cargar completamente.");
     }
   }
 
   function bindGeneratedEvents() {
     const generateButton = document.getElementById("generateBtn");
     if (generateButton) {
-      generateButton.addEventListener("click", handleGenerate);
+      generateButton.addEventListener("click", function () {
+        openGenerateModal("generate");
+      });
     }
 
     [
       generatedFilterIds.courseId,
       generatedFilterIds.teacherId,
+      generatedFilterIds.classroomId,
       generatedFilterIds.subjectId,
     ].forEach(function (id) {
       const select = document.getElementById(id);
@@ -2603,9 +2984,7 @@
           return;
         }
 
-        const card = target.closest(
-          ".schedule-board-card[data-draggable='true'][data-schedule-id]",
-        );
+        const card = target.closest(".schedule-board-card[data-draggable='true'][data-schedule-id]");
         if (!card) {
           return;
         }
@@ -2628,11 +3007,7 @@
         state.generatedDragState.sourceDay = sourceDay;
         state.generatedDragState.sourceStart = sourceStart;
         state.generatedDragState.sourceEnd = sourceEnd;
-        state.generatedDragState.sourceSlotKey = createBoardCellKey(
-          sourceDay,
-          sourceStart,
-          sourceEnd,
-        );
+        state.generatedDragState.sourceSlotKey = createBoardCellKey(sourceDay, sourceStart, sourceEnd);
 
         card.classList.add("schedule-board-card-dragging");
 
@@ -2665,17 +3040,10 @@
         clearGeneratedDropFeedback();
 
         const targetCard = target.closest(".schedule-board-card[data-schedule-id]");
-        const preview = evaluateGeneratedDropCandidate(
-          targetCell,
-          targetCard ? targetCard.dataset.scheduleId : null,
-        );
+        const preview = evaluateGeneratedDropCandidate(targetCell, targetCard ? targetCard.dataset.scheduleId : null);
 
         targetCell.classList.add("schedule-board-cell-drop-hover");
-        targetCell.classList.add(
-          preview.valid
-            ? "schedule-board-cell-drop-valid"
-            : "schedule-board-cell-drop-invalid",
-        );
+        targetCell.classList.add(preview.valid ? "schedule-board-cell-drop-valid" : "schedule-board-cell-drop-invalid");
       });
 
       generatedOutput.addEventListener("drop", async function (event) {
@@ -2700,18 +3068,13 @@
         }
 
         const targetCard = target.closest(".schedule-board-card[data-schedule-id]");
-        const preview = evaluateGeneratedDropCandidate(
-          targetCell,
-          targetCard ? targetCard.dataset.scheduleId : null,
-        );
+        const preview = evaluateGeneratedDropCandidate(targetCell, targetCard ? targetCard.dataset.scheduleId : null);
 
         clearGeneratedDropFeedback();
 
         if (!preview.valid) {
           const sourceSelector =
-            '.schedule-board-card[data-schedule-id="' +
-            state.generatedDragState.sourceScheduleId +
-            '"]';
+            '.schedule-board-card[data-schedule-id="' + state.generatedDragState.sourceScheduleId + '"]';
           const sourceCard = generatedOutput.querySelector(sourceSelector);
           if (sourceCard) {
             sourceCard.classList.add("schedule-board-card-invalid-shake");
@@ -2723,37 +3086,28 @@
           if (preview.reason === "same_slot") {
             showAlert("info", "La sesión ya está en esa misma celda.");
           } else {
-            showAlert(
-              "warning",
-              "Movimiento no válido con las reglas actuales del horario.",
-            );
+            showAlert("warning", "Movimiento no válido con las reglas actuales del horario.");
           }
 
-          generatedOutput
-            .querySelectorAll(".schedule-board-card-dragging")
-            .forEach(function (card) {
-              card.classList.remove("schedule-board-card-dragging");
-            });
+          generatedOutput.querySelectorAll(".schedule-board-card-dragging").forEach(function (card) {
+            card.classList.remove("schedule-board-card-dragging");
+          });
           resetGeneratedDragState();
           return;
         }
 
         await applyGeneratedDropChange(preview);
 
-        generatedOutput
-          .querySelectorAll(".schedule-board-card-dragging")
-          .forEach(function (card) {
-            card.classList.remove("schedule-board-card-dragging");
-          });
+        generatedOutput.querySelectorAll(".schedule-board-card-dragging").forEach(function (card) {
+          card.classList.remove("schedule-board-card-dragging");
+        });
         resetGeneratedDragState();
       });
 
       generatedOutput.addEventListener("dragend", function () {
-        generatedOutput
-          .querySelectorAll(".schedule-board-card-dragging")
-          .forEach(function (card) {
-            card.classList.remove("schedule-board-card-dragging");
-          });
+        generatedOutput.querySelectorAll(".schedule-board-card-dragging").forEach(function (card) {
+          card.classList.remove("schedule-board-card-dragging");
+        });
         clearGeneratedDropFeedback();
         resetGeneratedDragState();
       });
@@ -2779,37 +3133,16 @@
       });
     }
 
-    const pdfButton = document.getElementById("generatedWorkspacePdfBtn");
-    if (pdfButton) {
-      pdfButton.addEventListener("click", function () {
-        openGeneratedExport("pdf");
-      });
-    }
-
-    const csvButton = document.getElementById("generatedWorkspaceCsvBtn");
-    if (csvButton) {
-      csvButton.addEventListener("click", function () {
-        openGeneratedExport("csv");
+    const exportButton = document.getElementById("generatedWorkspaceExportBtn");
+    if (exportButton) {
+      exportButton.addEventListener("click", function () {
+        openGeneratedExport();
       });
     }
 
     const saveButton = document.getElementById("generatedWorkspaceSaveBtn");
     if (saveButton) {
       saveButton.addEventListener("click", handleSaveGenerated);
-    }
-
-    const saveModal = document.getElementById("saveGeneratedModal");
-    if (saveModal) {
-      saveModal.addEventListener("click", function (event) {
-        if (event.target === saveModal) {
-          closeSaveGeneratedModal();
-        }
-      });
-    }
-
-    const cancelSaveButton = document.getElementById("cancelSaveGeneratedBtn");
-    if (cancelSaveButton) {
-      cancelSaveButton.addEventListener("click", closeSaveGeneratedModal);
     }
 
     const confirmSaveButton = document.getElementById("confirmSaveGeneratedBtn");
@@ -2829,7 +3162,14 @@
 
     const regenerateButton = document.getElementById("generatedWorkspaceRegenerateBtn");
     if (regenerateButton) {
-      regenerateButton.addEventListener("click", handleRegenerate);
+      regenerateButton.addEventListener("click", function () {
+        openGenerateModal("regenerate");
+      });
+    }
+
+    const confirmGenerateButton = document.getElementById("confirmScheduleGenerateBtn");
+    if (confirmGenerateButton) {
+      confirmGenerateButton.addEventListener("click", handleGenerateModalConfirm);
     }
   }
 
@@ -2842,9 +3182,7 @@
           return;
         }
 
-        const deleteButton = target.closest(
-          "button[data-action='delete'][data-index]",
-        );
+        const deleteButton = target.closest("button[data-action='delete'][data-index]");
         if (deleteButton) {
           const deleteIndex = Number.parseInt(deleteButton.dataset.index || "", 10);
           if (Number.isNaN(deleteIndex) || deleteIndex < 0) {
@@ -2913,18 +3251,21 @@
       });
     }
 
-    [savedFilterIds.courseId, savedFilterIds.teacherId, savedFilterIds.subjectId].forEach(
-      function (id) {
-        const select = document.getElementById(id);
-        if (!select) {
-          return;
-        }
-        select.addEventListener("change", function () {
-          state.savedDetailPage = 1;
-          renderSavedWorkspace();
-        });
-      },
-    );
+    [
+      savedFilterIds.courseId,
+      savedFilterIds.teacherId,
+      savedFilterIds.classroomId,
+      savedFilterIds.subjectId,
+    ].forEach(function (id) {
+      const select = document.getElementById(id);
+      if (!select) {
+        return;
+      }
+      select.addEventListener("change", function () {
+        state.savedDetailPage = 1;
+        renderSavedWorkspace();
+      });
+    });
 
     const savedOutput = document.getElementById("savedWorkspaceOutput");
     if (savedOutput) {
@@ -2939,9 +3280,7 @@
           return;
         }
 
-        const card = target.closest(
-          ".schedule-board-card[data-draggable='true'][data-schedule-id]",
-        );
+        const card = target.closest(".schedule-board-card[data-draggable='true'][data-schedule-id]");
         if (!card) {
           return;
         }
@@ -2964,11 +3303,7 @@
         state.savedDragState.sourceDay = sourceDay;
         state.savedDragState.sourceStart = sourceStart;
         state.savedDragState.sourceEnd = sourceEnd;
-        state.savedDragState.sourceSlotKey = createBoardCellKey(
-          sourceDay,
-          sourceStart,
-          sourceEnd,
-        );
+        state.savedDragState.sourceSlotKey = createBoardCellKey(sourceDay, sourceStart, sourceEnd);
 
         card.classList.add("schedule-board-card-dragging");
 
@@ -3001,17 +3336,10 @@
         clearSavedDropFeedback();
 
         const targetCard = target.closest(".schedule-board-card[data-schedule-id]");
-        const preview = evaluateSavedDropCandidate(
-          targetCell,
-          targetCard ? targetCard.dataset.scheduleId : null,
-        );
+        const preview = evaluateSavedDropCandidate(targetCell, targetCard ? targetCard.dataset.scheduleId : null);
 
         targetCell.classList.add("schedule-board-cell-drop-hover");
-        targetCell.classList.add(
-          preview.valid
-            ? "schedule-board-cell-drop-valid"
-            : "schedule-board-cell-drop-invalid",
-        );
+        targetCell.classList.add(preview.valid ? "schedule-board-cell-drop-valid" : "schedule-board-cell-drop-invalid");
       });
 
       savedOutput.addEventListener("drop", async function (event) {
@@ -3036,18 +3364,13 @@
         }
 
         const targetCard = target.closest(".schedule-board-card[data-schedule-id]");
-        const preview = evaluateSavedDropCandidate(
-          targetCell,
-          targetCard ? targetCard.dataset.scheduleId : null,
-        );
+        const preview = evaluateSavedDropCandidate(targetCell, targetCard ? targetCard.dataset.scheduleId : null);
 
         clearSavedDropFeedback();
 
         if (!preview.valid) {
           const sourceSelector =
-            '.schedule-board-card[data-schedule-id="' +
-            state.savedDragState.sourceScheduleId +
-            '"]';
+            '.schedule-board-card[data-schedule-id="' + state.savedDragState.sourceScheduleId + '"]';
           const sourceCard = savedOutput.querySelector(sourceSelector);
           if (sourceCard) {
             sourceCard.classList.add("schedule-board-card-invalid-shake");
@@ -3059,37 +3382,28 @@
           if (preview.reason === "same_slot") {
             showAlert("info", "La sesión ya está en esa misma celda.");
           } else {
-            showAlert(
-              "warning",
-              "Movimiento no válido con las reglas actuales del horario.",
-            );
+            showAlert("warning", "Movimiento no válido con las reglas actuales del horario.");
           }
 
-          savedOutput
-            .querySelectorAll(".schedule-board-card-dragging")
-            .forEach(function (card) {
-              card.classList.remove("schedule-board-card-dragging");
-            });
+          savedOutput.querySelectorAll(".schedule-board-card-dragging").forEach(function (card) {
+            card.classList.remove("schedule-board-card-dragging");
+          });
           resetSavedDragState();
           return;
         }
 
         await applySavedDropChange(preview);
 
-        savedOutput
-          .querySelectorAll(".schedule-board-card-dragging")
-          .forEach(function (card) {
-            card.classList.remove("schedule-board-card-dragging");
-          });
+        savedOutput.querySelectorAll(".schedule-board-card-dragging").forEach(function (card) {
+          card.classList.remove("schedule-board-card-dragging");
+        });
         resetSavedDragState();
       });
 
       savedOutput.addEventListener("dragend", function () {
-        savedOutput
-          .querySelectorAll(".schedule-board-card-dragging")
-          .forEach(function (card) {
-            card.classList.remove("schedule-board-card-dragging");
-          });
+        savedOutput.querySelectorAll(".schedule-board-card-dragging").forEach(function (card) {
+          card.classList.remove("schedule-board-card-dragging");
+        });
         clearSavedDropFeedback();
         resetSavedDragState();
       });
@@ -3124,26 +3438,12 @@
       });
     }
 
-    const pdfButton = document.getElementById("savedWorkspacePdfBtn");
-    if (pdfButton) {
-      pdfButton.addEventListener("click", function () {
+    const exportButton = document.getElementById("savedWorkspaceExportBtn");
+    if (exportButton) {
+      exportButton.addEventListener("click", function () {
         openExportModal({
           source: "saved",
           savedName: state.selectedSavedTimetableName || "",
-          format: "pdf",
-          lockFormat: true,
-        });
-      });
-    }
-
-    const csvButton = document.getElementById("savedWorkspaceCsvBtn");
-    if (csvButton) {
-      csvButton.addEventListener("click", function () {
-        openExportModal({
-          source: "saved",
-          savedName: state.selectedSavedTimetableName || "",
-          format: "csv",
-          lockFormat: true,
         });
       });
     }
@@ -3165,9 +3465,10 @@
       confirmButton.addEventListener("click", handleExportConfirm);
     }
 
-    modal.addEventListener("click", function (event) {
-      if (event.target === modal) {
-        closeExportModal();
+    modal.addEventListener("hidden.bs.modal", function () {
+      const exportFormat = document.getElementById("exportFormat");
+      if (exportFormat) {
+        exportFormat.disabled = false;
       }
     });
 
@@ -3185,6 +3486,7 @@
   }
 
   async function init() {
+    initScheduleFilterDropdowns();
     bindExportEvents();
 
     if (schedulesSection) {
@@ -3195,18 +3497,13 @@
     if (savedSection) {
       bindSavedEvents();
       showSavedPicker();
-      state.initialSavedRouteName = String(
-        savedSection.dataset.openSavedName || "",
-      ).trim();
+      state.initialSavedRouteName = String(savedSection.dataset.openSavedName || "").trim();
     }
 
     await loadCoreData();
     await loadSavedSchedules();
 
-    if (
-      window.orariooAuth &&
-      typeof window.orariooAuth.initLucideIcons === "function"
-    ) {
+    if (window.orariooAuth && typeof window.orariooAuth.initLucideIcons === "function") {
       window.orariooAuth.initLucideIcons();
     }
   }

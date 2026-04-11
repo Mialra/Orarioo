@@ -1,0 +1,488 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}
+    Orarioo | Perfil
+{% endblock title %}
+{% block extra_head %}
+    <link rel="stylesheet"
+          href="{% static 'css/dashboard.css' %}?v=20260406_dashboard_nav_2">
+    <link rel="stylesheet" href="{% static 'css/profile.css' %}">
+{% endblock extra_head %}
+{% block content %}
+    <div class="profile-page">
+        <nav class="navbar navbar-expand-lg bg-white border-bottom shadow-sm sticky-top dash-navbar">
+            <div class="container-fluid px-3 px-lg-4">
+                <div class="dash-brand me-3">
+                    <div class="dash-brand-icon" aria-hidden="true">
+                        <i data-lucide="calendar-days" class="dash-brand-lucide"></i>
+                    </div>
+                    <div>
+                        <h1>Orarioo</h1>
+                        <p>Gestión escolar</p>
+                    </div>
+                </div>
+                <button class="navbar-toggler"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#dashboardNav"
+                        aria-controls="dashboardNav"
+                        aria-expanded="false"
+                        aria-label="Mostrar navegación">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse dash-navbar-content"
+                     id="dashboardNav">
+                    <ul class="nav nav-pills dash-tabs mx-auto gap-2 py-3 py-lg-0"
+                        aria-label="Navegación principal">
+                        <li class="nav-item dash-tab-item">
+                            <a class="nav-link dash-tab" href="{% url 'dashboard-schedules' %}">
+                                <i data-lucide="calendar-days" class="dash-nav-icon" aria-hidden="true"></i>
+                                Generador
+                            </a>
+                        </li>
+                        <li class="nav-item dash-tab-item">
+                            <a class="nav-link dash-tab" href="{% url 'dashboard-saved' %}">
+                                <i data-lucide="folder-open" class="dash-nav-icon" aria-hidden="true"></i>
+                                Guardados
+                            </a>
+                        </li>
+                        <li class="nav-item dash-tab-item">
+                            <a class="nav-link dash-tab" href="{% url 'dashboard-administration' %}">
+                                <i data-lucide="settings" class="dash-nav-icon" aria-hidden="true"></i>
+                                Administración
+                            </a>
+                        </li>
+                        <li class="nav-item dash-tab-item">
+                            <a class="nav-link dash-tab" href="{% url 'dashboard-audit' %}">
+                                <i data-lucide="history" class="dash-nav-icon" aria-hidden="true"></i>
+                                Registro de cambios
+                            </a>
+                        </li>
+                    </ul>
+                    <div class="d-flex align-items-center gap-2 ms-lg-3 pb-3 pb-lg-0 dash-profile-section">
+                        <div class="dropdown dash-profile-dropdown">
+                            <button id="dashboard-profile-menu-button"
+                                    class="btn d-inline-flex align-items-center gap-2 px-2 py-1 dash-profile-trigger"
+                                    type="button"
+                                    data-bs-toggle="dropdown"
+                                    data-bs-auto-close="outside"
+                                    aria-expanded="false">
+                                <span id="dashboard-user-initials" class="dash-avatar" aria-hidden="true">AP</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end p-2 dash-profile-menu"
+                                aria-labelledby="dashboard-profile-menu-button">
+                                <li class="px-2 py-1">
+                                    <div class="small text-uppercase text-secondary fw-semibold">Equipo actual</div>
+                                    <div id="dashboard-current-team-name" class="fw-semibold">-</div>
+                                </li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li class="px-2 py-1">
+                                    <div class="small text-uppercase text-secondary fw-semibold mb-1">Cambiar de equipo</div>
+                                    <div id="dashboard-team-switch-list" class="d-grid gap-1"></div>
+                                </li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li>
+                                    <button id="dashboard-create-team" class="dropdown-item" type="button">Crear equipo</button>
+                                </li>
+                                <li>
+                                    <button id="dashboard-invite-team-member" class="dropdown-item" type="button">Invitar usuarios</button>
+                                </li>
+                                <li>
+                                    <button id="dashboard-view-pending-invitations"
+                                            class="dropdown-item d-flex justify-content-between align-items-center"
+                                            type="button">
+                                        <span>Ver invitaciones pendientes</span>
+                                        <span id="dashboard-pending-invitations-badge"
+                                              class="badge text-bg-primary">0</span>
+                                    </button>
+                                </li>
+                                <li>
+                                    <button id="dashboard-leave-team"
+                                            class="dropdown-item text-danger"
+                                            type="button">Salir del equipo</button>
+                                </li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'profile' %}">Mi perfil</a>
+                                </li>
+                                <li>
+                                    <button id="logout-button" class="dropdown-item" type="button">Cerrar sesión</button>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        <main class="container-xl py-4 py-lg-5">
+            <section class="profile-shell mx-auto" aria-labelledby="profile-page-title">
+                <section class="dash-panel dash-generator-card mb-4 mb-lg-5"
+                         aria-labelledby="profile-page-title">
+                    <div class="dash-panel-body">
+                        <header class="dash-panel-header mb-0">
+                            <div>
+                                <h1 id="profile-page-title" class="dash-panel-title">Mi perfil</h1>
+                                <p class="dash-panel-copy">Consulta tus datos de cuenta y actualiza tu información.</p>
+                            </div>
+                        </header>
+                    </div>
+                </section>
+                <article class="card border-0 profile-card shadow-sm mb-4">
+                    <div class="card-body p-4 p-lg-5">
+                        <div class="profile-user-summary pb-4 mb-4">
+                            <div id="profile-avatar" class="profile-avatar" aria-hidden="true">--</div>
+                            <div class="profile-user-copy">
+                                <h2 id="profile-display-name" class="profile-user-name mb-1">-</h2>
+                                <p class="profile-user-email mb-2">
+                                    <i data-lucide="mail" class="profile-icon-sm" aria-hidden="true"></i>
+                                    <span id="profile-display-email">-</span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="dash-panel-header mb-4">
+                            <div>
+                                <h2 class="dash-panel-title">Información personal</h2>
+                                <p class="dash-panel-copy">Datos básicos visibles en tu cuenta para identificarte en la plataforma.</p>
+                            </div>
+                            <button id="profile-personal-edit-trigger"
+                                    type="button"
+                                    class="btn btn-outline-primary profile-section-edit-btn d-inline-flex align-items-center gap-2"
+                                    aria-controls="profile-personal-form"
+                                    aria-pressed="false">
+                                <i data-lucide="pencil" class="profile-icon-sm" aria-hidden="true"></i>
+                                Editar
+                            </button>
+                        </div>
+                        <form id="profile-personal-form"
+                              class="row g-3"
+                              method="post"
+                              action="{% url 'user-self-update' %}"
+                              novalidate>
+                            <div class="col-12 col-md-6">
+                                <label for="profile-given-name" class="form-label">Nombre</label>
+                                <input id="profile-given-name"
+                                       name="given_name"
+                                       type="text"
+                                       maxlength="150"
+                                       class="form-control profile-control"
+                                       autocomplete="given-name"
+                                       disabled
+                                       required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="profile-family-name" class="form-label">Apellidos</label>
+                                <input id="profile-family-name"
+                                       name="family_name"
+                                       type="text"
+                                       maxlength="150"
+                                       class="form-control profile-control"
+                                       autocomplete="family-name"
+                                       disabled
+                                       required>
+                            </div>
+                            <div class="col-12">
+                                <label for="profile-email" class="form-label">Email</label>
+                                <input id="profile-email"
+                                       name="email"
+                                       type="email"
+                                       class="form-control profile-control"
+                                       autocomplete="email"
+                                       readonly
+                                       disabled>
+                            </div>
+                            <div class="col-12 d-none" id="profile-personal-actions">
+                                <div class="d-flex flex-column flex-sm-row gap-2 pt-1">
+                                    <button id="profile-save-btn" type="submit" class="btn btn-primary">Guardar cambios</button>
+                                    <button id="profile-cancel-btn"
+                                            type="button"
+                                            class="btn btn-outline-secondary">Cancelar</button>
+                                </div>
+                                <p class="profile-form-note mt-2 mb-0">El correo electrónico no se puede modificar por motivos de seguridad.</p>
+                            </div>
+                        </form>
+                        <div id="profile-personal-alert"
+                             class="alert d-none mt-3 mb-0"
+                             role="status"
+                             aria-live="polite"></div>
+                    </div>
+                </article>
+                <article class="card border-0 profile-card shadow-sm mb-4">
+                    <div class="card-body p-4 p-lg-5">
+                        <div class="dash-panel-header mb-4">
+                            <div>
+                                <h2 class="dash-panel-title">Seguridad</h2>
+                                <p class="dash-panel-copy">Actualiza tu contraseña periódicamente para mantener la cuenta protegida.</p>
+                            </div>
+                            <button id="profile-password-edit-trigger"
+                                    type="button"
+                                    class="btn btn-outline-primary profile-section-edit-btn d-inline-flex align-items-center gap-2"
+                                    aria-controls="profile-password-form"
+                                    aria-pressed="false">
+                                <i data-lucide="pencil" class="profile-icon-sm" aria-hidden="true"></i>
+                                Editar
+                            </button>
+                        </div>
+                        <form id="profile-password-form"
+                              class="row g-3"
+                              method="post"
+                              action="{% url 'user-change-password' %}"
+                              novalidate>
+                            <div class="col-12">
+                                <label for="profile-current-password" class="form-label">Contraseña actual</label>
+                                <input id="profile-current-password"
+                                       name="current_password"
+                                       type="password"
+                                       class="form-control profile-control"
+                                       autocomplete="current-password"
+                                       disabled
+                                       required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="profile-new-password" class="form-label">Nueva contraseña</label>
+                                <input id="profile-new-password"
+                                       name="new_password"
+                                       type="password"
+                                       minlength="8"
+                                       class="form-control profile-control"
+                                       autocomplete="new-password"
+                                       disabled
+                                       required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="profile-confirm-password" class="form-label">Repite la nueva contraseña</label>
+                                <input id="profile-confirm-password"
+                                       name="password_confirm"
+                                       type="password"
+                                       minlength="8"
+                                       class="form-control profile-control"
+                                       autocomplete="new-password"
+                                       disabled
+                                       required>
+                            </div>
+                            <div class="col-12 d-none" id="profile-password-actions">
+                                <div class="d-flex flex-column flex-sm-row gap-2 pt-1">
+                                    <button id="profile-password-submit" type="submit" class="btn btn-primary">Guardar cambios</button>
+                                    <button id="profile-password-cancel-btn"
+                                            type="button"
+                                            class="btn btn-outline-secondary">Cancelar</button>
+                                </div>
+                                <p class="profile-form-note mt-2 mb-0">Mínimo 8 caracteres. Usa una combinación robusta y única.</p>
+                            </div>
+                        </form>
+                        <div id="profile-password-alert"
+                             class="alert d-none mt-3 mb-0"
+                             role="status"
+                             aria-live="polite"></div>
+                    </div>
+                </article>
+                <article class="card border-0 profile-card shadow-sm mb-4 profile-danger-card">
+                    <div class="card-body p-4 p-lg-5">
+                        <div class="dash-panel-header mb-3">
+                            <div>
+                                <h2 class="dash-panel-title">Eliminar cuenta</h2>
+                                <p class="dash-panel-copy">Cierra tu cuenta de forma irreversible y borra tus datos personales de la plataforma.</p>
+                            </div>
+                        </div>
+                        <p class="profile-danger-copy mb-4">
+                            Esta acción eliminará permanentemente tu cuenta y todos tus datos personales. Esta acción no se puede deshacer.
+                        </p>
+                        <button id="profile-delete-account-trigger"
+                                type="button"
+                                class="btn btn-danger d-inline-flex align-items-center gap-2"
+                                data-bs-toggle="modal"
+                                data-bs-target="#profileDeleteAccountModal">
+                            <i data-lucide="trash-2" class="profile-icon-sm" aria-hidden="true"></i>
+                            Eliminar cuenta
+                        </button>
+                        <div id="profile-delete-page-alert"
+                             class="alert d-none mt-3 mb-0"
+                             role="status"
+                             aria-live="polite"></div>
+                    </div>
+                </article>
+                <article class="card border-0 profile-card shadow-sm">
+                    <div class="card-body p-4 p-lg-5">
+                        <div class="dash-panel-header mb-3">
+                            <div>
+                                <h2 class="dash-panel-title">Descarga tus datos</h2>
+                                <p class="dash-panel-copy">Obtén una copia JSON de tus datos personales en formato portable.</p>
+                            </div>
+                        </div>
+                        <p class="small text-body-secondary mb-4">
+                            Limite de seguridad: {{ export_rate_limit_max_requests }} solicitud cada {{ export_rate_limit_window_minutes }} minutos.
+                        </p>
+                        <button id="profile-export-btn"
+                                type="button"
+                                class="btn btn-outline-primary"
+                                disabled>Descargar mis datos</button>
+                        <div id="profile-export-alert"
+                             class="alert d-none mt-3 mb-0"
+                             role="status"
+                             aria-live="polite"></div>
+                    </div>
+                </article>
+            </section>
+        </main>
+        <div class="modal fade"
+             id="dashboardCreateTeamModal"
+             tabindex="-1"
+             aria-labelledby="dashboardCreateTeamModalLabel"
+             aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="dashboardCreateTeamModalLabel">Crear equipo</h5>
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label for="dashboard-new-team-name" class="form-label">Nombre del equipo</label>
+                        <input id="dashboard-new-team-name"
+                               type="text"
+                               class="form-control"
+                               maxlength="150"
+                               placeholder="Ej: Equipo de Jefatura" />
+                        <div id="dashboard-create-team-error"
+                             class="text-danger small mt-2 d-none"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                data-bs-dismiss="modal">Cancelar</button>
+                        <button id="dashboard-create-team-submit"
+                                type="button"
+                                class="btn btn-primary">Crear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade"
+             id="dashboardInviteTeamModal"
+             tabindex="-1"
+             aria-labelledby="dashboardInviteTeamModalLabel"
+             aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="dashboardInviteTeamModalLabel">Invitar usuario</h5>
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label for="dashboard-invite-email" class="form-label">Email del usuario existente</label>
+                        <input id="dashboard-invite-email"
+                               type="email"
+                               class="form-control"
+                               placeholder="usuario@centro.com" />
+                        <div id="dashboard-invite-team-error"
+                             class="text-danger small mt-2 d-none"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                data-bs-dismiss="modal">Cancelar</button>
+                        <button id="dashboard-invite-team-submit"
+                                type="button"
+                                class="btn btn-primary">Enviar invitación</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade"
+             id="dashboardInvitationsModal"
+             tabindex="-1"
+             aria-labelledby="dashboardInvitationsModalLabel"
+             aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="dashboardInvitationsModalLabel">Invitaciones pendientes</h5>
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="dashboard-invitations-empty" class="text-secondary">No tienes invitaciones.</div>
+                        <div id="dashboard-invitations-list" class="d-grid gap-2"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                data-bs-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade"
+             id="profileDeleteAccountModal"
+             tabindex="-1"
+             aria-labelledby="profileDeleteAccountModalLabel"
+             aria-hidden="true"
+             data-bs-backdrop="static"
+             data-bs-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header border-0 pb-0">
+                        <div>
+                            <h5 class="modal-title" id="profileDeleteAccountModalLabel">Eliminar cuenta</h5>
+                            <p class="modal-subtitle mb-0">Confirma tu identidad escribiendo exactamente tu correo electrónico.</p>
+                        </div>
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                    </div>
+                    <form id="profile-delete-account-form" novalidate>
+                        <div class="modal-body pt-3">
+                            <div class="alert alert-danger" role="alert">
+                                Esta acción eliminará permanentemente tu cuenta y todos tus datos personales. Esta acción no se puede deshacer.
+                            </div>
+                            <div class="mb-2">
+                                <label for="profile-delete-confirmation" class="form-label">
+                                    Escribe <strong>{{ user.email }}</strong> para confirmar
+                                </label>
+                                <input id="profile-delete-confirmation"
+                                       type="text"
+                                       class="form-control profile-control"
+                                       maxlength="255"
+                                       placeholder="usuario@dominio.com"
+                                       autocomplete="off"
+                                       required>
+                                <div id="profile-delete-confirmation-feedback"
+                                     class="invalid-feedback d-block d-none"></div>
+                            </div>
+                            <div id="profile-delete-modal-alert"
+                                 class="alert d-none mt-3 mb-0"
+                                 role="status"
+                                 aria-live="polite"></div>
+                        </div>
+                        <div class="modal-footer border-0 pt-0">
+                            <button type="button"
+                                    class="btn btn-outline-secondary"
+                                    data-bs-dismiss="modal">Cancelar</button>
+                            <button id="profile-delete-account-submit"
+                                    type="submit"
+                                    class="btn btn-danger"
+                                    disabled>Eliminar cuenta</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock content %}
+{% block extra_scripts %}
+    <script src="{% static 'js/dashboard.js' %}"></script>
+    <script src="{% static 'js/profile.js' %}?v=20260411_email_confirm_btn"></script>
+{% endblock extra_scripts %}
