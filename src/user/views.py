@@ -34,6 +34,7 @@ from auditableEntity.audit import (
 )
 from auditableEntity.models import AuditEntry
 from common.drf import AuditActorViewMixin
+from common.errors.exceptions import ResourceConflictError, ValidationAppError
 from common.permissions import IsManagementUser
 from common.tenancy import get_active_team
 from main.views import render_admin_dashboard
@@ -461,24 +462,30 @@ class SetActiveTeamView(APIView):
     def post(self, request):
         team_id = request.data.get("team_id") or request.data.get("active_team")
         if not team_id:
-            return Response(
-                {"team_id": "team_id is required."},
-                status=status.HTTP_400_BAD_REQUEST,
+            raise ValidationAppError(
+                "REQUIRED_FIELD",
+                "team_id is required.",
+                field_name="team_id",
+                context={"field": "team_id"},
             )
 
         try:
             team_id = int(team_id)
         except (TypeError, ValueError):
-            return Response(
-                {"team_id": "team_id must be a valid integer."},
-                status=status.HTTP_400_BAD_REQUEST,
+            raise ValidationAppError(
+                "INVALID_INTEGER",
+                "team_id must be a valid integer.",
+                field_name="team_id",
+                context={"field": "team_id", "value": team_id},
             )
 
         team = request.user.collaboration_teams.filter(id=team_id).first()
         if team is None:
-            return Response(
-                {"team_id": "The selected team does not belong to the user."},
-                status=status.HTTP_400_BAD_REQUEST,
+            raise ValidationAppError(
+                "TEAM_NOT_MEMBER",
+                "The selected team does not belong to the user.",
+                field_name="team_id",
+                context={"field": "team_id", "team_id": team_id},
             )
 
         request.user.active_team = team
@@ -532,33 +539,30 @@ class CollaborationTeamInviteView(APIView):
                 team = request.user.collaboration_teams.order_by("name", "id").first()
 
         if team is None:
-            return Response(
-                {
-                    "detail": (
-                        "No active collaboration team found. "
-                        "Create or select a team first."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+            raise ValidationAppError(
+                "ACTIVE_TEAM_REQUIRED",
+                "No active collaboration team found. Create or select a team first.",
             )
 
         email = serializer.validated_data["email"]
         invited_user = User.objects.filter(email=email, is_enabled=True).first()
         if invited_user is None:
-            return Response(
-                {
-                    "email": (
-                        "No active user exists with that email. "
-                        "Ask that person to sign up first."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+            raise ValidationAppError(
+                "INVITED_USER_NOT_FOUND",
+                "No active user exists with that email. Ask that person to sign up first.",
+                field_name="email",
+                context={"field": "email", "value": email},
             )
 
         if team.members.filter(id=invited_user.id).exists():
-            return Response(
-                {"detail": "The user already belongs to this collaboration team."},
-                status=status.HTTP_400_BAD_REQUEST,
+            raise ResourceConflictError(
+                "USER_ALREADY_IN_TEAM",
+                "The user already belongs to this collaboration team.",
+                context={
+                    "email": email,
+                    "team_id": team.id,
+                    "team_name": team.name,
+                },
             )
 
         pending_exists = CollaborationTeamInvitation.objects.filter(
@@ -567,14 +571,14 @@ class CollaborationTeamInviteView(APIView):
             status=CollaborationTeamInvitationStatus.PENDING,
         ).exists()
         if pending_exists:
-            return Response(
-                {
-                    "detail": (
-                        "There is already a pending invitation for this user "
-                        "in the selected collaboration team."
-                    )
+            raise ResourceConflictError(
+                "INVITATION_ALREADY_PENDING",
+                "There is already a pending invitation for this user in the selected collaboration team.",
+                context={
+                    "email": email,
+                    "team_id": team.id,
+                    "team_name": team.name,
                 },
-                status=status.HTTP_400_BAD_REQUEST,
             )
 
         invitation = CollaborationTeamInvitation.objects.create(
@@ -669,24 +673,28 @@ class CollaborationTeamLeaveView(APIView):
             request.user.active_team, "id", None
         )
         if not raw_team_id:
-            return Response(
-                {"detail": "No team selected to leave."},
-                status=status.HTTP_400_BAD_REQUEST,
+            raise ValidationAppError(
+                "ACTIVE_TEAM_REQUIRED",
+                "No team selected to leave.",
             )
 
         try:
             team_id = int(raw_team_id)
         except (TypeError, ValueError):
-            return Response(
-                {"team_id": "team_id must be a valid integer."},
-                status=status.HTTP_400_BAD_REQUEST,
+            raise ValidationAppError(
+                "INVALID_INTEGER",
+                "team_id must be a valid integer.",
+                field_name="team_id",
+                context={"field": "team_id", "value": raw_team_id},
             )
 
         team = request.user.collaboration_teams.filter(id=team_id).first()
         if team is None:
-            return Response(
-                {"detail": "You do not belong to the selected team."},
-                status=status.HTTP_400_BAD_REQUEST,
+            raise ValidationAppError(
+                "TEAM_NOT_MEMBER",
+                "You do not belong to the selected team.",
+                field_name="team_id",
+                context={"field": "team_id", "team_id": team_id},
             )
 
         team.members.remove(request.user)

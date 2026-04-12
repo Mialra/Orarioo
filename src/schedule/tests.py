@@ -87,14 +87,12 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
 
     def assert_generate_bad_request_with_detail(self, response, detail_snippet):
-        del detail_snippet
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
-        self.assertEqual(
-            response.data["detail"],
-            "Unable to generate schedule with the current input constraints.",
-        )
-        self.assertEqual(response.data.get("error_code"), "schedule_generation_failed")
+        self.assertIn(detail_snippet, response.data["detail"])
+        self.assertIn("_error", response.data)
+        self.assertIn("errors", response.data)
+        self.assertEqual(response.data["_meta"]["success"], False)
 
     def create_schedule(
         self,
@@ -1351,7 +1349,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assert_generate_bad_request_with_detail(
             response,
-            "exceeds max weekly hours",
+            "exceeds",
         )
 
     def test_apply_manual_change_rejects_negative_slot_index(self):
@@ -1401,7 +1399,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assert_generate_bad_request_with_detail(
             response,
-            "exceeds max weekly hours",
+            "exceeds",
         )
 
     def test_generate_rejects_group_over_weekly_capacity_for_primary(self):
@@ -1424,7 +1422,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assert_generate_bad_request_with_detail(
             response,
-            "exceeds weekly capacity",
+            "exceeds",
         )
 
     def test_generate_respects_group_daily_capacity_for_primary(self):
@@ -1458,7 +1456,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assert_generate_bad_request_with_detail(
             response,
-            "exceeds max weekly hours",
+            "exceeds",
         )
 
     def test_generate_excludes_tc_subjects_when_include_tc_is_false(self):
@@ -1502,7 +1500,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         response_with_tc = self.generate_schedule({"include_tc": True})
         self.assert_generate_bad_request_with_detail(
             response_with_tc,
-            "exceeds max weekly hours",
+            "exceeds",
         )
 
         response_without_tc = self.generate_schedule({"include_tc": False})
@@ -2042,4 +2040,264 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assert_generate_bad_request_with_detail(
             response,
             "Could not generate a feasible schedule",
+        )
+
+    def test_analyze_without_params(self):
+        """Test that analyze endpoint requires schedule_ids or source parameter."""
+        response = self.client.post(reverse("schedule-analyze"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # Error structure: _error.code
+        self.assertEqual(response.data["_error"]["code"], "INVALID_ANALYZE_PARAMS")
+
+    def test_analyze_with_no_matching_schedules(self):
+        """Test that analyze returns error when no schedules match the criteria."""
+        response = self.client.post(
+            reverse("schedule-analyze"),
+            {"schedule_ids": [9999]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["_error"]["code"], "NO_SCHEDULES_FOUND")
+
+    def test_analyze_with_specific_schedule_ids(self):
+        """Test that analyze works with specific schedule IDs."""
+        schedule = self.create_schedule()
+
+        response = self.client.post(
+            reverse("schedule-analyze"),
+            {"schedule_ids": [schedule.id]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("count", response.data)
+        self.assertIn("defects", response.data)
+        # count should match the number of defects
+        self.assertEqual(response.data["count"], len(response.data["defects"]))
+
+    def test_analyze_with_generated_source(self):
+        """Test that analyze can filter by generated source."""
+        # Create a generated schedule
+        self.create_schedule(
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+        )
+
+        response = self.client.post(
+            reverse("schedule-analyze"),
+            {"source": "generated"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("defects", response.data)
+
+    def test_analyze_with_saved_source(self):
+        """Test that analyze can filter by saved source."""
+        # Create a non-generated schedule (saved)
+        self.create_schedule(name="Manual Schedule")
+
+        response = self.client.post(
+            reverse("schedule-analyze"),
+            {"source": "saved"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("defects", response.data)
+
+    def test_analyze_detects_internal_gaps(self):
+        """Test that analyze detects internal gaps (gaps between consecutive hours)."""
+        # Create two schedules for the same group on the same day with a gap
+        today = timezone.now().date()
+
+        # First session: 9:00-10:00
+        schedule1 = Schedule.objects.create(
+            name="Morning Session",
+            start_time=timezone.make_aware(
+                datetime.combine(today, datetime.min.time()).replace(hour=9)
+            ),
+            end_time=timezone.make_aware(
+                datetime.combine(today, datetime.min.time()).replace(hour=10)
+            ),
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=self.group,
+            subject=self.subject,
+            team=self.team,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+        )
+        schedule1.users.add(self.user)
+
+        # Second session: 12:00-13:00 (gap at 11:00)
+        schedule2 = Schedule.objects.create(
+            name="Afternoon Session",
+            start_time=timezone.make_aware(
+                datetime.combine(today, datetime.min.time()).replace(hour=12)
+            ),
+            end_time=timezone.make_aware(
+                datetime.combine(today, datetime.min.time()).replace(hour=13)
+            ),
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=self.group,
+            subject=self.subject,
+            team=self.team,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+        )
+        schedule2.users.add(self.user)
+
+        response = self.client.post(
+            reverse("schedule-analyze"),
+            {"schedule_ids": [schedule1.id, schedule2.id]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreater(response.data["count"], 0)
+
+        defects = response.data["defects"]
+        internal_gaps = [d for d in defects if d.get("gap_type") == "INTERNAL"]
+        self.assertGreater(len(internal_gaps), 0)
+
+        internal_gap = internal_gaps[0]
+        self.assertEqual(internal_gap["entity_type"], "group")
+        self.assertEqual(internal_gap["entity_id"], self.group.id)
+        self.assertEqual(internal_gap["severity"], "MEDIUM")
+        self.assertIn("Hueco detectado", internal_gap["description"])
+
+    def test_analyze_detects_boundary_gaps(self):
+        """Test that analyze detects boundary gaps (missing sessions in expected range)."""
+        today = timezone.now().date()
+
+        # Create one session at 9:00 for a primary group
+        # Primary groups should have sessions from 9:00 to 13:00
+        # So missing 10:00, 11:30-12:00 (break), 12:00, 13:00 would be boundary gaps
+        schedule = Schedule.objects.create(
+            name="Single Morning Session",
+            start_time=timezone.make_aware(
+                datetime.combine(today, datetime.min.time()).replace(hour=9)
+            ),
+            end_time=timezone.make_aware(
+                datetime.combine(today, datetime.min.time()).replace(hour=10)
+            ),
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=self.group,
+            subject=self.subject,
+            team=self.team,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+        )
+        schedule.users.add(self.user)
+
+        response = self.client.post(
+            reverse("schedule-analyze"),
+            {"schedule_ids": [schedule.id]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreater(response.data["count"], 0)
+
+        defects = response.data["defects"]
+        boundary_gaps = [d for d in defects if d.get("gap_type") == "BOUNDARY"]
+        self.assertGreater(len(boundary_gaps), 0)
+
+        boundary_gap = boundary_gaps[0]
+        self.assertEqual(boundary_gap["entity_type"], "group")
+        self.assertEqual(boundary_gap["severity"], "LOW")
+        self.assertIn("Sesión faltante", boundary_gap["description"])
+
+    def test_analyze_response_structure(self):
+        """Test that analyze response has the correct structure."""
+        schedule = self.create_schedule()
+
+        response = self.client.post(
+            reverse("schedule-analyze"),
+            {"schedule_ids": [schedule.id]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Check response structure
+        self.assertIn("count", response.data)
+        self.assertIn("defects", response.data)
+        self.assertEqual(response.data["count"], len(response.data["defects"]))
+
+        # Check defect structure if any
+        if response.data["defects"]:
+            defect = response.data["defects"][0]
+            self.assertIn("entity_id", defect)
+            self.assertIn("entity_name", defect)
+            self.assertIn("entity_type", defect)
+            self.assertIn("severity", defect)
+            self.assertIn("gap_type", defect)
+            self.assertIn("description", defect)
+            self.assertIn("context", defect)
+
+    def test_analyze_respects_stage_specific_hours(self):
+        """Test that analyze respects different hours for different educational stages."""
+        secondary_group = Group.objects.create(
+            name="3A ESO",
+            stage=EducationalStage.SECONDARY,
+            team=self.team,
+        )
+
+        secondary_subject = Subject.objects.create(
+            team=self.team,
+            name="Physics",
+            weekly_hours=2,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.SECONDARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=secondary_group,
+        )
+
+        today = timezone.now().date()
+
+        # ESO starts at 8:00, so create session at 8:00-9:00
+        schedule = Schedule.objects.create(
+            name="Secondary Session",
+            start_time=timezone.make_aware(
+                datetime.combine(today, datetime.min.time()).replace(hour=8)
+            ),
+            end_time=timezone.make_aware(
+                datetime.combine(today, datetime.min.time()).replace(hour=9)
+            ),
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=secondary_group,
+            subject=secondary_subject,
+            team=self.team,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+        )
+        schedule.users.add(self.user)
+
+        response = self.client.post(
+            reverse("schedule-analyze"),
+            {"schedule_ids": [schedule.id]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        defects = response.data["defects"]
+        # Should have boundary gaps for missing hours (9-13)
+        # but NOT a gap at 8:00 since ESO starts at 8:00
+        descriptions = [d["description"] for d in defects]
+
+        # Should NOT complain about 8:00 being outside expected range
+        self.assertFalse(
+            any("08:00" in desc and "Sesión faltante" in desc for desc in descriptions),
+            "Secondary stage should not report 08:00 as missing",
         )

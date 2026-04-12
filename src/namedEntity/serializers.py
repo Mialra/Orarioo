@@ -1,18 +1,21 @@
-from rest_framework import serializers
-
-from common.validation import validate_and_normalize_required_text
+from app.constants import STRING_MAX_LENGTH
+from common.validators.validators import (
+    validate_and_normalize_required_text,
+    validate_case_insensitive_unique,
+)
 
 
 class NamedEntityNameValidationMixin:
     """Reusable `name` normalization for serializers bound to NamedEntity models."""
 
-    name_max_length = 150
+    name_max_length = STRING_MAX_LENGTH
     enforce_case_insensitive_unique_name = False
 
     def validate_name(self, value):
         normalized = validate_and_normalize_required_text(
             value,
             field_name="name",
+            label="name",
             max_length=self.name_max_length,
         )
 
@@ -23,14 +26,10 @@ class NamedEntityNameValidationMixin:
         if model is None:
             return normalized
 
-        queryset = model.objects.filter(name__iexact=normalized)
-        instance = getattr(self, "instance", None)
-        if instance is not None and getattr(instance, "pk", None) is not None:
-            queryset = queryset.exclude(pk=instance.pk)
-
-        if queryset.exists():
-            raise serializers.ValidationError(
-                "An entity with this name already exists (case-insensitive)."
-            )
-
-        return normalized
+        return validate_case_insensitive_unique(
+            normalized,
+            field_name="name",
+            queryset=model.objects.all(),
+            instance=getattr(self, "instance", None),
+            label="name",
+        )

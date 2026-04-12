@@ -16,6 +16,8 @@
   const displayEmailEl = document.getElementById("profile-display-email");
   const avatarEl = document.getElementById("profile-avatar");
   const roleBadgeEl = document.getElementById("profile-role-badge");
+  const givenNameErrorEl = document.getElementById("profile-given-name-error");
+  const familyNameErrorEl = document.getElementById("profile-family-name-error");
 
   const personalAlertEl = document.getElementById("profile-personal-alert");
   const passwordAlertEl = document.getElementById("profile-password-alert");
@@ -28,6 +30,9 @@
   const newPasswordEl = document.getElementById("profile-new-password");
   const confirmPasswordEl = document.getElementById("profile-confirm-password");
   const passwordSubmitBtn = document.getElementById("profile-password-submit");
+  const currentPasswordErrorEl = document.getElementById("profile-current-password-error");
+  const newPasswordErrorEl = document.getElementById("profile-new-password-error");
+  const confirmPasswordErrorEl = document.getElementById("profile-confirm-password-error");
 
   const exportButton = document.getElementById("profile-export-btn");
   const deleteAccountForm = document.getElementById("profile-delete-account-form");
@@ -278,10 +283,10 @@
       return fallbackMessage;
     }
     if (typeof payload.detail === "string") {
-      return payload.detail;
+      return window.OrariooErrorHandler.translateEntry({ message: payload.detail }, fallbackMessage);
     }
     if (Array.isArray(payload.non_field_errors) && payload.non_field_errors.length) {
-      return payload.non_field_errors[0];
+      return window.OrariooErrorHandler.translateEntry({ message: payload.non_field_errors[0] }, fallbackMessage);
     }
     const firstKey = Object.keys(payload)[0];
     if (!firstKey) {
@@ -289,10 +294,10 @@
     }
     const value = payload[firstKey];
     if (Array.isArray(value) && value.length) {
-      return value[0];
+      return window.OrariooErrorHandler.translateEntry({ message: value[0] }, fallbackMessage);
     }
     if (typeof value === "string") {
-      return value;
+      return window.OrariooErrorHandler.translateEntry({ message: value }, fallbackMessage);
     }
     return fallbackMessage;
   }
@@ -303,9 +308,13 @@
 
     const givenName = givenNameEl ? givenNameEl.value.trim() : "";
     const familyName = familyNameEl ? familyNameEl.value.trim() : "";
+    const email = emailEl ? emailEl.value.trim() : "";
 
-    if (!givenName || !familyName) {
-      showAlert(personalAlertEl, "Nombre y apellidos son obligatorios.", "alert-danger");
+    if (!givenName) {
+      window.OrariooErrorHandler.applyFormErrors(
+        [{ name: "given_name", input: givenNameEl, feedback: givenNameErrorEl }],
+        { given_name: [window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" })] },
+      );
       return;
     }
 
@@ -328,8 +337,11 @@
       });
 
       if (!response.ok) {
-        const message = parseErrorDetail(payload, "No se pudo actualizar el perfil.");
-        showAlert(personalAlertEl, message, "alert-danger");
+        const fields = [
+          { name: "given_name", input: givenNameEl, feedback: givenNameErrorEl },
+          { name: "family_name", input: familyNameEl, feedback: familyNameErrorEl },
+        ];
+        window.OrariooErrorHandler.applyFormErrors(fields, payload);
         return;
       }
 
@@ -351,18 +363,57 @@
     const newPassword = newPasswordEl ? newPasswordEl.value : "";
     const passwordConfirm = confirmPasswordEl ? confirmPasswordEl.value : "";
 
-    if (!currentPassword || !newPassword || !passwordConfirm) {
-      showAlert(passwordAlertEl, "Completa los tres campos de contraseña.", "alert-danger");
+    const fields = [
+      { name: "current_password", input: currentPasswordEl, feedback: currentPasswordErrorEl },
+      { name: "new_password", input: newPasswordEl, feedback: newPasswordErrorEl },
+      { name: "password_confirm", input: confirmPasswordEl, feedback: confirmPasswordErrorEl },
+    ];
+
+    // Validar campos requeridos
+    if (!currentPassword) {
+      window.OrariooErrorHandler.applyFormErrors([fields[0]], {
+        current_password: [window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" })],
+      });
       return;
     }
 
+    // Validar nueva contraseña
+    if (!newPassword) {
+      window.OrariooErrorHandler.applyFormErrors([fields[1]], {
+        new_password: [window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" })],
+      });
+      return;
+    }
+
+    const passwordErrors = [];
     if (newPassword.length < 8) {
-      showAlert(passwordAlertEl, "La nueva contraseña debe tener al menos 8 caracteres.", "alert-danger");
+      passwordErrors.push("PASSWORD_MIN_LENGTH");
+    }
+    if (!/[A-Za-z]/.test(newPassword)) {
+      passwordErrors.push("PASSWORD_REQUIRES_LETTER");
+    }
+    if (!/\d/.test(newPassword)) {
+      passwordErrors.push("PASSWORD_REQUIRES_NUMBER");
+    }
+
+    if (passwordErrors.length) {
+      const errorMessage = window.OrariooErrorHandler.translateEntry({ code: passwordErrors[0] });
+      window.OrariooErrorHandler.applyFormErrors([fields[1]], { new_password: [errorMessage] });
+      return;
+    }
+
+    // Validar confirmación de contraseña
+    if (!passwordConfirm) {
+      window.OrariooErrorHandler.applyFormErrors([fields[2]], {
+        password_confirm: [window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" })],
+      });
       return;
     }
 
     if (newPassword !== passwordConfirm) {
-      showAlert(passwordAlertEl, "Las nuevas contraseñas no coinciden.", "alert-danger");
+      window.OrariooErrorHandler.applyFormErrors([fields[2]], {
+        password_confirm: [window.OrariooErrorHandler.translateEntry({ code: "PASSWORD_MISMATCH" })],
+      });
       return;
     }
 
@@ -386,8 +437,7 @@
       });
 
       if (!response.ok) {
-        const message = parseErrorDetail(payload, "No se pudo cambiar la contraseña.");
-        showAlert(passwordAlertEl, message, "alert-danger");
+        window.OrariooErrorHandler.applyFormErrors(fields, payload);
         return;
       }
 
@@ -537,6 +587,21 @@
 
     if (window.orariooAuth && typeof window.orariooAuth.initLucideIcons === "function") {
       window.orariooAuth.initLucideIcons();
+    }
+
+    if (window.orariooAuth && typeof window.orariooAuth.initPasswordToggle === "function") {
+      window.orariooAuth.initPasswordToggle({
+        inputId: "profile-current-password",
+        buttonId: "profile-current-password-toggle",
+      });
+      window.orariooAuth.initPasswordToggle({
+        inputId: "profile-new-password",
+        buttonId: "profile-new-password-toggle",
+      });
+      window.orariooAuth.initPasswordToggle({
+        inputId: "profile-confirm-password",
+        buttonId: "profile-confirm-password-toggle",
+      });
     }
 
     if (personalEditTrigger) {

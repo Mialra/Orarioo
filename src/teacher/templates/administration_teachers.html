@@ -35,11 +35,15 @@
                         <input type="hidden" id="admin-teacher-id" value="">
                         <input type="hidden" id="admin-teacher-mode" value="create">
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-teacher-name">Nombre*</label>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="admin-teacher-name">Nombre</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
                             <input class="form-control"
                                    id="admin-teacher-name"
                                    type="text"
                                    placeholder="Ej: Juan"
+                                   maxlength="{{ string_max_length }}"
                                    required>
                             <div class="invalid-feedback" id="admin-teacher-name-error"></div>
                         </div>
@@ -48,17 +52,22 @@
                             <input class="form-control"
                                    id="admin-teacher-surnames"
                                    type="text"
-                                   placeholder="Ej: Garcia Perez">
+                                   placeholder="Ej: García"
+                                   maxlength="{{ string_max_length }}">
+                            <div class="invalid-feedback" id="admin-teacher-surnames-error"></div>
                         </div>
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-teacher-max-weekly-hours">Máximo horas semanales*</label>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0"
+                                       for="admin-teacher-max-weekly-hours">Máximo horas semanales</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
                             <input class="form-control"
                                    id="admin-teacher-max-weekly-hours"
                                    type="number"
                                    min="1"
                                    step="1"
-                                   placeholder="20"
-                                   value="20"
+                                   placeholder="Ej: 20"
                                    required>
                             <div class="invalid-feedback" id="admin-teacher-max-weekly-hours-error"></div>
                         </div>

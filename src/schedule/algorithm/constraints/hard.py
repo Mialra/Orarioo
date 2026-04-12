@@ -1,5 +1,5 @@
 from group.models import EducationalStage
-from schedule.algorithm.errors import ScheduleGenerationError
+from schedule.algorithm.errors import ScheduleCapacityError, ScheduleGenerationError
 from schedule.algorithm.slots import (
     build_slot_day_index,
     build_slot_preference_index,
@@ -79,7 +79,16 @@ def _apply_recess_supervision_capacity(
                 (
                     "Cannot assign recess supervision for stage '{stage}'. "
                     "No teachers available in that stage."
-                ).format(stage=stage)
+                ).format(stage=stage),
+                code="RECESS_SUPERVISION_UNAVAILABLE",
+                context={
+                    "stage": stage,
+                    "required_supervisors": required_supervisors,
+                },
+                suggestions=[
+                    "Assign at least one teacher to that stage before generating the schedule.",
+                    "Reduce the required number of recess supervisors for that stage.",
+                ],
             )
 
         daily_minutes = RECESS_MINUTES_PER_DAY_BY_STAGE[stage]
@@ -145,37 +154,42 @@ def _validate_group_slot_capacity(*, sessions_by_group, slot_count):
         for group_state in sessions_by_group.values()
     ):
         raise ScheduleGenerationError(
-            "Not enough available slots to place all sessions for at least one group."
+            "Not enough available slots to place all sessions for at least one group.",
+            code="GROUP_SLOT_CAPACITY_EXCEEDED",
+            suggestions=[
+                "Reduce weekly hours for one or more groups.",
+                "Review unavailable time preferences that may be removing too many slots.",
+            ],
         )
 
 
 def _validate_group_weekly_capacity(*, sessions_by_group):
     for group_state in sessions_by_group.values():
         if group_state["assigned_hours"] > group_state["weekly_limit"]:
-            raise ScheduleGenerationError(
-                (
-                    "Group '{name}' exceeds weekly capacity for its stage: "
-                    "assigned {assigned} > max {max_hours}."
-                ).format(
-                    name=group_state["name"],
-                    assigned=group_state["assigned_hours"],
-                    max_hours=group_state["weekly_limit"],
-                )
+            raise ScheduleCapacityError(
+                resource_type="group",
+                resource_name=group_state["name"],
+                assigned=group_state["assigned_hours"],
+                capacity=group_state["weekly_limit"],
+                suggestions=[
+                    "Reduce the weekly hours assigned to this group.",
+                    "Split the load across additional groups or subjects if possible.",
+                ],
             )
 
 
 def _validate_teacher_weekly_capacity(*, sessions_by_teacher):
     for teacher_state in sessions_by_teacher.values():
         if teacher_state["assigned_hours"] > teacher_state["max_weekly_hours"]:
-            raise ScheduleGenerationError(
-                (
-                    "Teacher '{name}' exceeds max weekly hours: "
-                    "assigned {assigned} > max {max_hours}."
-                ).format(
-                    name=teacher_state["name"],
-                    assigned=_format_hours(teacher_state["assigned_hours"]),
-                    max_hours=teacher_state["max_weekly_hours"],
-                )
+            raise ScheduleCapacityError(
+                resource_type="teacher",
+                resource_name=teacher_state["name"],
+                assigned=_format_hours(teacher_state["assigned_hours"]),
+                capacity=teacher_state["max_weekly_hours"],
+                suggestions=[
+                    "Increase the teacher's maximum weekly hours.",
+                    "Reassign part of the workload to another teacher.",
+                ],
             )
 
 

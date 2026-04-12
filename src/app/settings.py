@@ -79,6 +79,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "app.context_processors.validation_constants",
             ],
         },
     },
@@ -167,6 +168,12 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
 
 # REST Framework Configuration
+LOGIN_THROTTLE_RATE = config("LOGIN_THROTTLE_RATE", default="10/min")
+SIGNUP_THROTTLE_RATE = config(
+    "SIGNUP_THROTTLE_RATE",
+    default="120/hour" if DEBUG else "10/hour",
+)
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "common.authentication.ActiveUserJWTAuthentication",
@@ -182,12 +189,12 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",
         "user": "300/min",
-        "login": "10/min",
-        "signup": "10/hour",
+        "login": LOGIN_THROTTLE_RATE,
+        "signup": SIGNUP_THROTTLE_RATE,
     },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 5,
-    "EXCEPTION_HANDLER": "common.exceptions.api_exception_handler",
+    "EXCEPTION_HANDLER": "common.errors.handlers.api_exception_handler",
 }
 
 # JWT Configuration

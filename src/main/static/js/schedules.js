@@ -28,6 +28,7 @@
   const SAVED_SUMMARY_API_PATH = "/schedules/saved-summary/";
   const SAVED_DETAIL_API_PATH = "/schedules/saved-detail/";
   const CELL_UPDATE_ANIMATION_MS = 420;
+  const errorHandler = window.OrariooErrorHandler || {};
 
   const generatedFilterIds = {
     courseId: "generatedWorkspaceCourseFilter",
@@ -496,7 +497,18 @@
     };
 
     alert.className = "alert " + (classMap[type] || "alert-info");
-    alert.textContent = message;
+    if (
+      message &&
+      typeof message === "object" &&
+      errorHandler &&
+      typeof errorHandler.renderAlertContent === "function"
+    ) {
+      alert.innerHTML = errorHandler.renderAlertContent(message);
+    } else if (errorHandler && typeof errorHandler.escapeHtml === "function") {
+      alert.innerHTML = errorHandler.escapeHtml(message);
+    } else {
+      alert.textContent = message;
+    }
     alert.classList.remove("d-none");
 
     window.clearTimeout(showAlert._timer);
@@ -505,7 +517,28 @@
     }, 4500);
   }
 
+  function extractApiErrorInfo(data, fallback) {
+    if (errorHandler && typeof errorHandler.parseApiError === "function") {
+      return errorHandler.parseApiError(data, {
+        fallbackMessage: fallback,
+      });
+    }
+
+    return {
+      message: extractApiErrorMessage(data, fallback),
+      suggestions: [],
+      code: "",
+      raw: data || null,
+    };
+  }
+
   function extractApiErrorMessage(data, fallback) {
+    if (errorHandler && typeof errorHandler.parseApiError === "function") {
+      return errorHandler.parseApiError(data, {
+        fallbackMessage: fallback,
+      }).message;
+    }
+
     if (!data || typeof data !== "object") {
       return fallback;
     }
@@ -2025,10 +2058,7 @@
         return false;
       }
 
-      if (
-        selectedClassroom &&
-        normalizeForCompare(session.classroom_name) !== normalizeForCompare(selectedClassroom)
-      ) {
+      if (selectedClassroom && normalizeForCompare(session.classroom_name) !== normalizeForCompare(selectedClassroom)) {
         return false;
       }
 
@@ -2878,7 +2908,7 @@
       state.generatedSavedName = "";
       state.generatedMoveInFlight = false;
       showGeneratedLanding();
-      showAlert("error", extractApiErrorMessage(result.data, "No se pudo generar el horario."));
+      showAlert("error", extractApiErrorInfo(result.data, "No se pudo generar el horario."));
       return;
     }
 
@@ -3251,21 +3281,18 @@
       });
     }
 
-    [
-      savedFilterIds.courseId,
-      savedFilterIds.teacherId,
-      savedFilterIds.classroomId,
-      savedFilterIds.subjectId,
-    ].forEach(function (id) {
-      const select = document.getElementById(id);
-      if (!select) {
-        return;
-      }
-      select.addEventListener("change", function () {
-        state.savedDetailPage = 1;
-        renderSavedWorkspace();
-      });
-    });
+    [savedFilterIds.courseId, savedFilterIds.teacherId, savedFilterIds.classroomId, savedFilterIds.subjectId].forEach(
+      function (id) {
+        const select = document.getElementById(id);
+        if (!select) {
+          return;
+        }
+        select.addEventListener("change", function () {
+          state.savedDetailPage = 1;
+          renderSavedWorkspace();
+        });
+      },
+    );
 
     const savedOutput = document.getElementById("savedWorkspaceOutput");
     if (savedOutput) {
@@ -3485,9 +3512,168 @@
     });
   }
 
+  function getCsrfToken() {
+    // Intenta obtener el CSRF token de varias formas
+    // 1. Desde input hidden
+    let token = document.querySelector("[name=csrfmiddlewaretoken]")?.value;
+    if (token) return token;
+
+    // 2. Desde cookies
+    const name = "csrftoken";
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === name + "=") {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue || "";
+  }
+
+  async function analyzeSchedules(scheduleIds) {
+    // Llama al endpoint backend para analizar los horarios usando apiJson
+    const result = await apiJson("/schedules/analyze/", "POST", {
+      schedule_ids: scheduleIds,
+    });
+
+    if (!result.ok) {
+      return { error: true, message: result.data?.detail || "Error desconocido" };
+    }
+
+    return result.data?.defects || [];
+  }
+
+  function showScheduleAnalysisModal() {
+    // Obtiene IDs de los schedules generados, llama al análisis y muestra el modal
+    if (!state.latestGeneratedSchedules || state.latestGeneratedSchedules.length === 0) {
+      return;
+    }
+
+    const scheduleIds = state.latestGeneratedSchedules.map((s) => s.id);
+
+    analyzeSchedules(scheduleIds).then(function (result) {
+      // result puede ser un array de defects o un objeto con error
+      let defects = [];
+      let hasError = false;
+
+      if (result.error) {
+        hasError = true;
+      } else if (Array.isArray(result)) {
+        defects = result;
+      }
+
+      let modal = document.getElementById("scheduleAnalysisModal");
+      if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "scheduleAnalysisModal";
+        modal.className = "modal fade";
+        modal.innerHTML =
+          '<div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Análisis del Horario</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="schedule-analysis-content"></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button></div></div></div>';
+        document.body.appendChild(modal);
+      }
+
+      const content = modal.querySelector("#schedule-analysis-content");
+
+      if (hasError) {
+        content.innerHTML =
+          '<div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-triangle"></i> Se ha producido un error analizando el horario. Por favor, inténtelo de nuevo.</div>';
+      } else if (defects.length === 0) {
+        content.innerHTML =
+          '<p class="text-success text-center py-4"><i class="bi bi-check-circle"></i> El horario parece estar bien distribuido sin gaps evidentes</p>';
+      } else {
+        let html =
+          '<h6 class="mb-3"><i class="bi bi-exclamation-circle"></i> Se encontraron los siguientes problemas:</h6><ul style="list-style: none; padding: 0;">';
+
+        defects.forEach(function (defect) {
+          html +=
+            '<li style="margin-bottom: 12px; padding: 12px; background: #fff8f0; border-left: 3px solid #ff9800; border-radius: 4px;">';
+          html += '<strong style="color: #d97706;">' + escapeHtml(defect.entity_name) + "</strong><br>";
+          html += '<small style="color: #92400e;">' + escapeHtml(defect.description) + "</small>";
+          html += "</li>";
+        });
+
+        html += "</ul>";
+        content.innerHTML = html;
+      }
+
+      if (window.bootstrap && window.bootstrap.Modal) {
+        const bsModal = new window.bootstrap.Modal(modal);
+        bsModal.show();
+      }
+    });
+  }
+
+  function bindCentralDefectsButtonEvents() {
+    const generatedDefectsBtn = document.getElementById("generatedDefectsBtn");
+    if (generatedDefectsBtn) {
+      generatedDefectsBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        showScheduleAnalysisModal();
+      });
+    }
+
+    const savedDefectsBtn = document.getElementById("savedDefectsBtn");
+    if (savedDefectsBtn) {
+      savedDefectsBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        const selectedGroup = getSelectedSavedGroup();
+        const schedules = selectedGroup && Array.isArray(selectedGroup.sessions) ? selectedGroup.sessions : [];
+
+        if (!schedules || schedules.length === 0) {
+          alert("No hay horarios guardados seleccionados");
+          return;
+        }
+
+        const scheduleIds = schedules.map((s) => s.id);
+
+        analyzeSchedules(scheduleIds).then(function (defects) {
+          let modal = document.getElementById("savedAnalysisModal");
+          if (!modal) {
+            modal = document.createElement("div");
+            modal.id = "savedAnalysisModal";
+            modal.className = "modal fade";
+            modal.innerHTML =
+              '<div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Análisis del Horario Guardado</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="saved-analysis-content"></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button></div></div></div>';
+            document.body.appendChild(modal);
+          }
+
+          const content = modal.querySelector("#saved-analysis-content");
+
+          if (defects.length === 0) {
+            content.innerHTML =
+              '<p class="text-success text-center py-4">✓ El horario parece estar bien distribuido</p>';
+          } else {
+            let html = '<h6 class="mb-3">Problemas detectados:</h6><ul style="list-style: none; padding: 0;">';
+
+            defects.forEach(function (defect) {
+              html +=
+                '<li style="margin-bottom: 12px; padding: 12px; background: #fff8f0; border-left: 3px solid #ff9800; border-radius: 4px;">';
+              html += "<strong>" + escapeHtml(defect.entity_name) + "</strong><br>";
+              html += "<small>" + escapeHtml(defect.description) + "</small>";
+              html += "</li>";
+            });
+
+            html += "</ul>";
+            content.innerHTML = html;
+          }
+
+          if (window.bootstrap && window.bootstrap.Modal) {
+            const bsModal = new window.bootstrap.Modal(modal);
+            bsModal.show();
+          }
+        });
+      });
+    }
+  }
+
   async function init() {
     initScheduleFilterDropdowns();
     bindExportEvents();
+    bindCentralDefectsButtonEvents();
 
     if (schedulesSection) {
       bindGeneratedEvents();
