@@ -1,4 +1,4 @@
-from app.constants import STRING_MAX_LENGTH, MAX_LENGTH_EXTENDED
+from app.constants import MAX_LENGTH_EXTENDED, STRING_MAX_LENGTH
 
 
 def validation_constants(request):

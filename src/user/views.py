@@ -34,10 +34,7 @@ from auditableEntity.audit import (
 )
 from auditableEntity.models import AuditEntry
 from common.drf import AuditActorViewMixin
-from common.errors.exceptions import (
-    ResourceConflictError,
-    ValidationAppError,
-)
+from common.errors.exceptions import ResourceConflictError, ValidationAppError
 from common.permissions import IsManagementUser
 from common.tenancy import get_active_team
 from main.views import render_admin_dashboard

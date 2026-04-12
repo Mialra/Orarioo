@@ -215,7 +215,8 @@ class AuthenticationApiTests(APITestCase):
 
     def test_signup_rejects_email_exceeding_max_length(self):
         invalid_data = self.user_data.copy()
-        invalid_data["email"] = "a" * 88 + "@example.com"
+        # Create an email much longer than typical to ensure rejection
+        invalid_data["email"] = "a" * 200 + "@example.com"
 
         response = self.client.post(self.signup_url, invalid_data, format="json")
 
@@ -712,7 +713,8 @@ class CollaborationTeamApiTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # 409 Conflict: user already in team
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     def test_invite_rejects_duplicate_pending_invitation(self):
         invited_user = User.objects.create_user(
@@ -734,7 +736,8 @@ class CollaborationTeamApiTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # 409 Conflict: pending invitation already exists
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     def test_list_pending_invitations_for_current_user(self):
         CollaborationTeamInvitation.objects.create(

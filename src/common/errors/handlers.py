@@ -9,8 +9,8 @@ from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
 from common.errors.exceptions import (
-    AppError,
     NON_FIELD_ERRORS_KEY,
+    AppError,
     build_error_entry,
     flatten_error_messages,
 )
@@ -77,7 +77,9 @@ def _payload_to_structured_entries(raw_value, *, default_code, field_name=None):
                 build_error_entry(
                     raw_value.get("code") or default_code,
                     raw_value.get("message")
-                    or _extract_message(raw_value, "The request could not be processed."),
+                    or _extract_message(
+                        raw_value, "The request could not be processed."
+                    ),
                     context=raw_value.get("context") or {},
                 )
             ]

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from app.constants import STRING_MAX_LENGTH, MAX_LENGTH_EXTENDED
+from app.constants import MAX_LENGTH_EXTENDED, STRING_MAX_LENGTH
 from classroom.models import Classroom
 from common.serializer_utils import AUDIT_FIELD_NAMES
 from common.tenancy import get_active_team

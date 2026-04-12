@@ -22,7 +22,9 @@ class ApiExceptionHandlerTests(SimpleTestCase):
         self.assertIn("_error", response.data)
         self.assertIn("_meta", response.data)
         self.assertEqual(response.data["_meta"]["success"], False)
-        self.assertEqual(response.data["name"], ["name cannot be empty or whitespace only."])
+        self.assertEqual(
+            response.data["name"], ["name cannot be empty or whitespace only."]
+        )
         self.assertEqual(
             response.data["errors"]["name"][0]["message"],
             "name cannot be empty or whitespace only.",

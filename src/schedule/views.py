@@ -20,12 +20,12 @@ from common.errors.exceptions import ValidationAppError
 from common.export_utils import build_csv_response, sanitize_filename_stem
 from group.models import Group
 from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
-from schedule.algorithm.evaluator import ScheduleEvaluator
 from schedule.algorithm.constraints.hard import (
     group_daily_limit,
     session_preference_state,
     teacher_preference_state,
 )
+from schedule.algorithm.evaluator import ScheduleEvaluator
 from schedule.algorithm.generator import ScheduleReplanner
 from schedule.algorithm.slots import (
     STAGE_SLOT_WINDOWS,
@@ -2199,6 +2199,99 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    def _parse_analyze_params(self, request):
+        """
+        Parsea y valida los parámetros del request de análisis.
+
+        Args:
+            request: HTTP request object
+
+        Returns:
+            Tuple[List[int], str]: (schedule_ids, source)
+
+        Raises:
+            ValidationAppError: Si parámetros inválidos
+        """
+        schedule_ids = request.data.get("schedule_ids", [])
+        source = (request.data.get("source") or "").strip().lower()
+
+        if not (schedule_ids or source in {"generated", "saved"}):
+            raise ValidationAppError(
+                "INVALID_ANALYZE_PARAMS",
+                "Se debe especificar schedule_ids o source (generated/saved).",
+            )
+
+        return schedule_ids, source
+
+    def _get_schedules_to_analyze(self, queryset, schedule_ids, source):
+        """
+        Obtiene schedules a analizar filtrando por IDs o fuente.
+
+        Args:
+            queryset: Schedule queryset base
+            schedule_ids: List de IDs específicos (puede estar vacío)
+            source: "generated", "saved", o vacío
+
+        Returns:
+            List[Schedule]: Schedules a analizar
+
+        Raises:
+            ValidationAppError: Si no hay schedules para analizar
+        """
+        if schedule_ids and isinstance(schedule_ids, list):
+            schedules = list(queryset.filter(id__in=schedule_ids))
+        elif source in {"generated", "saved"}:
+            schedules = list(self._resolve_source_queryset(queryset, source))
+        else:
+            schedules = []
+
+        if not schedules:
+            raise ValidationAppError(
+                "NO_SCHEDULES_FOUND",
+                "No se encontraron horarios para analizar.",
+            )
+
+        return schedules
+
+    def _parse_and_validate_analysis_request(self, request):
+        """
+        Parsea, valida y obtiene los schedules del request.
+
+        Args:
+            request: HTTP request object
+
+        Returns:
+            List[Schedule]: Schedules a analizar
+
+        Raises:
+            ValidationAppError: Si hay errores de validación
+        """
+        schedule_ids, source = self._parse_analyze_params(request)
+        queryset = self.get_queryset()
+        return self._get_schedules_to_analyze(queryset, schedule_ids, source)
+
+    def _perform_defect_analysis(self, schedules):
+        """
+        Ejecuta el análisis de defectos en los schedules.
+
+        Args:
+            schedules: List[Schedule] a analizar
+
+        Returns:
+            List de defectos encontrados
+
+        Raises:
+            ValidationAppError: Si hay errores en el análisis
+        """
+        try:
+            return ScheduleEvaluator.analyze_schedules(schedules)
+        except Exception as e:
+            logger.exception("Error analyzing schedules: %s", str(e))
+            raise ValidationAppError(
+                "ANALYSIS_ERROR",
+                f"Error al analizar el horario: {str(e)}",
+            )
+
     @action(detail=False, methods=["post"], url_path="analyze")
     def analyze(self, request):
         """
@@ -2214,54 +2307,16 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             "defects": [...]
         }
         """
-        try:
-            # Parsear parámetros
-            schedule_ids = request.data.get("schedule_ids", [])
-            source = (request.data.get("source") or "").strip().lower()
+        schedules = self._parse_and_validate_analysis_request(request)
+        defects = self._perform_defect_analysis(schedules)
 
-            # Obtener los schedules a analizar
-            queryset = self.get_queryset()
+        return Response(
+            {"count": len(defects), "defects": defects},
+            status=status.HTTP_200_OK,
+        )
 
-            if schedule_ids and isinstance(schedule_ids, list):
-                # Si se especifican IDs específicos
-                schedules = list(queryset.filter(id__in=schedule_ids))
-            elif source in {"generated", "saved"}:
-                # Si se especifica una fuente (generated o saved)
-                schedules = list(self._resolve_source_queryset(queryset, source))
-            else:
-                raise ValidationAppError(
-                    "INVALID_ANALYZE_PARAMS",
-                    "Se debe especificar schedule_ids o source (generated/saved).",
-                )
-
-            if not schedules:
-                raise ValidationAppError(
-                    "NO_SCHEDULES_FOUND",
-                    "No se encontraron horarios para analizar.",
-                )
-
-            # Ejecutar análisis
-            defects = ScheduleEvaluator.analyze_schedules(schedules)
-
-            return Response(
-                {
-                    "count": len(defects),
-                    "defects": defects,
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        except ValidationAppError:
-            # Re-raise para que sea manejado por el error handler global
-            raise
-        except Exception as e:
-            logger.exception("Error analyzing schedules: %s", str(e))
-            raise ValidationAppError(
-                "ANALYSIS_ERROR",
-                f"Error al analizar el horario: {str(e)}",
-            )
-
-
+    @action(detail=False, methods=["post"], url_path="apply-manual-change")
+    def apply_manual_change(self, request):
         """Apply a manual session-to-slot change and replan the entire schedule."""
         actor = getattr(request.user, "email", "")
 

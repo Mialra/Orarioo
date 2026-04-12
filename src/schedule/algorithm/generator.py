@@ -257,6 +257,7 @@ class BasicScheduleGenerator:
             team=team,
         )
 
+
 class ScheduleReplanner:
     """Replan an existing schedule with manual session-to-slot changes."""
 
