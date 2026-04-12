@@ -1,7 +1,18 @@
+import re
+
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from rest_framework import serializers
 
+from app.constants import STRING_MAX_LENGTH
+from common.validators.validators import (
+    normalize_optional_text,
+    raise_non_field_error,
+    raise_validation_error,
+    validate_and_normalize_email,
+    validate_and_normalize_required_text,
+    validate_case_insensitive_unique,
+)
 from user.models import (
     CollaborationTeam,
     CollaborationTeamInvitation,
@@ -18,18 +29,27 @@ class CollaborationTeamSerializer(serializers.ModelSerializer):
 
 
 class CollaborationTeamCreateSerializer(serializers.Serializer):
-    name = serializers.CharField(max_length=255)
+    name = serializers.CharField(max_length=STRING_MAX_LENGTH)
 
     def validate_name(self, value):
-        normalized = value.strip()
-        if not normalized:
-            raise serializers.ValidationError("Team name cannot be empty.")
-        return normalized
+        return validate_and_normalize_required_text(
+            value,
+            field_name="name",
+            label="name",
+            max_length=STRING_MAX_LENGTH,
+        )
 
 
 class CollaborationTeamInviteSerializer(serializers.Serializer):
     email = serializers.EmailField()
     team_id = serializers.IntegerField(required=False)
+
+    def validate_email(self, value):
+        return validate_and_normalize_email(
+            value,
+            field_name="email",
+            label="email",
+        )
 
 
 class CollaborationTeamInvitationSerializer(serializers.ModelSerializer):
@@ -64,17 +84,35 @@ class CollaborationTeamInvitationRespondSerializer(serializers.Serializer):
 class UserNameEmailValidationMixin:
     @staticmethod
     def validate_given_name(value):
-        if not value or not value.strip():
-            raise serializers.ValidationError("Name cannot be empty.")
-        return value
+        return validate_and_normalize_required_text(
+            value,
+            field_name="given_name",
+            label="given_name",
+            max_length=STRING_MAX_LENGTH,
+        )
+
+    @staticmethod
+    def validate_family_name(value):
+        return normalize_optional_text(
+            value,
+            field_name="family_name",
+            label="family_name",
+            max_length=STRING_MAX_LENGTH,
+        )
 
     def validate_email(self, value):
-        queryset = User.objects.filter(email=value)
-        if self.instance is not None:
-            queryset = queryset.exclude(id=self.instance.id)
-        if queryset.exists():
-            raise serializers.ValidationError("This email is already registered.")
-        return value
+        normalized = validate_and_normalize_email(
+            value,
+            field_name="email",
+            label="email",
+        )
+        return validate_case_insensitive_unique(
+            normalized,
+            field_name="email",
+            queryset=User.objects.all(),
+            instance=self.instance,
+            label="email",
+        )
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -106,6 +144,7 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
     """Serializer for creating new users"""
 
     given_name = serializers.CharField(source="name")
+    email = serializers.EmailField(validators=[])
     password = serializers.CharField(
         write_only=True,
         required=True,
@@ -140,25 +179,54 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
 
     def validate(self, data):
         """Validates that passwords match"""
+        password = data.get("password") or ""
+
+        if len(password) < 8:
+            raise_validation_error(
+                "password",
+                "PASSWORD_MIN_LENGTH",
+                "Password must be at least 8 characters long.",
+                context={"field": "password", "min_length": 8},
+            )
+
+        if not re.search(r"[A-Za-z]", password):
+            raise_validation_error(
+                "password",
+                "PASSWORD_REQUIRES_LETTER",
+                "Password must include at least one letter.",
+                context={"field": "password"},
+            )
+
+        if not re.search(r"\d", password):
+            raise_validation_error(
+                "password",
+                "PASSWORD_REQUIRES_NUMBER",
+                "Password must include at least one number.",
+                context={"field": "password"},
+            )
+
         if data["password"] != data["password_confirm"]:
-            raise serializers.ValidationError({"password": "Passwords do not match."})
+            raise_validation_error(
+                "password_confirm",
+                "PASSWORD_MISMATCH",
+                "Passwords do not match.",
+                context={"field": "password_confirm"},
+            )
 
         if not data.get("privacy_policy_accepted"):
-            raise serializers.ValidationError(
-                {
-                    "privacy_policy_accepted": (
-                        "You must accept the privacy policy to complete signup."
-                    )
-                }
+            raise_validation_error(
+                "privacy_policy_accepted",
+                "POLICY_NOT_ACCEPTED",
+                "You must accept the privacy policy to complete signup.",
+                context={"field": "privacy_policy_accepted"},
             )
 
         if not data.get("terms_conditions_accepted"):
-            raise serializers.ValidationError(
-                {
-                    "terms_conditions_accepted": (
-                        "You must accept the terms and conditions to complete signup."
-                    )
-                }
+            raise_validation_error(
+                "terms_conditions_accepted",
+                "TERMS_NOT_ACCEPTED",
+                "You must accept the terms and conditions to complete signup.",
+                context={"field": "terms_conditions_accepted"},
             )
 
         return data
@@ -214,8 +282,11 @@ class UserChangePasswordSerializer(serializers.Serializer):
     def validate(self, data):
         """Validates that the new passwords match"""
         if data["new_password"] != data["password_confirm"]:
-            raise serializers.ValidationError(
-                {"password_confirm": "New passwords do not match."}
+            raise_validation_error(
+                "password_confirm",
+                "PASSWORD_MISMATCH",
+                "New passwords do not match.",
+                context={"field": "password_confirm"},
             )
         return data
 
@@ -223,7 +294,12 @@ class UserChangePasswordSerializer(serializers.Serializer):
         """Validates that the current password is correct"""
         user = self.context["request"].user
         if not user.check_password(value):
-            raise serializers.ValidationError("Current password is incorrect.")
+            raise_validation_error(
+                "current_password",
+                "INVALID_CREDENTIALS",
+                "Current password is incorrect.",
+                context={"field": "current_password"},
+            )
         return value
 
     def save(self):
@@ -249,12 +325,11 @@ class UserAccountDeletionSerializer(serializers.Serializer):
         provided_confirmation = (data.get("confirmation_text") or "").strip().lower()
 
         if provided_confirmation != expected_confirmation:
-            raise serializers.ValidationError(
-                {
-                    "confirmation_text": (
-                        "Debes escribir exactamente tu correo electrónico para eliminar la cuenta."
-                    )
-                }
+            raise_validation_error(
+                "confirmation_text",
+                "INVALID_CONFIRMATION_TEXT",
+                "confirmation_text must exactly match the current email address.",
+                context={"field": "confirmation_text"},
             )
         return data
 
@@ -267,19 +342,33 @@ class LoginSerializer(serializers.Serializer):
 
     def validate(self, data):
         """Validates login credentials"""
-        email = data.get("email")
+        email = validate_and_normalize_email(
+            data.get("email"),
+            field_name="email",
+            label="email",
+        )
         password = data.get("password")
 
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            raise serializers.ValidationError("Incorrect email or password.")
+            raise_non_field_error(
+                "INVALID_CREDENTIALS",
+                "Incorrect email or password.",
+            )
 
         if not user.check_password(password):
-            raise serializers.ValidationError("Incorrect email or password.")
+            raise_non_field_error(
+                "INVALID_CREDENTIALS",
+                "Incorrect email or password.",
+            )
 
         if not user.is_enabled or getattr(user, "deleted_at", None):
-            raise serializers.ValidationError("This user has been deactivated.")
+            raise_non_field_error(
+                "USER_DISABLED",
+                "This user has been deactivated.",
+            )
 
         data["user"] = user
+        data["email"] = email
         return data

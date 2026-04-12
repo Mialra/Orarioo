@@ -103,6 +103,13 @@
                     </div>
                     <div class="schedule-toolbar-buttons">
                         <button type="button"
+                                id="generatedDefectsBtn"
+                                class="btn btn-outline-warning schedule-toolbar-btn"
+                                title="Ver todos los problemas detectados en el horario">
+                            <i data-lucide="alert-circle" class="btn-icon" aria-hidden="true"></i>
+                            <span id="generatedDefectsBtnLabel">Analizar</span>
+                        </button>
+                        <button type="button"
                                 id="generatedWorkspaceExportBtn"
                                 class="btn btn-outline-secondary schedule-toolbar-btn">
                             <i data-lucide="download" class="btn-icon" aria-hidden="true"></i>
@@ -118,7 +125,9 @@
                 </div>
                 <p class="schedule-workspace-hint mb-0"
                    title="Puedes arrastrar y soltar una sesión para recolocarla dentro del horario.">
-                    <i data-lucide="move" class="schedule-workspace-hint-icon" aria-hidden="true"></i>
+                    <i data-lucide="move"
+                       class="schedule-workspace-hint-icon"
+                       aria-hidden="true"></i>
                     Arrastra y suelta una sesión para recolocarla dentro del horario. Si la sueltas sobre otra, se intercambian automáticamente.
                 </p>
             </div>

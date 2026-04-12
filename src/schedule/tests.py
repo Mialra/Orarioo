@@ -87,14 +87,12 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
 
     def assert_generate_bad_request_with_detail(self, response, detail_snippet):
-        del detail_snippet
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
-        self.assertEqual(
-            response.data["detail"],
-            "Unable to generate schedule with the current input constraints.",
-        )
-        self.assertEqual(response.data.get("error_code"), "schedule_generation_failed")
+        self.assertIn(detail_snippet, response.data["detail"])
+        self.assertIn("_error", response.data)
+        self.assertIn("errors", response.data)
+        self.assertEqual(response.data["_meta"]["success"], False)
 
     def create_schedule(
         self,

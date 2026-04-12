@@ -35,27 +35,37 @@
                         <input type="hidden" id="admin-subject-id" value="">
                         <input type="hidden" id="admin-subject-mode" value="create">
                         <div class="col-12 col-md-8">
-                            <label class="form-label fw-semibold" for="admin-subject-name">Nombre*</label>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="admin-subject-name">Nombre</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
                             <input class="form-control"
                                    id="admin-subject-name"
                                    type="text"
-                                   placeholder="Ej: Matemáticas"
+                                   placeholder="Ej: Matemáticas 1º Primaria"
+                                   maxlength="{{ subject_name_max_length }}"
                                    required>
                             <div class="invalid-feedback" id="admin-subject-name-error"></div>
                         </div>
                         <div class="col-12 col-md-4">
-                            <label class="form-label fw-semibold" for="admin-subject-weekly-hours">Horas semanales*</label>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="admin-subject-weekly-hours">Horas semanales</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
                             <input class="form-control"
                                    id="admin-subject-weekly-hours"
                                    type="number"
+                                   placeholder="Ej: 5"
                                    min="1"
                                    step="1"
-                                   value="5"
                                    required>
                             <div class="invalid-feedback" id="admin-subject-weekly-hours-error"></div>
                         </div>
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-subject-stage">Etapa*</label>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="admin-subject-stage">Etapa</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
                             <select class="form-select orarioo-custom-select"
                                     id="admin-subject-stage"
                                     required>
@@ -66,7 +76,10 @@
                             <div class="invalid-feedback" id="admin-subject-stage-error"></div>
                         </div>
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-subject-type">Tipo*</label>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="admin-subject-type">Tipo</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
                             <select class="form-select orarioo-custom-select"
                                     id="admin-subject-type"
                                     required>
@@ -76,7 +89,10 @@
                             <div class="invalid-feedback" id="admin-subject-type-error"></div>
                         </div>
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-subject-teacher">Profesor asignado*</label>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="admin-subject-teacher">Profesor asignado</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
                             <select class="form-select orarioo-custom-select"
                                     id="admin-subject-teacher"
                                     required>

@@ -3,7 +3,7 @@ from rest_framework import serializers
 from classroom.models import Classroom
 from common.serializer_utils import AUDIT_FIELD_NAMES
 from common.tenancy import get_active_team
-from common.validation import normalize_optional_text
+from common.validators.validators import normalize_optional_text, raise_validation_error
 from group.models import Group
 from namedEntity.serializers import NamedEntityNameValidationMixin
 from schedule.models import Schedule
@@ -81,30 +81,47 @@ class ScheduleSerializer(NamedEntityNameValidationMixin, serializers.ModelSerial
         )
 
         if start_time is not None and end_time is not None and end_time <= start_time:
-            raise serializers.ValidationError(
-                {"end_time": "end_time must be greater than start_time."}
+            raise_validation_error(
+                "end_time",
+                "INVALID_TIME_RANGE",
+                "end_time must be greater than start_time.",
+                context={"field": "end_time"},
             )
 
         if self.instance is None and not attrs.get("users"):
-            raise serializers.ValidationError(
-                {"users": "At least one user must be assigned."}
+            raise_validation_error(
+                "users",
+                "REQUIRED_COLLECTION",
+                "At least one user must be assigned.",
+                context={"field": "users"},
             )
 
         if self.instance is None and not attrs.get("subject"):
-            raise serializers.ValidationError({"subject": "This field is required."})
+            raise_validation_error(
+                "subject",
+                "REQUIRED_FIELD",
+                "This field is required.",
+                context={"field": "subject"},
+            )
 
         if (
             self.instance is not None
             and "subject" in attrs
             and attrs.get("subject") is None
         ):
-            raise serializers.ValidationError(
-                {"subject": "This field may not be null."}
+            raise_validation_error(
+                "subject",
+                "NULL_NOT_ALLOWED",
+                "This field may not be null.",
+                context={"field": "subject"},
             )
 
         if self.instance is not None and "users" in attrs and not attrs.get("users"):
-            raise serializers.ValidationError(
-                {"users": "At least one user must be assigned."}
+            raise_validation_error(
+                "users",
+                "REQUIRED_COLLECTION",
+                "At least one user must be assigned.",
+                context={"field": "users"},
             )
 
         attrs["observations"] = normalize_optional_text(
@@ -112,6 +129,7 @@ class ScheduleSerializer(NamedEntityNameValidationMixin, serializers.ModelSerial
                 "observations", self.instance.observations if self.instance else ""
             ),
             field_name="observations",
+            label="observations",
         )
 
         return attrs

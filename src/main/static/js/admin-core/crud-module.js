@@ -270,7 +270,9 @@
 
             if (!response.ok) {
                 formUtils.applyServerErrors(config.form.fields, response.data);
-                const detail = response.data && response.data.detail;
+                const detail = response.errorInfo && response.errorInfo.message
+                    ? response.errorInfo.message
+                    : response.data && response.data.detail;
                 uiState.showAlert(alertBox, detail || config.messages.saveError, "danger");
                 setSubmitLoading(false);
                 return;

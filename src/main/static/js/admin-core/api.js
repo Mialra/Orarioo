@@ -1,5 +1,6 @@
 (function () {
     const root = window.OrariooAdmin = window.OrariooAdmin || {};
+    const errorHandler = window.OrariooErrorHandler || {};
 
     async function safeJson(response) {
         try {
@@ -20,11 +21,15 @@
                 headers: headers,
                 body: config.data ? JSON.stringify(config.data) : undefined,
             });
+            const data = await safeJson(response);
 
             return {
                 ok: response.ok,
                 status: response.status,
-                data: await safeJson(response),
+                data: data,
+                errorInfo: response.ok || !errorHandler || typeof errorHandler.parseApiError !== "function"
+                    ? null
+                    : errorHandler.parseApiError(data, {}),
             };
         } catch (error) {
             return {

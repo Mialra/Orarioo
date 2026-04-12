@@ -202,6 +202,34 @@ class AuthenticationApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_signup_rejects_password_without_number(self):
+        invalid_data = self.user_data.copy()
+        invalid_data["email"] = "nonumber@example.com"
+        invalid_data["password"] = "PasswordOnly"
+        invalid_data["password_confirm"] = "PasswordOnly"
+
+        response = self.client.post(self.signup_url, invalid_data, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("password", response.data)
+
+    def test_signup_rejects_email_exceeding_max_length(self):
+        invalid_data = self.user_data.copy()
+        invalid_data["email"] = "a" * 88 + "@example.com"
+
+        response = self.client.post(self.signup_url, invalid_data, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data)
+
+    def test_signup_accepts_email_within_max_length(self):
+        valid_data = self.user_data.copy()
+        valid_data["email"] = "a" * 87 + "@example.com"
+
+        response = self.client.post(self.signup_url, valid_data, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
     def test_signup_requires_privacy_policy_acceptance(self):
         invalid_data = self.user_data.copy()
         invalid_data["privacy_policy_accepted"] = False

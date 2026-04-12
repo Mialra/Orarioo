@@ -175,8 +175,19 @@
                     name: "name",
                     input: elements.nameInput,
                     feedback: elements.nameError,
-                    required: true,
-                    requiredMessage: "El nombre es obligatorio.",
+                    rules: [
+                        {
+                            validator: function () {
+                                if (!elements.nameInput.value.trim()) {
+                                    return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
+                                }
+                                if (elements.nameInput.value.length > window.ValidationConstants.STRING_MAX_LENGTH) {
+                                    return "Este campo no puede tener más de " + window.ValidationConstants.STRING_MAX_LENGTH + " caracteres.";
+                                }
+                                return "";
+                            },
+                        },
+                    ],
                 },
             ],
             clearValidationOnInput: [

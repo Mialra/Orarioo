@@ -5,15 +5,97 @@
   const privacyCheckbox = document.getElementById("privacy_policy_accepted");
   const termsCheckbox = document.getElementById("terms_conditions_accepted");
 
-  window.orariooAuth.initBootstrapTooltips();
+  const elements = {
+    givenName: document.getElementById("given_name"),
+    familyName: document.getElementById("family_name"),
+    email: document.getElementById("email"),
+    password: document.getElementById("password"),
+    passwordConfirm: document.getElementById("password_confirm"),
+    givenNameError: document.getElementById("given_name_error"),
+    familyNameError: document.getElementById("family_name_error"),
+    emailError: document.getElementById("email_error"),
+    passwordError: document.getElementById("password_error"),
+    passwordConfirmError: document.getElementById("password_confirm_error"),
+    privacyError: document.getElementById("privacy_policy_accepted_error"),
+    termsError: document.getElementById("terms_conditions_accepted_error"),
+  };
 
-  function setLoadingState(isLoading) {
-    submitButton.classList.toggle("is-loading", isLoading);
-    const legalAccepted =
-      Boolean(privacyCheckbox && privacyCheckbox.checked) && Boolean(termsCheckbox && termsCheckbox.checked);
-    submitButton.disabled = isLoading || !legalAccepted;
-    submitButton.setAttribute("aria-disabled", submitButton.disabled ? "true" : "false");
-  }
+  const fields = [
+    {
+      name: "given_name",
+      input: elements.givenName,
+      feedback: elements.givenNameError,
+      rules: [{ type: "required", message: window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" }) }],
+      validator: function (value) {
+        if (value && value.length > window.ValidationConstants.STRING_MAX_LENGTH) {
+          return "Este campo no puede tener más de " + window.ValidationConstants.STRING_MAX_LENGTH + " caracteres.";
+        }
+        return "";
+      },
+    },
+    {
+      name: "family_name",
+      input: elements.familyName,
+      feedback: elements.familyNameError,
+      rules: [],
+    },
+    {
+      name: "email",
+      input: elements.email,
+      feedback: elements.emailError,
+      rules: [
+        { type: "required", message: window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" }) },
+        { type: "email", message: window.OrariooErrorHandler.translateEntry({ code: "INVALID_EMAIL" }) },
+      ],
+      validator: function (value) {
+        if (value && value.length > window.ValidationConstants.MAX_LENGTH_EXTENDED) {
+          return "Este campo no puede tener más de " + window.ValidationConstants.MAX_LENGTH_EXTENDED + " caracteres.";
+        }
+        return "";
+      },
+    },
+    {
+      name: "password",
+      input: elements.password,
+      feedback: elements.passwordError,
+      rules: [{ type: "required", message: window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" }) }],
+      validator: function (value) {
+        const result = window.OrariooValidators.rules.password(value);
+        if (result === true) return "";
+        return window.OrariooErrorHandler.translateEntry({ code: result[0] });
+      },
+    },
+    {
+      name: "password_confirm",
+      input: elements.passwordConfirm,
+      feedback: elements.passwordConfirmError,
+      rules: [{ type: "required", message: window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" }) }],
+      validator: function (value) {
+        if (value !== elements.password.value) {
+          return window.OrariooErrorHandler.translateEntry({ code: "PASSWORD_MISMATCH" });
+        }
+        return "";
+      },
+    },
+    {
+      name: "privacy_policy_accepted",
+      input: privacyCheckbox,
+      feedback: elements.privacyError,
+      event: "change",
+      rules: [{ type: "checked", message: window.OrariooErrorHandler.translateEntry({ code: "POLICY_NOT_ACCEPTED" }) }],
+    },
+    {
+      name: "terms_conditions_accepted",
+      input: termsCheckbox,
+      feedback: elements.termsError,
+      event: "change",
+      rules: [{ type: "checked", message: window.OrariooErrorHandler.translateEntry({ code: "TERMS_NOT_ACCEPTED" }) }],
+    },
+  ];
+
+  window.orariooAuth.initBootstrapTooltips();
+  window.orariooAuth.initPasswordToggle({ inputId: "password", buttonId: "password-toggle" });
+  window.orariooAuth.initPasswordToggle({ inputId: "password_confirm", buttonId: "password-confirm-toggle" });
 
   function showAlert(message, type) {
     alertBox.textContent = message;
@@ -26,109 +108,58 @@
     alertBox.classList.remove("error", "info", "success");
   }
 
-  function syncLegalControls() {
-    if (!privacyCheckbox || !termsCheckbox) {
-      submitButton.disabled = true;
-      submitButton.setAttribute("aria-disabled", "true");
-      return;
-    }
+  function clearFieldErrors() {
+    fields.forEach(function (field) {
+      window.OrariooValidators.clearFieldValidity(field.input, field.feedback);
+    });
+  }
 
-    const accepted = privacyCheckbox.checked && termsCheckbox.checked;
+  function validateForm(payload) {
+    clearFieldErrors();
+    return window.OrariooValidators.validateFields(fields, payload);
+  }
+
+  function syncLegalControls() {
+    const accepted = privacyCheckbox?.checked && termsCheckbox?.checked;
     submitButton.disabled = !accepted;
     submitButton.setAttribute("aria-disabled", accepted ? "false" : "true");
-
-    if (privacyCheckbox.checked) {
-      privacyCheckbox.classList.remove("is-invalid");
-    }
-
-    if (termsCheckbox.checked) {
-      termsCheckbox.classList.remove("is-invalid");
-    }
   }
 
-  function normalizeKnownError(message) {
-    if (!message) {
-      return message;
-    }
-
-    const lower = String(message).toLowerCase();
-    if (lower.includes("user with this email already exists") || lower.includes("this email is already registered")) {
-      return "Ya existe una cuenta con este correo electrónico.";
-    }
-
-    return message;
+  function setLoadingState(isLoading) {
+    submitButton.classList.toggle("is-loading", isLoading);
+    const accepted = privacyCheckbox?.checked && termsCheckbox?.checked;
+    submitButton.disabled = isLoading || !accepted;
   }
 
-  function getFriendlySignupError(responseData) {
-    if (!responseData) {
-      return "No se pudo crear la cuenta. Inténtelo de nuevo.";
+  function hasFieldErrors(data) {
+    if (!data || typeof data !== "object") {
+      return false;
     }
 
-    if (typeof responseData.detail === "string") {
-      return normalizeKnownError(responseData.detail);
-    }
+    const formFieldNames = fields.map(function (field) {
+      return field.name;
+    });
 
-    if (Array.isArray(responseData.password) && responseData.password.length > 0) {
-      return normalizeKnownError(responseData.password[0]);
-    }
-
-    if (Array.isArray(responseData.password_confirm) && responseData.password_confirm.length > 0) {
-      return normalizeKnownError(responseData.password_confirm[0]);
-    }
-
-    if (Array.isArray(responseData.email) && responseData.email.length > 0) {
-      return normalizeKnownError(responseData.email[0]);
-    }
-
-    if (Array.isArray(responseData.given_name) && responseData.given_name.length > 0) {
-      return normalizeKnownError(responseData.given_name[0]);
-    }
-
-    if (Array.isArray(responseData.family_name) && responseData.family_name.length > 0) {
-      return normalizeKnownError(responseData.family_name[0]);
-    }
-
-    if (Array.isArray(responseData.privacy_policy_accepted) && responseData.privacy_policy_accepted.length > 0) {
-      return normalizeKnownError(responseData.privacy_policy_accepted[0]);
-    }
-
-    if (Array.isArray(responseData.terms_conditions_accepted) && responseData.terms_conditions_accepted.length > 0) {
-      return normalizeKnownError(responseData.terms_conditions_accepted[0]);
-    }
-
-    if (typeof responseData === "object") {
-      const firstKey = Object.keys(responseData)[0];
-      if (firstKey && Array.isArray(responseData[firstKey]) && responseData[firstKey].length > 0) {
-        return normalizeKnownError(responseData[firstKey][0]);
-      }
-    }
-
-    return "No se pudo crear la cuenta. Revisa los datos e inténtalo de nuevo.";
-  }
-
-  async function redirectIfAlreadyAuthenticated() {
-    const tokens = window.orariooAuth.getTokens();
-    if (!tokens.access && !tokens.refresh) {
-      return;
-    }
-
-    try {
-      const response = await window.orariooAuth.apiFetch("/api/users/me/", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
+    const structuredErrors = data.errors;
+    if (structuredErrors && typeof structuredErrors === "object") {
+      return formFieldNames.some(function (name) {
+        return Array.isArray(structuredErrors[name]) && structuredErrors[name].length > 0;
       });
-
-      if (response.ok) {
-        window.location.replace("/dashboard/");
-        return;
-      }
-
-      window.orariooAuth.clearAuthSession();
-    } catch (error) {
-      window.orariooAuth.clearAuthSession();
     }
+
+    return formFieldNames.some(function (name) {
+      return Array.isArray(data[name]) && data[name].length > 0;
+    });
+  }
+
+  function getFriendlySignupError(data) {
+    if (hasFieldErrors(data)) {
+      return "";
+    }
+
+    return window.OrariooErrorHandler.parseApiError(data, {
+      fallbackMessage: "No se pudo crear la cuenta. Revisa los datos e inténtalo de nuevo.",
+    }).message;
   }
 
   async function submitSignup(event) {
@@ -136,46 +167,16 @@
     clearAlert();
 
     const payload = {
-      given_name: document.getElementById("given_name").value.trim(),
-      family_name: document.getElementById("family_name").value.trim(),
-      email: document.getElementById("email").value.trim(),
-      password: document.getElementById("password").value,
-      password_confirm: document.getElementById("password_confirm").value,
-      privacy_policy_accepted: Boolean(privacyCheckbox && privacyCheckbox.checked),
-      terms_conditions_accepted: Boolean(termsCheckbox && termsCheckbox.checked),
+      given_name: elements.givenName.value.trim(),
+      family_name: elements.familyName.value.trim(),
+      email: elements.email.value.trim(),
+      password: elements.password.value,
+      password_confirm: elements.passwordConfirm.value,
+      privacy_policy_accepted: privacyCheckbox.checked,
+      terms_conditions_accepted: termsCheckbox.checked,
     };
 
-    if (
-      !payload.given_name ||
-      !payload.family_name ||
-      !payload.email ||
-      !payload.password ||
-      !payload.password_confirm
-    ) {
-      showAlert("Completa todos los campos obligatorios.", "error");
-      return;
-    }
-
-    if (payload.password !== payload.password_confirm) {
-      showAlert("Las contraseñas no coinciden.", "error");
-      return;
-    }
-
-    if (!payload.privacy_policy_accepted) {
-      if (privacyCheckbox) {
-        privacyCheckbox.classList.add("is-invalid");
-        privacyCheckbox.focus();
-      }
-      showAlert("Debes aceptar la Política de Privacidad para crear tu cuenta.", "error");
-      return;
-    }
-
-    if (!payload.terms_conditions_accepted) {
-      if (termsCheckbox) {
-        termsCheckbox.classList.add("is-invalid");
-        termsCheckbox.focus();
-      }
-      showAlert("Debes aceptar los Términos y Condiciones para crear tu cuenta.", "error");
+    if (!validateForm(payload)) {
       return;
     }
 
@@ -184,49 +185,35 @@
     try {
       const response = await fetch("/api/signup/", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json().catch(function () {
-        return null;
-      });
+      const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        showAlert(getFriendlySignupError(data), "error");
+        window.OrariooErrorHandler.applyFormErrors(fields, data);
+        const alertMessage = getFriendlySignupError(data);
+        if (alertMessage) {
+          showAlert(alertMessage, "error");
+        } else {
+          clearAlert();
+        }
         return;
       }
 
       window.orariooAuth.setAuthSession(data);
-      window.location.assign("/dashboard/");
-    } catch (error) {
-      showAlert("No hay conexión con el servidor. Inténtelo en unos segundos.", "error");
+      window.location.href = "/dashboard/";
+    } catch (e) {
+      showAlert("No hay conexión con el servidor.", "error");
     } finally {
       setLoadingState(false);
     }
   }
 
-  window.orariooAuth.initPasswordToggle({
-    inputId: "password",
-    buttonId: "password-toggle",
-  });
-
-  window.orariooAuth.initPasswordToggle({
-    inputId: "password_confirm",
-    buttonId: "password-confirm-toggle",
-  });
-
-  if (privacyCheckbox) {
-    privacyCheckbox.addEventListener("change", syncLegalControls);
-  }
-
-  if (termsCheckbox) {
-    termsCheckbox.addEventListener("change", syncLegalControls);
-  }
-
   form.addEventListener("submit", submitSignup);
+  privacyCheckbox?.addEventListener("change", syncLegalControls);
+  termsCheckbox?.addEventListener("change", syncLegalControls);
+
   syncLegalControls();
-  redirectIfAlreadyAuthenticated();
 })();

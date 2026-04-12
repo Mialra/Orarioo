@@ -1,10 +1,18 @@
 (function () {
     const root = window.OrariooAdmin = window.OrariooAdmin || {};
+    const validators = window.OrariooValidators || {};
+    const errorHandler = window.OrariooErrorHandler || {};
 
     function setFieldError(input, feedback, message) {
+        if (validators && typeof validators.setFieldValidity === "function") {
+            validators.setFieldValidity(input, message, feedback);
+            return;
+        }
+
         if (!input) {
             return;
         }
+
         const hasError = Boolean(message);
         input.classList.toggle("is-invalid", hasError);
         if (feedback) {
@@ -23,30 +31,21 @@
     }
 
     function validateFields(fields, payload) {
+        if (validators && typeof validators.validateFields === "function") {
+            return validators.validateFields(fields, payload);
+        }
+
         clearErrors(fields);
-        let isValid = true;
-
-        (fields || []).forEach(function (field) {
-            const value = payload[field.name];
-            let message = "";
-
-            if (field.required && !value) {
-                message = field.requiredMessage || "Campo obligatorio.";
-            } else if (field.validator && value) {
-                message = field.validator(value) || "";
-            }
-
-            if (message) {
-                setFieldError(field.input, field.feedback, message);
-                isValid = false;
-            }
-        });
-
-        return isValid;
+        return true;
     }
 
     function applyServerErrors(fields, responseData) {
         if (!responseData || typeof responseData !== "object") {
+            return;
+        }
+
+        if (errorHandler && typeof errorHandler.applyFormErrors === "function") {
+            errorHandler.applyFormErrors(fields, responseData);
             return;
         }
 

@@ -20,6 +20,7 @@
     const inviteEmailInput = document.getElementById("dashboard-invite-email");
     const inviteSubmit = document.getElementById("dashboard-invite-team-submit");
     const inviteError = document.getElementById("dashboard-invite-team-error");
+    const errorHandler = window.OrariooErrorHandler || {};
 
     const invitationsEmpty = document.getElementById("dashboard-invitations-empty");
     const invitationsList = document.getElementById("dashboard-invitations-list");
@@ -113,27 +114,20 @@
     }
 
     function normalizeApiMessage(payload, fallbackMessage) {
-        if (!payload) {
-            return fallbackMessage;
-        }
-
-        if (typeof payload.detail === "string" && payload.detail.trim()) {
-            return payload.detail;
-        }
-
-        if (typeof payload.email === "string" && payload.email.trim()) {
-            return payload.email;
-        }
-
-        if (typeof payload.name === "string" && payload.name.trim()) {
-            return payload.name;
-        }
-
-        if (Array.isArray(payload.non_field_errors) && payload.non_field_errors.length) {
-            return String(payload.non_field_errors[0]);
+        if (errorHandler && typeof errorHandler.parseApiError === "function") {
+            return errorHandler.parseApiError(payload, {
+                fallbackMessage: fallbackMessage,
+            }).message;
         }
 
         return fallbackMessage;
+    }
+
+    function buildHandledError(payload, fallbackMessage) {
+        const message = normalizeApiMessage(payload, fallbackMessage);
+        const error = new Error(message);
+        error.payload = payload || null;
+        return error;
     }
 
     async function createCollaborationTeam(teamName) {
@@ -150,7 +144,7 @@
         });
 
         if (!response.ok) {
-            throw new Error(normalizeApiMessage(payload, "No se pudo crear el equipo."));
+            throw buildHandledError(payload, "No se pudo crear el equipo.");
         }
 
         window.orariooAuth.setAuthSession(payload);
@@ -176,7 +170,7 @@
         });
 
         if (!response.ok) {
-            throw new Error(normalizeApiMessage(payload, "No se pudo invitar al usuario."));
+            throw buildHandledError(payload, "No se pudo invitar al usuario.");
         }
 
         return payload;
@@ -193,7 +187,7 @@
             return null;
         });
         if (!response.ok) {
-            throw new Error(normalizeApiMessage(payload, "No se pudieron cargar las invitaciones."));
+            throw buildHandledError(payload, "No se pudieron cargar las invitaciones.");
         }
         invitationsCache = payload && payload.results ? payload.results : [];
         renderInvitationCount(payload && typeof payload.pending_count === "number" ? payload.pending_count : 0);
@@ -215,7 +209,7 @@
             return null;
         });
         if (!response.ok) {
-            throw new Error(normalizeApiMessage(payload, "No se pudo responder la invitacion."));
+            throw buildHandledError(payload, "No se pudo responder la invitacion.");
         }
         return payload;
     }
@@ -237,7 +231,7 @@
             return null;
         });
         if (!response.ok) {
-            throw new Error(normalizeApiMessage(payload, "No se pudo salir del equipo."));
+            throw buildHandledError(payload, "No se pudo salir del equipo.");
         }
         window.orariooAuth.setAuthSession(payload);
         window.location.reload();
@@ -342,11 +336,14 @@
             body: JSON.stringify({ team_id: Number(teamId) }),
         });
 
+        const payload = await response.json().catch(function () {
+            return null;
+        });
+
         if (!response.ok) {
-            throw new Error("No se pudo cambiar el equipo activo.");
+            throw buildHandledError(payload, "No se pudo cambiar el equipo activo.");
         }
 
-        const payload = await response.json();
         window.orariooAuth.setAuthSession(payload);
         window.location.reload();
     }

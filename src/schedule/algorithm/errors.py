@@ -1,2 +1,13 @@
-class ScheduleGenerationError(Exception):
-    """Raised when a schedule cannot be generated with current data."""
+from common.errors.exceptions import (
+    ScheduleCapacityError,
+    ScheduleConflictError,
+    ScheduleError,
+    ScheduleGenerationError,
+)
+
+__all__ = [
+    "ScheduleCapacityError",
+    "ScheduleConflictError",
+    "ScheduleError",
+    "ScheduleGenerationError",
+]

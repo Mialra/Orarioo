@@ -44,7 +44,11 @@ class BasicScheduleGenerator:
         teacher = Teacher.objects.filter(team=team).order_by("id").first()
         if teacher is None:
             raise ScheduleGenerationError(
-                "At least one teacher is required before generating a schedule."
+                "At least one teacher is required before generating a schedule.",
+                code="MISSING_TEACHERS",
+                suggestions=[
+                    "Create at least one teacher before generating the schedule.",
+                ],
             )
 
         subjects = list(
@@ -121,6 +125,7 @@ class BasicScheduleGenerator:
             schedules=created,
             user=user,
         )
+
         cls._create_generation_audit_entry(
             schedules=created,
             team=team,
@@ -252,7 +257,6 @@ class BasicScheduleGenerator:
             team=team,
         )
 
-
 class ScheduleReplanner:
     """Replan an existing schedule with manual session-to-slot changes."""
 
@@ -284,7 +288,9 @@ class ScheduleReplanner:
             ).get(id=schedule_to_move_id, users=user, team=team)
         except Schedule.DoesNotExist as exc:
             raise ScheduleGenerationError(
-                "The selected schedule was not found for the current user."
+                "The selected schedule was not found for the current user.",
+                code="SCHEDULE_NOT_FOUND",
+                context={"schedule_id": schedule_to_move_id},
             ) from exc
 
         timetable_schedules = list(
@@ -295,7 +301,10 @@ class ScheduleReplanner:
             )
         )
         if not timetable_schedules:
-            raise ScheduleGenerationError("No schedules found for manual replanning.")
+            raise ScheduleGenerationError(
+                "No schedules found for manual replanning.",
+                code="NO_SCHEDULES_FOR_REPLANNING",
+            )
 
         fallback_classroom = cls._get_or_create_classroom(actor_email, team)
         classrooms = cls._build_classroom_pool(
@@ -309,7 +318,12 @@ class ScheduleReplanner:
 
         if new_slot_index < 0 or new_slot_index >= len(slots):
             raise ScheduleGenerationError(
-                f"Invalid slot index {new_slot_index}. Must be 0-{len(slots) - 1}"
+                f"Invalid slot index {new_slot_index}. Must be 0-{len(slots) - 1}",
+                code="INVALID_SLOT_INDEX",
+                context={
+                    "new_slot_index": new_slot_index,
+                    "max_slot_index": len(slots) - 1,
+                },
             )
 
         sessions, previous_assignment_by_session, moved_session_idx = (
@@ -322,7 +336,9 @@ class ScheduleReplanner:
 
         if moved_session_idx is None:
             raise ScheduleGenerationError(
-                f"Could not find schedule {schedule_to_move_id} inside selected timetable."
+                f"Could not find schedule {schedule_to_move_id} inside selected timetable.",
+                code="SCHEDULE_NOT_FOUND_IN_TIMETABLE",
+                context={"schedule_id": schedule_to_move_id},
             )
 
         fixed_assignments = {moved_session_idx: new_slot_index}
@@ -421,7 +437,9 @@ class ScheduleReplanner:
             )
             if slot_key not in slot_index_by_key:
                 raise ScheduleGenerationError(
-                    "Could not map existing schedule slot to current weekly slot model."
+                    "Could not map existing schedule slot to current weekly slot model.",
+                    code="SLOT_MODEL_MAPPING_FAILED",
+                    context={"schedule_id": schedule.id},
                 )
 
             previous_assignment_by_session[idx] = {

@@ -29,7 +29,11 @@ def solve_session_assignment(
     if cp_model is None:  # pragma: no cover
         raise ScheduleGenerationError(
             "OR-Tools (cp_model) is required for schedule generation and is not available. "
-            "Please install ortools: pip install ortools"
+            "Please install ortools: pip install ortools",
+            code="SCHEDULE_SOLVER_UNAVAILABLE",
+            suggestions=[
+                "Install the 'ortools' package in the backend environment.",
+            ],
         )
 
     compatible_classrooms_by_session = _build_compatible_classroom_index(
@@ -170,7 +174,18 @@ def _cp_sat_session_assignment(
         raise ScheduleGenerationError(
             f"Could not generate a feasible schedule with current basic constraints. "
             f"(Solver status: {_solver_status_name(feasible_status)}, "
-            f"timeout: {feasible_timeout}s, sessions: {session_count}, slots: {slot_count})"
+            f"timeout: {feasible_timeout}s, sessions: {session_count}, slots: {slot_count})",
+            context={
+                "solver_status": _solver_status_name(feasible_status),
+                "timeout_seconds": feasible_timeout,
+                "session_count": session_count,
+                "slot_count": slot_count,
+            },
+            suggestions=[
+                "Review teacher and subject unavailable time preferences.",
+                "Check whether any teacher or group exceeds its weekly capacity.",
+                "Add more compatible classrooms if specialized rooms are required.",
+            ],
         )
 
     # Phase 2: optimize soft constraints, starting from feasible solution.
@@ -463,7 +478,17 @@ def _build_compatible_classroom_index(*, sessions, classrooms):
                 compatible_classrooms = [default_classroom]
         if not compatible_classrooms:
             raise ScheduleGenerationError(
-                _classroom_compatibility_error(session=session)
+                _classroom_compatibility_error(session=session),
+                code="NO_COMPATIBLE_CLASSROOM",
+                context={
+                    "subject": getattr(session.get("subject"), "name", ""),
+                    "group": getattr(session.get("group"), "name", ""),
+                    "allowed_classroom_ids": sorted(allowed_classroom_ids or []),
+                },
+                suggestions=[
+                    "Assign at least one compatible classroom to the subject.",
+                    "Create a shared classroom that can host the subject.",
+                ],
             )
         compatible_classrooms_by_session[session_index] = compatible_classrooms
     return compatible_classrooms_by_session

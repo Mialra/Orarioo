@@ -16,9 +16,11 @@ from auditableEntity.audit import create_audit_entry, suppress_audit_events
 from auditableEntity.models import AuditActionType
 from classroom.models import Classroom
 from common.drf import TeamScopedAuditableModelViewSet
+from common.errors.exceptions import ValidationAppError
 from common.export_utils import build_csv_response, sanitize_filename_stem
 from group.models import Group
 from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
+from schedule.algorithm.evaluator import ScheduleEvaluator
 from schedule.algorithm.constraints.hard import (
     group_daily_limit,
     session_preference_state,
@@ -60,9 +62,6 @@ except ImportError:
 class ScheduleViewSet(TeamScopedAuditableModelViewSet):
     """CRUD API for schedules."""
 
-    GENERATION_FAILED_DETAIL = (
-        "Unable to generate schedule with the current input constraints."
-    )
     DEFAULT_GENERATION_OPTIONS = {
         "recess_supervisors_preschool": 0,
         "recess_supervisors_primary": 0,
@@ -950,7 +949,10 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         raw_seed = request.data.get("seed")
         generation_options, options_error = self._parse_generation_options(request.data)
         if options_error is not None:
-            return options_error
+            raise ValidationAppError(
+                "INVALID_GENERATION_OPTION",
+                options_error.data.get("detail", "Invalid schedule generation option."),
+            )
 
         if raw_seed in (None, ""):
             generation_seed = random.SystemRandom().randrange(1, 2**31 - 1)
@@ -958,9 +960,11 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             try:
                 generation_seed = int(raw_seed)
             except (TypeError, ValueError):
-                return Response(
-                    {"detail": "seed must be an integer value."},
-                    status=status.HTTP_400_BAD_REQUEST,
+                raise ValidationAppError(
+                    "INVALID_INTEGER",
+                    "seed must be an integer value.",
+                    field_name="seed",
+                    context={"field": "seed", "value": raw_seed},
                 )
 
         try:
@@ -977,15 +981,10 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 actor,
                 exc,
             )
-            return Response(
-                {
-                    "detail": self.GENERATION_FAILED_DETAIL,
-                    "error_code": "schedule_generation_failed",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            raise
         serialized = self.get_serializer(schedules, many=True)
         teacher_workloads = self._build_teacher_workloads(schedules)
+
         return Response(
             {
                 "detail": "Schedule generated successfully.",
@@ -2200,7 +2199,69 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             status=status.HTTP_200_OK,
         )
 
-    def apply_manual_change(self, request):
+    @action(detail=False, methods=["post"], url_path="analyze")
+    def analyze(self, request):
+        """
+        Analiza un conjunto de schedules en busca de defectos.
+
+        Espera: {
+            "schedule_ids": [1, 2, 3, ...] o
+            "source": "generated" | "saved"
+        }
+
+        Retorna:
+        {
+            "defects": [...]
+        }
+        """
+        try:
+            # Parsear parámetros
+            schedule_ids = request.data.get("schedule_ids", [])
+            source = (request.data.get("source") or "").strip().lower()
+
+            # Obtener los schedules a analizar
+            queryset = self.get_queryset()
+
+            if schedule_ids and isinstance(schedule_ids, list):
+                # Si se especifican IDs específicos
+                schedules = list(queryset.filter(id__in=schedule_ids))
+            elif source in {"generated", "saved"}:
+                # Si se especifica una fuente (generated o saved)
+                schedules = list(self._resolve_source_queryset(queryset, source))
+            else:
+                raise ValidationAppError(
+                    "INVALID_ANALYZE_PARAMS",
+                    "Se debe especificar schedule_ids o source (generated/saved).",
+                )
+
+            if not schedules:
+                raise ValidationAppError(
+                    "NO_SCHEDULES_FOUND",
+                    "No se encontraron horarios para analizar.",
+                )
+
+            # Ejecutar análisis
+            defects = ScheduleEvaluator.analyze_schedules(schedules)
+
+            return Response(
+                {
+                    "count": len(defects),
+                    "defects": defects,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except ValidationAppError:
+            # Re-raise para que sea manejado por el error handler global
+            raise
+        except Exception as e:
+            logger.exception("Error analyzing schedules: %s", str(e))
+            raise ValidationAppError(
+                "ANALYSIS_ERROR",
+                f"Error al analizar el horario: {str(e)}",
+            )
+
+
         """Apply a manual session-to-slot change and replan the entire schedule."""
         actor = getattr(request.user, "email", "")
 
@@ -2257,10 +2318,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 new_slot_index,
                 actor,
             )
-            return Response(
-                {"detail": "Failed to replan schedule with manual change."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            raise
 
         serialized = self.get_serializer(new_schedules, many=True)
         return Response(
