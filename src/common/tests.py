@@ -5,8 +5,8 @@ from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 
-from common.errors.exceptions import ValidationAppError
 from common.errors import api_exception_handler
+from common.errors.exceptions import ValidationAppError
 from common.notifications import send_security_email
 
 

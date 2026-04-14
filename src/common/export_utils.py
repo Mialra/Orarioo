@@ -157,10 +157,7 @@ def build_table_pdf_response(
             for value in headers
         ],
         *[
-            [
-                Paragraph(normalize_pdf_export_cell(value), cell_style)
-                for value in row
-            ]
+            [Paragraph(normalize_pdf_export_cell(value), cell_style) for value in row]
             for row in normalized_rows
         ],
     ]

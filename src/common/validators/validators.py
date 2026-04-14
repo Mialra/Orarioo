@@ -93,7 +93,9 @@ def validate_and_normalize_required_text(
             context={"field": field_name},
         )
 
-    _check_max_length(normalized, field_name=field_name, max_length=max_length, label=label)
+    _check_max_length(
+        normalized, field_name=field_name, max_length=max_length, label=label
+    )
 
     return normalized.lower() if lowercase else normalized
 
@@ -126,7 +128,9 @@ def normalize_optional_text(
     if not normalized:
         return ""
 
-    _check_max_length(normalized, field_name=field_name, max_length=max_length, label=label)
+    _check_max_length(
+        normalized, field_name=field_name, max_length=max_length, label=label
+    )
 
     return normalized.lower() if lowercase else normalized
 
