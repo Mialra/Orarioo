@@ -1,8 +1,6 @@
-from rest_framework.pagination import PageNumberPagination
-
 from classroom.models import Classroom
 from classroom.serializers import ClassroomSerializer
-from common.drf import TeamScopedAuditableModelViewSet
+from common.drf import StandardPagination, TeamScopedAuditableModelViewSet
 from main.views import render_admin_dashboard
 
 
@@ -13,11 +11,6 @@ def admin_classrooms(request):
 class ClassroomViewSet(TeamScopedAuditableModelViewSet):
     """CRUD API for classrooms."""
 
-    class ClassroomPagination(PageNumberPagination):
-        page_size = 9
-        page_size_query_param = "page_size"
-        max_page_size = 100
-
     queryset = Classroom.objects.all()
     serializer_class = ClassroomSerializer
-    pagination_class = ClassroomPagination
+    pagination_class = StandardPagination

@@ -16,7 +16,6 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -33,7 +32,7 @@ from auditableEntity.audit import (
     suppress_audit_events,
 )
 from auditableEntity.models import AuditEntry
-from common.drf import AuditActorViewMixin
+from common.drf import AuditActorViewMixin, StandardPagination
 from common.errors.exceptions import ResourceConflictError, ValidationAppError
 from common.permissions import IsManagementUser
 from common.tenancy import get_active_team
@@ -71,19 +70,7 @@ def sign_up(request):
 
 
 def admin_users(request):
-    state = {
-        "title": "Usuarios del equipo",
-        "description": "Consulta los usuarios de tu equipo activo.",
-        "empty_message": "No hay usuarios en el equipo activo.",
-    }
-
-    return render_admin_dashboard(
-        request,
-        "users",
-        {
-            "dashboard_admin_state": state,
-        },
-    )
+    return render_admin_dashboard(request, "users")
 
 
 def _extract_client_ip(request):
@@ -320,14 +307,14 @@ def _erase_user_account(request, user, serializer):
 
 
 def profile(request):
+    max_requests, window_seconds = _get_export_rate_limit_config()
     return render(
         request,
         "profile/profile.html",
         {
             "show_authenticated_footer": True,
-            "export_rate_limit_max_requests": _get_export_rate_limit_config()[0],
-            "export_rate_limit_window_minutes": _get_export_rate_limit_config()[1]
-            // 60,
+            "export_rate_limit_max_requests": max_requests,
+            "export_rate_limit_window_minutes": window_seconds // 60,
         },
     )
 
@@ -725,14 +712,9 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
     - POST /api/users/me/ - Get current user data
     """
 
-    class UserPagination(PageNumberPagination):
-        page_size = 9
-        page_size_query_param = "page_size"
-        max_page_size = 100
-
     queryset = User.objects.filter(is_enabled=True).order_by("-created_at")
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = UserPagination
+    pagination_class = StandardPagination
     http_method_names = ["get", "post", "head", "options"]
     serializer_action_classes = {
         "create": UserCreateSerializer,

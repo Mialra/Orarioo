@@ -1,7 +1,14 @@
 from rest_framework import permissions, viewsets
+from rest_framework.pagination import PageNumberPagination
 
 from auditableEntity.audit import audit_actor_context
 from common.tenancy import get_active_team
+
+class StandardPagination(PageNumberPagination):
+    page_size = 9
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
 
 CRUD_LIST_ACTIONS = {"get": "list", "post": "create"}
 CRUD_DETAIL_ACTIONS = {
