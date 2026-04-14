@@ -1,5 +1,5 @@
 from app.constants import STRING_MAX_LENGTH
-from common.validators.validators import (
+from common.validators import (
     validate_and_normalize_required_text,
     validate_case_insensitive_unique,
 )

@@ -5,7 +5,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from app.constants import STRING_MAX_LENGTH
-from common.validators.validators import (
+from common.validators import (
     normalize_optional_text,
     raise_non_field_error,
     raise_validation_error,

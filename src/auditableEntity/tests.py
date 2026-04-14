@@ -45,19 +45,13 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             given_name="Direccion",
             family_name="Audit",
         )
-        self.outside_user = self.create_user(
-            email="audit-outsider@test.com",
-            given_name="Fuera",
-            family_name="Equipo",
+        self.outside_user, self.outside_team = self.create_isolated_user(
+            email_prefix="audit-outsider"
         )
         self.team = CollaborationTeam.objects.create(name="Equipo Auditoria")
         self.team.members.set([self.user, self.team_user])
         self.user.active_team = self.team
         self.user.save(update_fields=["active_team"])
-        self.outside_team = CollaborationTeam.objects.create(name="Equipo Externo")
-        self.outside_team.members.add(self.outside_user)
-        self.outside_user.active_team = self.outside_team
-        self.outside_user.save(update_fields=["active_team"])
         self.teacher = Teacher.objects.create(
             name="Audit Teacher",
             max_weekly_hours=20,

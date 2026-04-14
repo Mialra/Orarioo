@@ -3,7 +3,7 @@ from rest_framework import serializers
 from classroom.models import Classroom
 from common.serializer_utils import AUDIT_FIELD_NAMES
 from common.tenancy import get_active_team
-from common.validators.validators import normalize_optional_text, raise_validation_error
+from common.validators import normalize_optional_text, raise_validation_error
 from group.models import Group
 from namedEntity.serializers import NamedEntityNameValidationMixin
 from schedule.models import Schedule

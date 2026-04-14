@@ -1,11 +1,14 @@
+"""
+Template context processors that inject shared data into every Django template.
+"""
+
 from app.constants import MAX_LENGTH_EXTENDED, STRING_MAX_LENGTH
 
 
-def validation_constants(request):
-    """
-    Inject validation constants into every template context.
-    This makes them available as {{ string_max_length }} and {{ max_length_extended }}
-    in all templates, and as window.ValidationConstants in JavaScript.
+def validation_constants(_request):
+    """Inject validation length constants into every template context.
+    Input: _request - Django HTTP request (unused, required by Django's processor protocol)
+    Output: dict with string_max_length and max_length_extended keys
     """
     return {
         "string_max_length": STRING_MAX_LENGTH,

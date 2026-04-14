@@ -1,3 +1,8 @@
+"""
+Utilities for generating CSV and PDF file download responses.
+Supports plain CSV export and ReportLab-based landscape A4 table PDF export.
+"""
+
 import csv
 import html
 import re
@@ -23,6 +28,10 @@ except ImportError:
 
 
 def sanitize_filename_stem(value, fallback):
+    """Sanitize a string so it can be safely used as a download filename stem.
+    Input: value - raw candidate string; fallback - value used when candidate is empty
+    Output: sanitized filename stem with no illegal filesystem characters
+    """
     candidate = (value or "").strip()
     if not candidate:
         candidate = fallback
@@ -32,7 +41,36 @@ def sanitize_filename_stem(value, fallback):
     return candidate or fallback
 
 
+def normalize_export_cell(value, *, multiline=False):
+    """Normalize a cell value for export: strip whitespace, collapse lines, return '-' for empty.
+    Input: value - any cell value; multiline - join lines with newline (True) or ' | ' (False)
+    Output: normalized non-empty string, or '-' when the value is blank
+    """
+    text = "" if value is None else str(value)
+    lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
+    lines = [line for line in lines if line]
+    if not lines:
+        return "-"
+    if multiline:
+        return "\n".join(lines)
+    return " | ".join(lines)
+
+
+def normalize_pdf_export_cell(value):
+    """Normalize a cell value for PDF export with HTML escaping and newline-to-br conversion.
+    Input: value - any cell value
+    Output: HTML-safe string ready for a ReportLab Paragraph element
+    """
+    text = normalize_export_cell(value, multiline=True)
+    escaped = html.escape(text).replace("\n", "<br/>")
+    return escaped.replace(" &quot;", "<br/>&quot;")
+
+
 def build_csv_response(headers, rows, filename):
+    """Build an HTTP response that triggers a UTF-8 CSV download with BOM.
+    Input: headers - list of column header strings; rows - iterable of row iterables; filename - download filename
+    Output: HttpResponse with content_type text/csv
+    """
     output = StringIO()
     output.write("\ufeff")
     writer = csv.writer(output)
@@ -45,44 +83,11 @@ def build_csv_response(headers, rows, filename):
     return response
 
 
-def normalize_export_cell(value, *, multiline=False):
-    text = "" if value is None else str(value)
-    lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
-    lines = [line for line in lines if line]
-    if not lines:
-        return "-"
-    if multiline:
-        return "\n".join(lines)
-    return " | ".join(lines)
-
-
-def normalize_pdf_export_cell(value):
-    text = normalize_export_cell(value, multiline=True)
-    escaped = html.escape(text).replace("\n", "<br/>")
-    return escaped.replace(" &quot;", "<br/>&quot;")
-
-
-def build_table_pdf_response(
-    *,
-    headers,
-    rows,
-    filename,
-    title_text="",
-    empty_message="Sin datos",
-):
-    if not REPORTLAB_AVAILABLE:
-        raise RuntimeError("reportlab is not installed")
-
-    buffer = BytesIO()
-    document = SimpleDocTemplate(
-        buffer,
-        pagesize=landscape(A4),
-        leftMargin=24,
-        rightMargin=24,
-        topMargin=24,
-        bottomMargin=24,
-    )
-
+def _build_pdf_styles():
+    """Build the ReportLab paragraph styles used for table cell and header rendering.
+    Input: None (requires reportlab to be installed)
+    Output: tuple of (cell_style, header_style) ParagraphStyle instances
+    """
     styles = getSampleStyleSheet()
     cell_style = ParagraphStyle(
         "ExportCell",
@@ -105,6 +110,37 @@ def build_table_pdf_response(
         spaceAfter=0,
         spaceBefore=0,
     )
+    return cell_style, header_style
+
+
+def build_table_pdf_response(
+    *,
+    headers,
+    rows,
+    filename,
+    title_text="",
+    empty_message="Sin datos",
+):
+    """Build an HTTP response that triggers a landscape A4 PDF table download.
+    Input: headers - column headers; rows - data rows (None/empty shows empty_message); filename - download filename; title_text - optional bold title above the table; empty_message - placeholder row text when rows is empty
+    Output: HttpResponse with content_type application/pdf
+    """
+    if not REPORTLAB_AVAILABLE:
+        raise RuntimeError("reportlab is not installed")
+
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        leftMargin=24,
+        rightMargin=24,
+        topMargin=24,
+        bottomMargin=24,
+    )
+
+    cell_style, header_style = _build_pdf_styles()
+    styles = getSampleStyleSheet()
+
     story = []
     if title_text:
         story.extend(
@@ -122,10 +158,7 @@ def build_table_pdf_response(
         ],
         *[
             [
-                Paragraph(
-                    normalize_pdf_export_cell(value),
-                    cell_style,
-                )
+                Paragraph(normalize_pdf_export_cell(value), cell_style)
                 for value in row
             ]
             for row in normalized_rows

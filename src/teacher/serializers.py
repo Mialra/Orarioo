@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
-from common.validators.validators import (
+from common.validators import (
     collect_invalid_time_preference_entries,
     normalize_time_preferences,
     raise_validation_error,

@@ -34,7 +34,6 @@ from auditableEntity.audit import (
 from auditableEntity.models import AuditEntry
 from common.drf import AuditActorViewMixin, StandardPagination
 from common.errors.exceptions import ResourceConflictError, ValidationAppError
-from common.permissions import IsManagementUser
 from common.tenancy import get_active_team
 from main.views import render_admin_dashboard
 from securityIncident.models import SecurityIncident
@@ -738,7 +737,7 @@ class UserViewSet(AuditActorViewMixin, viewsets.ModelViewSet):
             return [permissions.AllowAny()]
         if self.action in ["list", "retrieve"]:
             # Team-scoped management is available to authenticated users.
-            return [IsManagementUser()]
+            return [permissions.IsAuthenticated()]
         if self.action in ["change_password", "me"]:
             # Authenticated user can change their password
             return [permissions.IsAuthenticated()]

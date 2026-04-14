@@ -4,7 +4,7 @@ from app.constants import MAX_LENGTH_EXTENDED, STRING_MAX_LENGTH
 from classroom.models import Classroom
 from common.serializer_utils import AUDIT_FIELD_NAMES
 from common.tenancy import get_active_team
-from common.validators.validators import (
+from common.validators import (
     collect_invalid_time_preference_entries,
     normalize_optional_text,
     normalize_time_preferences,

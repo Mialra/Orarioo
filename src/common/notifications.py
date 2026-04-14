@@ -1,3 +1,8 @@
+"""
+Email notification utilities for sending security and transactional emails.
+Uses Django's send_mail with optional HTML template rendering via django.template.
+"""
+
 import logging
 
 from django.conf import settings
@@ -9,7 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 def _render_email_content(content):
-    """Render email content from a raw string or a template descriptor."""
+    """Render email content from a raw string or a template descriptor dict.
+    Input: content - str, None, or dict with optional 'template'/'context'/'content' keys
+    Output: rendered string (HTML or plain text); empty string for None input
+    """
     if isinstance(content, dict):
         template_name = content.get("template")
         context = content.get("context") or {}
@@ -17,16 +25,14 @@ def _render_email_content(content):
             return render_to_string(template_name, context)
         return str(content.get("content", ""))
 
-    if isinstance(content, (tuple, list)) and len(content) == 2:
-        template_name, context = content
-        if isinstance(template_name, str) and isinstance(context, dict):
-            return render_to_string(template_name, context)
-
     return "" if content is None else str(content)
 
 
 def send_security_email(subject, message, recipient_list, html_message=None):
-    """Send a security notification email using Django's send_mail."""
+    """Send a security notification email, rendering templates when needed.
+    Input: subject - email subject string; message - plain-text body or descriptor; recipient_list - list of recipient addresses; html_message - optional HTML body or descriptor dict
+    Output: True if at least one email was accepted by the mail server, False on any failure
+    """
     try:
         rendered_html = (
             _render_email_content(html_message) if html_message is not None else None
