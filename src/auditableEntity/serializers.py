@@ -1,10 +1,16 @@
+"""
+Serializers that expose audit history in the API using Spanish field names.
+"""
+
 from rest_framework import serializers
 
-from auditableEntity.audit import ENTITY_LABELS
+from auditableEntity.audit import ENTITY_LABELS, get_action_label
 from auditableEntity.models import AuditEntry
 
 
 class AuditEntrySerializer(serializers.ModelSerializer):
+    """Read-only serializer for audit history responses."""
+
     tipo_entidad = serializers.SerializerMethodField()
     nombre_entidad = serializers.CharField(source="entity_name", read_only=True)
     tipo_accion = serializers.SerializerMethodField()
@@ -27,12 +33,9 @@ class AuditEntrySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_tipo_entidad(self, obj):
+        """Translate the stored entity type into its Spanish label."""
         return ENTITY_LABELS.get(obj.entity_type, obj.entity_type)
 
     def get_tipo_accion(self, obj):
-        mapping = {
-            "CREATE": "Creación",
-            "UPDATE": "Modificación",
-            "DELETE": "Borrado",
-        }
-        return mapping.get(obj.action_type, obj.action_type)
+        """Translate the stored action type into its Spanish label."""
+        return get_action_label(obj.action_type)

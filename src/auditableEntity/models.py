@@ -1,3 +1,7 @@
+"""
+Audit models and abstract base classes shared by auditable apps.
+"""
+
 from django.conf import settings
 from django.db import models
 
@@ -5,6 +9,8 @@ from namedEntity.models import NamedEntity
 
 
 class TeamScopedModel(models.Model):
+    """Abstract model that scopes each record to a collaboration team."""
+
     team = models.ForeignKey(
         "user.CollaborationTeam",
         on_delete=models.CASCADE,
@@ -30,12 +36,16 @@ class AuditableEntity(NamedEntity):
 
 
 class AuditActionType(models.TextChoices):
+    """Enumeration of audit operations persisted in AuditEntry rows."""
+
     CREATE = "CREATE", "Create"
     UPDATE = "UPDATE", "Update"
     DELETE = "DELETE", "Delete"
 
 
 class AuditEntry(models.Model):
+    """Immutable audit log row for a change performed on an auditable entity."""
+
     team = models.ForeignKey(
         "user.CollaborationTeam",
         on_delete=models.SET_NULL,
@@ -86,5 +96,6 @@ class AuditEntry(models.Model):
         ]
 
     def __str__(self):
+        """Return a short readable representation of the audit row."""
         entity_name = self.entity_name or self.entity_type
         return f"{self.action_type} {entity_name} by {self.actor_name or 'unknown'}"
