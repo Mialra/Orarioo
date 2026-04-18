@@ -1,3 +1,7 @@
+"""
+Core view functions: root redirect, dashboard sections, admin tab renderer, and legal pages.
+"""
+
 from urllib.parse import unquote
 
 from django.shortcuts import redirect, render
@@ -107,10 +111,19 @@ ADMIN_TAB_CONFIG = {
 
 
 def root_redirect(request):
+    """Redirect the root URL to the sign-in page.
+    Input: request - the incoming HTTP request
+    Output: HTTP redirect response to the sign-in URL
+    """
     return redirect("sign-in")
 
 
 def render_admin_dashboard(request, admin_tab, extra_context=None):
+    """Render the administration dashboard for the given tab.
+    Input: request - the incoming HTTP request; admin_tab - key from ADMIN_TAB_CONFIG;
+           extra_context - optional dict merged into the template context
+    Output: HTTP response rendering main/tabs/dashboard.html with administration context
+    """
     current_admin_tab = admin_tab if admin_tab in ADMIN_TAB_CONFIG else "users"
     route_config = ADMIN_ROUTE_CONFIG[current_admin_tab]
     context = {
@@ -135,6 +148,11 @@ def render_admin_dashboard(request, admin_tab, extra_context=None):
 
 
 def dashboard(request, section="schedules", timetable_name=""):
+    """Render the main dashboard for the given section.
+    Input: request - the incoming HTTP request; section - key from SECTION_CONFIG;
+           timetable_name - URL-encoded timetable name used only in the 'saved' section
+    Output: HTTP response rendering main/tabs/dashboard.html with section context
+    """
     current_section = section if section in SECTION_CONFIG else "schedules"
     route_config = SECTION_CONFIG[current_section]
     selected_saved_timetable = ""
@@ -158,12 +176,24 @@ def dashboard(request, section="schedules", timetable_name=""):
 
 
 def privacy_policy(request):
+    """Render the privacy policy legal page.
+    Input: request - the incoming HTTP request
+    Output: HTTP response rendering legal/privacy_policy.html
+    """
     return render(request, "legal/privacy_policy.html")
 
 
 def terms_and_conditions(request):
+    """Render the terms and conditions legal page.
+    Input: request - the incoming HTTP request
+    Output: HTTP response rendering legal/terms_and_conditions.html
+    """
     return render(request, "legal/terms_and_conditions.html")
 
 
 def security_protocol(request):
+    """Render the security protocol legal page.
+    Input: request - the incoming HTTP request
+    Output: HTTP response rendering legal/security_protocol.html
+    """
     return render(request, "legal/security_protocol.html")

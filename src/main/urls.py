@@ -1,3 +1,7 @@
+"""
+Top-level URL configuration: auth, dashboard, administration tabs, and legal pages.
+"""
+
 from django.urls import path
 
 from classroom.views import admin_classrooms

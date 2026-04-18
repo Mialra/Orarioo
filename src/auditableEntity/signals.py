@@ -211,7 +211,11 @@ def _build_m2m_handler(field_name):
             return
 
         if action in {"pre_add", "pre_remove", "pre_clear"}:
-            setattr(instance, _get_m2m_cache_name(field_name), _get_sorted_relation_names(instance, field_name))
+            setattr(
+                instance,
+                _get_m2m_cache_name(field_name),
+                _get_sorted_relation_names(instance, field_name),
+            )
             return
 
         if action not in {"post_add", "post_remove", "post_clear"}:
