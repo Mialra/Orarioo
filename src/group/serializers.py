@@ -4,6 +4,7 @@ Serializer for group CRUD operations with stage display and shared audit fields.
 
 from rest_framework import serializers
 
+from common.serializers import TeamScopedModelSerializerMixin
 from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
 from group.models import Group
 from namedEntity.serializers import NamedEntityNameValidationMixin
@@ -11,13 +12,16 @@ from namedEntity.serializers import NamedEntityNameValidationMixin
 GROUP_SERIALIZER_FIELDS = with_audit_fields("name", "team", "stage", "stage_display")
 
 
-class GroupSerializer(NamedEntityNameValidationMixin, serializers.ModelSerializer):
+class GroupSerializer(
+    TeamScopedModelSerializerMixin,
+    NamedEntityNameValidationMixin,
+    serializers.ModelSerializer,
+):
     """Validate and serialize groups using the shared NamedEntity rules."""
 
     enforce_case_insensitive_unique_name = True
 
     stage_display = serializers.SerializerMethodField()
-    team = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = Group

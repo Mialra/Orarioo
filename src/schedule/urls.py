@@ -1,3 +1,5 @@
+"""URL patterns for the schedule app."""
+
 from django.urls import path
 
 from common.drf import build_crud_views

@@ -1,3 +1,9 @@
+"""Schedule generator and replanner using the CP-SAT constraint solver.
+
+BasicScheduleGenerator creates a full weekly timetable from scratch.
+ScheduleReplanner replans an existing timetable after a manual session move.
+"""
+
 import random
 
 from django.db import transaction
@@ -21,7 +27,63 @@ from subject.models import Subject, SubjectType
 from teacher.models import Teacher
 
 
+# ---------------------------------------------------------------------------
+# Module-level helpers shared by both generator classes
+# ---------------------------------------------------------------------------
+
+def _get_or_create_classroom(actor_email: str, team):
+    """Return the first classroom for the team, creating a default one if none exist.
+    Input: actor_email - email used as created_by/updated_by on creation;
+           team - Team model instance
+    Output: Classroom instance
+    """
+    classroom = Classroom.objects.filter(team=team).order_by("id").first()
+    if classroom is not None:
+        return classroom
+    return Classroom.objects.create(
+        name="Auto Classroom",
+        team=team,
+        created_by=actor_email,
+        updated_by=actor_email,
+    )
+
+
+def _get_or_create_group(actor_email: str, team):
+    """Return the first group for the team, creating a default PRIMARY group if none exist.
+    Input: actor_email - email used as created_by/updated_by on creation;
+           team - Team model instance
+    Output: Group instance
+    """
+    group = Group.objects.filter(team=team).order_by("id").first()
+    if group is not None:
+        return group
+    return Group.objects.create(
+        name="Auto Group",
+        stage=EducationalStage.PRIMARY,
+        team=team,
+        created_by=actor_email,
+        updated_by=actor_email,
+    )
+
+
+def _build_classroom_pool(*, fallback_classroom, team):
+    """Return all classrooms for the team, falling back to a single default one.
+    Input: fallback_classroom - Classroom instance to use when none exist in DB;
+           team - Team model instance
+    Output: list of Classroom instances
+    """
+    classrooms = list(Classroom.objects.filter(team=team).order_by("id"))
+    if not classrooms:
+        return [fallback_classroom]
+    return classrooms
+
+
+# ---------------------------------------------------------------------------
+# Generator
+# ---------------------------------------------------------------------------
+
 class BasicScheduleGenerator:
+    """Generates a complete weekly timetable from scratch using CP-SAT."""
 
     @classmethod
     @transaction.atomic
@@ -34,6 +96,14 @@ class BasicScheduleGenerator:
         random_seed: int | None = None,
         generation_options=None,
     ):
+        """Generate and persist a full weekly schedule for the given team.
+        Input: actor_email - email of the user triggering generation;
+               user - Django User instance (owner of the generated schedules);
+               team - Team model instance;
+               random_seed - optional integer seed for reproducibility;
+               generation_options - dict with generation parameters (include_tc, tc_capacity, etc.)
+        Output: list of created Schedule instances; empty list if no sessions to schedule
+        """
         generation_options = generation_options or {}
         cls._clear_previous_generated_schedules(
             actor_email=actor_email,
@@ -66,9 +136,9 @@ class BasicScheduleGenerator:
         if not sessions:
             return []
 
-        fallback_classroom = cls._get_or_create_classroom(actor_email, team)
-        group = cls._get_or_create_group(actor_email, team)
-        classrooms = cls._build_classroom_pool(
+        fallback_classroom = _get_or_create_classroom(actor_email, team)
+        group = _get_or_create_group(actor_email, team)
+        classrooms = _build_classroom_pool(
             fallback_classroom=fallback_classroom,
             team=team,
         )
@@ -134,7 +204,10 @@ class BasicScheduleGenerator:
 
     @staticmethod
     def _clear_previous_generated_schedules(*, actor_email: str, user, team):
-        """Clean previous generated schedules to keep a single timetable view per run."""
+        """Delete all auto-generated schedules for this user/actor to allow a fresh run.
+        Input: actor_email - email of the actor; user - User instance; team - Team instance
+        Output: None; side-effect: deletes matching Schedule rows
+        """
         with suppress_audit_events(("schedule", AuditActionType.DELETE)):
             Schedule.objects.filter(
                 users=user,
@@ -145,6 +218,12 @@ class BasicScheduleGenerator:
 
     @staticmethod
     def _build_sessions(*, subjects, fallback_teacher, include_tc=True):
+        """Build the list of session dicts to be scheduled from the subject list.
+        Input: subjects - list of Subject instances (with related teacher, group, allowed_classrooms);
+               fallback_teacher - Teacher instance used when subjects list is empty;
+               include_tc - if False, TC-type subjects are excluded
+        Output: list of session dicts; single fallback session if subjects is empty
+        """
         sessions = []
         if not subjects:
             return [
@@ -185,44 +264,20 @@ class BasicScheduleGenerator:
         return sessions
 
     @staticmethod
-    def _get_or_create_classroom(actor_email: str, team):
-        classroom = Classroom.objects.filter(team=team).order_by("id").first()
-        if classroom is not None:
-            return classroom
-        return Classroom.objects.create(
-            name="Auto Classroom",
-            team=team,
-            created_by=actor_email,
-            updated_by=actor_email,
-        )
-
-    @staticmethod
-    def _get_or_create_group(actor_email: str, team):
-        group = Group.objects.filter(team=team).order_by("id").first()
-        if group is not None:
-            return group
-        return Group.objects.create(
-            name="Auto Group",
-            stage=EducationalStage.PRIMARY,
-            team=team,
-            created_by=actor_email,
-            updated_by=actor_email,
-        )
-
-    @staticmethod
-    def _build_classroom_pool(*, fallback_classroom, team):
-        classrooms = list(Classroom.objects.filter(team=team).order_by("id"))
-        if not classrooms:
-            return [fallback_classroom]
-        return classrooms
-
-    @staticmethod
     def _randomize_generation_inputs(*, sessions, slots, classrooms, rng):
+        """Shuffle sessions and classrooms in-place to introduce randomness.
+        Input: sessions, slots, classrooms - lists to shuffle; rng - seeded Random instance
+        Output: None; side-effect: mutates sessions and classrooms order
+        """
         rng.shuffle(sessions)
         rng.shuffle(classrooms)
 
     @staticmethod
     def _bulk_create_generated_schedules(*, schedules, user):
+        """Bulk-insert Schedule rows and create the M2M user association.
+        Input: schedules - list of unsaved Schedule instances; user - User instance to associate
+        Output: list of created Schedule instances with PKs assigned
+        """
         if not schedules:
             return []
 
@@ -239,6 +294,10 @@ class BasicScheduleGenerator:
 
     @staticmethod
     def _create_generation_audit_entry(*, schedules, team):
+        """Create a single audit entry summarising the generation run.
+        Input: schedules - list of created Schedule instances; team - Team instance
+        Output: None; side-effect: writes an audit entry row
+        """
         if not schedules:
             return
 
@@ -258,8 +317,12 @@ class BasicScheduleGenerator:
         )
 
 
+# ---------------------------------------------------------------------------
+# Replanner
+# ---------------------------------------------------------------------------
+
 class ScheduleReplanner:
-    """Replan an existing schedule with manual session-to-slot changes."""
+    """Replan an existing schedule with a fixed manual session-to-slot assignment."""
 
     @classmethod
     @transaction.atomic
@@ -272,16 +335,12 @@ class ScheduleReplanner:
         new_slot_index: int,
         actor_email: str,
     ):
-        """Replan schedule with a fixed session assignment.
-
-        Args:
-            user: Django user object
-            schedule_to_move_id: ID of the Schedule to move to new_slot_index
-            new_slot_index: Target slot index in the weekly slots array
-            actor_email: Email of the user initiating the change
-
-        Returns:
-            List of newly created Schedules
+        """Replan the full timetable after locking one session to a new slot.
+        Input: user - Django User instance; team - Team instance;
+               schedule_to_move_id - PK of the Schedule to fix at new_slot_index;
+               new_slot_index - target slot index in the weekly slots array;
+               actor_email - email of the user initiating the change
+        Output: list of updated Schedule instances
         """
         try:
             schedule_to_move = Schedule.objects.select_related(
@@ -307,8 +366,8 @@ class ScheduleReplanner:
                 code="NO_SCHEDULES_FOR_REPLANNING",
             )
 
-        fallback_classroom = cls._get_or_create_classroom(actor_email, team)
-        classrooms = cls._build_classroom_pool(
+        fallback_classroom = _get_or_create_classroom(actor_email, team)
+        classrooms = _build_classroom_pool(
             fallback_classroom=fallback_classroom,
             team=team,
         )
@@ -364,39 +423,12 @@ class ScheduleReplanner:
         )
 
     @staticmethod
-    def _get_or_create_classroom(actor_email: str, team):
-        classroom = Classroom.objects.filter(team=team).order_by("id").first()
-        if classroom is not None:
-            return classroom
-        return Classroom.objects.create(
-            name="Auto Classroom",
-            team=team,
-            created_by=actor_email,
-            updated_by=actor_email,
-        )
-
-    @staticmethod
-    def _get_or_create_group(actor_email: str, team):
-        group = Group.objects.filter(team=team).order_by("id").first()
-        if group is not None:
-            return group
-        return Group.objects.create(
-            name="Auto Group",
-            stage=EducationalStage.PRIMARY,
-            team=team,
-            created_by=actor_email,
-            updated_by=actor_email,
-        )
-
-    @staticmethod
-    def _build_classroom_pool(*, fallback_classroom, team):
-        classrooms = list(Classroom.objects.filter(team=team).order_by("id"))
-        if not classrooms:
-            return [fallback_classroom]
-        return classrooms
-
-    @staticmethod
     def _fetch_timetable_schedules(*, user, anchor_schedule, team):
+        """Fetch all schedules in the same timetable as the anchor schedule.
+        Input: user - User instance; anchor_schedule - Schedule used as reference;
+               team - Team instance
+        Output: QuerySet of Schedule instances with related fields pre-selected
+        """
         return (
             Schedule.objects.filter(
                 users=user,
@@ -409,6 +441,13 @@ class ScheduleReplanner:
 
     @staticmethod
     def _build_replanning_inputs(*, schedules, moved_schedule_id, slot_index_by_key):
+        """Build session list and previous assignment map from existing schedules.
+        Input: schedules - list of Schedule instances in the timetable;
+               moved_schedule_id - PK of the schedule being moved;
+               slot_index_by_key - dict {slot_instance_key: slot_idx}
+        Output: tuple (sessions, previous_assignment_by_session, moved_session_idx);
+                raises ScheduleGenerationError if a schedule cannot be mapped to a slot
+        """
         sessions = []
         previous_assignment_by_session = {}
         moved_session_idx = None
@@ -465,6 +504,13 @@ class ScheduleReplanner:
         actor_email,
         team,
     ):
+        """Persist the new slot/classroom assignment back to each Schedule row.
+        Input: schedules - list of Schedule instances; sessions - list of session dicts;
+               slot_by_session - list of assigned slot indices (one per session);
+               classroom_by_session - list of assigned Classroom instances;
+               slots - full slot list; actor_email - email for updated_by; team - Team instance
+        Output: list of updated Schedule instances
+        """
         updated = []
 
         for idx, schedule in enumerate(schedules):
@@ -479,7 +525,7 @@ class ScheduleReplanner:
             schedule.start_time = start_time
             schedule.end_time = end_time
             schedule.teacher = session["teacher"]
-            schedule.group = session.get("group") or cls._get_or_create_group(
+            schedule.group = session.get("group") or _get_or_create_group(
                 actor_email,
                 team,
             )

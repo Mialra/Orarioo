@@ -1,3 +1,5 @@
+"""Django admin registration for the Schedule model."""
+
 from django.contrib import admin
 
 from schedule.models import Schedule

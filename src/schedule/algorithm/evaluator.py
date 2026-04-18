@@ -1,3 +1,10 @@
+"""Post-generation schedule evaluator for detecting non-critical defects.
+
+Analyses generated schedules for internal and structural gaps within each
+group's daily timetable block. Runs after generation and never prevents
+the process from completing.
+"""
+
 import logging
 from collections import defaultdict
 
@@ -5,51 +12,45 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
-# Franjas horarias por etapa educativa (excluye descansos)
-# IMPORTANTE: 'end' es la ÚLTIMA HORA DE CLASE, no la hora de fin del horario
-# Ej: Si es 9:00-14:00, la última clase es 13:00-14:00 (hora 13), no hora 14
+# Time windows per educational stage (breaks excluded).
+# NOTE: 'end' is the LAST CLASS HOUR, not the end of the school day.
+# Example: for a 9:00-14:00 day the last class starts at 13:00 (hour 13).
 STAGE_HOURS = {
     "preschool": {
         "name": "Infantil",
-        "start": 9,  # Primera clase 9:00
-        "end": 13,  # Última clase 13:00-14:00
+        "start": 9,   # First class at 9:00
+        "end": 13,    # Last class 13:00-14:00
         "break": (10.5, 11),  # 10:30-11:00
     },
     "primary": {
         "name": "Primaria",
-        "start": 9,  # Primera clase 9:00
-        "end": 13,  # Última clase 13:00-14:00
+        "start": 9,   # First class at 9:00
+        "end": 13,    # Last class 13:00-14:00
         "break": (11.5, 12),  # 11:30-12:00
     },
     "secondary": {
         "name": "ESO",
-        "start": 8,  # Primera clase 8:00
-        "end": 13,  # Última clase 13:30-14:30 (tomamos hora 13)
+        "start": 8,   # First class at 8:00
+        "end": 13,    # Last class 13:30-14:30 (modelled as hour 13)
         "break": (11, 11.5),  # 11:00-11:30
     },
 }
 
 
 class ScheduleEvaluator:
-    """
-    Analiza horarios generados para detectar defectos no-críticos.
-    Ejecuta DESPUÉS de la generación, no falla el proceso.
+    """Analyses generated schedules to detect non-critical defects.
+
+    Runs AFTER generation; never fails the generation process.
     """
 
     @staticmethod
     def get_expected_hours_for_stage(stage):
-        """
-        Retorna las horas esperadas para una etapa, excluyendo descansos.
-
-        Args:
-            stage: 'preschool', 'primary', 'secondary'
-
-        Returns:
-            set de horas esperadas
+        """Return the set of expected teaching hours for a stage, excluding breaks.
+        Input: stage - 'preschool', 'primary', or 'secondary'
+        Output: set of integers representing the start hour of each teaching period
         """
         config = STAGE_HOURS.get(stage)
         if not config:
-            # Default si no se reconoce etapa
             config = STAGE_HOURS["primary"]
 
         start = int(config["start"])
@@ -57,10 +58,8 @@ class ScheduleEvaluator:
         break_start = config["break"][0]
         break_end = config["break"][1]
 
-        # Crear set de horas, excluyendo el descanso
         expected = set()
         for hour in range(start, end + 1):
-            # Excluir descanso
             if break_start <= hour < break_end:
                 continue
             expected.add(hour)
@@ -69,14 +68,9 @@ class ScheduleEvaluator:
 
     @staticmethod
     def _build_sessions_by_group_day(schedules):
-        """
-        Agrupa schedules por grupo + fecha, extrae horas ocupadas y stage.
-
-        Args:
-            schedules: Queryset o lista de Schedule objects
-
-        Returns:
-            Dict con estructura: {group_day_key: {group, group_name, date, hours, stage}}
+        """Group schedules by group + date and collect occupied hours and stage.
+        Input: schedules - queryset or list of Schedule objects
+        Output: dict {group_day_key: {group, group_name, date, hours, stage}}
         """
         sessions_by_group_day = defaultdict(
             lambda: {
@@ -98,12 +92,10 @@ class ScheduleEvaluator:
 
             processed += 1
 
-            # Convertir a hora local y extraer fecha y hora
             local_start = timezone.localtime(schedule.start_time)
             date_key = local_start.strftime("%Y-%m-%d")
             hour = local_start.hour
 
-            # Clave para agrupar: grupo_id + fecha
             group_day_key = f"{schedule.group.id}_{date_key}"
 
             sessions_by_group_day[group_day_key]["group"] = schedule.group
@@ -111,7 +103,6 @@ class ScheduleEvaluator:
             sessions_by_group_day[group_day_key]["date"] = date_key
             sessions_by_group_day[group_day_key]["hours"].add(hour)
 
-            # Obtener stage del grupo de forma segura
             try:
                 stage = (
                     schedule.group.stage
@@ -119,27 +110,25 @@ class ScheduleEvaluator:
                     else "primary"
                 )
             except Exception as e:
-                logger.debug(f"Error getting stage: {e}")
+                logger.debug("Error getting stage: %s", e)
                 stage = "primary"
             sessions_by_group_day[group_day_key]["stage"] = stage
 
         logger.info(
-            f"Processed: {processed}, Skipped: {skipped}, Group-day combinations: {len(sessions_by_group_day)}"
+            "Processed: %d, Skipped: %d, Group-day combinations: %d",
+            processed,
+            skipped,
+            len(sessions_by_group_day),
         )
         return sessions_by_group_day
 
     @staticmethod
     def _detect_internal_gaps(day_data, hours_list, expected_hours):
-        """
-        Detecta gaps INTERNOS (entre sesiones consecutivas).
-
-        Args:
-            day_data: Dict con info del grupo/fecha
-            hours_list: List de horas ocupadas (sorted)
-            expected_hours: Set de horas esperadas para la etapa
-
-        Returns:
-            Lista de defectos tipo INTERNAL
+        """Detect internal gaps between consecutive sessions of a group on a given day.
+        Input: day_data - dict with group/date info;
+               hours_list - sorted list of occupied hours;
+               expected_hours - set of expected hours for the stage
+        Output: list of defect dicts with gap_type='INTERNAL'
         """
         defects = []
 
@@ -147,10 +136,8 @@ class ScheduleEvaluator:
             current_hour = hours_list[i]
             next_hour = hours_list[i + 1]
 
-            # Si hay más de 1 hora de diferencia, hay un gap
             if next_hour - current_hour > 1:
                 for missing_hour in range(current_hour + 1, next_hour):
-                    # No reportar descansos como gaps
                     if missing_hour in expected_hours:
                         defect = {
                             "entity_id": day_data["group"].id,
@@ -170,7 +157,7 @@ class ScheduleEvaluator:
                             },
                         }
                         defects.append(defect)
-                        logger.info(f"DEFECT INTERNAL: {defect['description']}")
+                        logger.info("DEFECT INTERNAL: %s", defect["description"])
 
         return defects
 
@@ -178,19 +165,14 @@ class ScheduleEvaluator:
     def _detect_boundary_gaps(
         day_data, hours_set, hours_list, expected_hours, stage_config, stage
     ):
-        """
-        Detecta gaps BOUNDARY (horas faltantes en rango esperado).
-
-        Args:
-            day_data: Dict con info del grupo/fecha
-            hours_set: Set de horas ocupadas
-            hours_list: List de horas ocupadas (sorted)
-            expected_hours: Set de horas esperadas para la etapa
-            stage_config: Dict con config de horarios de la etapa
-            stage: String identificador de la etapa
-
-        Returns:
-            Lista de defectos tipo BOUNDARY
+        """Detect missing hours within the expected range for the stage (boundary gaps).
+        Input: day_data - dict with group/date info;
+               hours_set - set of occupied hours;
+               hours_list - sorted list of occupied hours;
+               expected_hours - set of expected hours for the stage;
+               stage_config - stage configuration dict from STAGE_HOURS;
+               stage - stage identifier string ('preschool', 'primary', 'secondary')
+        Output: list of defect dicts with gap_type='BOUNDARY'
         """
         defects = []
         missing_expected_hours = expected_hours - hours_set
@@ -216,36 +198,30 @@ class ScheduleEvaluator:
                     },
                 }
                 defects.append(defect)
-                logger.info(f"DEFECT BOUNDARY: {defect['description']}")
+                logger.info("DEFECT BOUNDARY: %s", defect["description"])
 
         return defects
 
     @staticmethod
     def analyze_gaps_groups(schedules):
+        """Detect internal and structural gaps within each group's daily timetable block.
+
+        Detects two gap types:
+        1. Internal: between consecutive sessions (e.g. 9:00 → 11:00, 10:00 missing).
+        2. Boundary: missing hours relative to the expected range for the stage.
+
+        Input: schedules - queryset or list of Schedule objects
+        Output: list of defect dicts for all detected gaps
         """
-        Detecta huecos internos (gaps) dentro de cada grupo y día.
+        logger.info("analyze_gaps_groups: Analysing %d schedules", len(schedules))
 
-        Detecta dos tipos de gaps:
-        1. Internos: Entre sesiones (ej: 9:00 → 11:00, falta 10:00)
-        2. Estructurales: Fuera del rango esperado para la etapa
-
-        Args:
-            schedules: Queryset o lista de Schedule objects
-
-        Returns:
-            Lista de defectos por gaps detectados
-        """
-        logger.info(f"analyze_gaps_groups: Analizando {len(schedules)} schedules")
-
-        # Fase 1: Agrupar sesiones
         sessions_by_group_day = ScheduleEvaluator._build_sessions_by_group_day(
             schedules
         )
 
         defects = []
 
-        # Fase 2: Detectar gaps
-        for group_day_key, day_data in sessions_by_group_day.items():
+        for _group_day_key, day_data in sessions_by_group_day.items():
             if not day_data["hours"]:
                 continue
 
@@ -256,37 +232,34 @@ class ScheduleEvaluator:
             hours_set = day_data["hours"]
             hours_list = sorted(hours_set)
 
-            # Detectar gaps internos
             defects.extend(
                 ScheduleEvaluator._detect_internal_gaps(
                     day_data, hours_list, expected_hours
                 )
             )
 
-            # Detectar gaps boundary
             defects.extend(
                 ScheduleEvaluator._detect_boundary_gaps(
                     day_data, hours_set, hours_list, expected_hours, stage_config, stage
                 )
             )
 
-        logger.info(f"analyze_gaps_groups: Detectados {len(defects)} gaps")
+        logger.info("analyze_gaps_groups: Detected %d gaps", len(defects))
         return defects
 
     @staticmethod
     def analyze_schedules(schedules):
-        """
-        Función principal que orquesta el análisis de horarios.
-        Llama a subfunciones especializadas para detectar diferentes tipos de defectos.
+        """Orchestrate the full analysis of a set of schedules.
 
-        Args:
-            schedules: Queryset o lista de Schedule objects
+        Calls specialised sub-functions to detect different defect types and
+        returns the consolidated list. Does not raise on defects found.
 
-        Returns:
-            Lista consolidada de defectos encontrados
+        Input: schedules - queryset or list of Schedule objects
+        Output: consolidated list of defect dicts; empty list if schedules is empty
         """
         logger.info(
-            f"=== analyze_schedules START - Total schedules: {len(schedules) if schedules else 0} ==="
+            "=== analyze_schedules START - Total schedules: %d ===",
+            len(schedules) if schedules else 0,
         )
 
         if not schedules:
@@ -295,11 +268,10 @@ class ScheduleEvaluator:
 
         all_defects = []
 
-        # Ejecutar análisis especializados
         gaps_defects = ScheduleEvaluator.analyze_gaps_groups(schedules)
         all_defects.extend(gaps_defects)
 
         logger.info(
-            f"=== analyze_schedules END - Total defects: {len(all_defects)} ==="
+            "=== analyze_schedules END - Total defects: %d ===", len(all_defects)
         )
         return all_defects

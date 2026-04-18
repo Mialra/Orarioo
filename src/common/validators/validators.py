@@ -223,3 +223,43 @@ def collect_invalid_time_preference_entries(preferences, valid_states):
             invalid_states_entries.append({"slot": key, "state": state})
 
     return invalid_keys, invalid_states_entries
+
+
+def validate_time_preferences(
+    value,
+    *,
+    valid_states,
+    field_name="time_preferences",
+    require_string_keys=True,
+):
+    """Normalize and validate a time-preferences payload against the allowed states."""
+    normalized = normalize_time_preferences(value)
+    invalid_keys, invalid_values = collect_invalid_time_preference_entries(
+        normalized,
+        valid_states,
+    )
+
+    if require_string_keys and invalid_keys:
+        raise_validation_error(
+            field_name,
+            "INVALID_TIME_PREFERENCE_KEY",
+            "All time preference keys must be strings.",
+            context={
+                "field": field_name,
+                "invalid_keys": invalid_keys,
+            },
+        )
+
+    if invalid_values:
+        raise_validation_error(
+            field_name,
+            "INVALID_TIME_PREFERENCE_STATE",
+            "One or more time preference states are invalid.",
+            context={
+                "field": field_name,
+                "invalid_states": invalid_values,
+                "allowed": sorted(valid_states),
+            },
+        )
+
+    return normalized

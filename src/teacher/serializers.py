@@ -4,22 +4,24 @@ Serializer for teacher CRUD operations with hour-range validation and audit fiel
 
 from rest_framework import serializers
 
+from common.serializers import TeamScopedModelSerializerMixin
 from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
 from common.validators import (
-    collect_invalid_time_preference_entries,
-    normalize_time_preferences,
     raise_validation_error,
+    validate_time_preferences,
 )
 from namedEntity.serializers import NamedEntityNameValidationMixin
 from teacher.models import Teacher, TeacherTimePreferenceState
 
 
-class TeacherSerializer(NamedEntityNameValidationMixin, serializers.ModelSerializer):
+class TeacherSerializer(
+    TeamScopedModelSerializerMixin,
+    NamedEntityNameValidationMixin,
+    serializers.ModelSerializer,
+):
     """Validate and serialize teachers using the shared NamedEntity rules."""
 
     enforce_case_insensitive_unique_name = True
-
-    team = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = Teacher
@@ -62,27 +64,11 @@ class TeacherSerializer(NamedEntityNameValidationMixin, serializers.ModelSeriali
             "time_preferences",
             self.instance.time_preferences if self.instance else {},
         )
-        normalized_time_preferences = normalize_time_preferences(time_preferences)
-
-        valid_states = {state.value for state in TeacherTimePreferenceState}
-        _, invalid_values = collect_invalid_time_preference_entries(
-            normalized_time_preferences,
-            valid_states,
+        attrs["time_preferences"] = validate_time_preferences(
+            time_preferences,
+            valid_states={state.value for state in TeacherTimePreferenceState},
+            require_string_keys=False,
         )
-
-        if invalid_values:
-            raise_validation_error(
-                "time_preferences",
-                "INVALID_TIME_PREFERENCE_STATE",
-                "One or more time preference states are invalid.",
-                context={
-                    "field": "time_preferences",
-                    "invalid_states": invalid_values,
-                    "allowed": sorted(valid_states),
-                },
-            )
-
-        attrs["time_preferences"] = normalized_time_preferences
         return attrs
 
     def validate_max_weekly_hours(self, value):

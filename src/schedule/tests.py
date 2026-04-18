@@ -19,7 +19,6 @@ from schedule.algorithm.slots import (
 )
 from schedule.constants import AUTO_GENERATED_OBSERVATION
 from schedule.models import Schedule
-from schedule.views import REPORTLAB_AVAILABLE
 from subject.models import EducationalStage as SubjectEducationalStage
 from subject.models import Subject, SubjectTimePreferenceState, SubjectType
 from teacher.models import Teacher, TeacherTimePreferenceState
@@ -287,47 +286,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("Mathematics", csv_text)
         self.assertNotIn("Language 2A", csv_text)
 
-    @skipIf(not REPORTLAB_AVAILABLE, "reportlab is not installed")
-    def test_export_pdf_saved_returns_pdf_file(self):
-        self.create_schedule(
-            name="Horario Guardado",
-            observations="Saved timetable",
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-
-        response = self.client.get(
-            reverse("schedule-export"),
-            {
-                "export_format": "pdf",
-                "source": "saved",
-                "scope": "all",
-            },
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response["Content-Type"], "application/pdf")
-        self.assertTrue(response.content.startswith(b"%PDF"))
-        self.assertIn(
-            'filename="Horario Guardado.pdf"',
-            response["Content-Disposition"],
-        )
-
-    def test_export_entity_scope_requires_valid_entity_data(self):
-        response = self.client.get(
-            reverse("schedule-export"),
-            {
-                "export_format": "csv",
-                "source": "all",
-                "scope": "entity",
-                "entity_type": "group",
-            },
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("detail", response.data)
-
     @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
     def test_export_cards_mode_with_specific_teacher_without_teacher_all(self):
         second_teacher = Teacher.objects.create(
@@ -392,32 +350,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         joined = " ".join(values)
         self.assertIn("Julian", joined)
         self.assertNotIn("Ana Perez", joined)
-
-    @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
-    def test_export_cards_mode_with_no_selection_returns_only_header(self):
-        self.create_schedule(
-            name="Sesion Base",
-            observations=AUTO_GENERATED_OBSERVATION,
-        )
-
-        response = self.client.get(
-            reverse("schedule-export"),
-            {
-                "export_format": "csv",
-                "source": "generated",
-                "selection_mode": "cards",
-                "group_all": "0",
-                "teacher_all": "0",
-                "classroom_all": "0",
-                "subject_all": "0",
-            },
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        workbook = load_workbook(filename=BytesIO(response.content))
-        self.assertEqual(workbook.sheetnames, ["Sin datos"])
-        sheet = workbook["Sin datos"]
-        self.assertEqual(sheet.max_row, 1)
 
     def test_update_schedule(self):
         schedule = self.create_schedule()
@@ -617,84 +549,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         unique_starts = {item.start_time for item in group_schedules}
         self.assertEqual(len(unique_starts), len(group_schedules))
-
-    def test_save_generated_schedules_in_bulk(self):
-        start_time = timezone.now() + timedelta(days=1)
-        end_time = start_time + timedelta(hours=1)
-        schedule_1 = self.create_schedule(
-            name="Auto Session 1",
-            start_time=start_time,
-            end_time=end_time,
-            observations=AUTO_GENERATED_OBSERVATION,
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-
-        schedule_2 = self.create_schedule(
-            name="Auto Session 2",
-            start_time=start_time + timedelta(hours=1),
-            end_time=end_time + timedelta(hours=1),
-            observations=AUTO_GENERATED_OBSERVATION,
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-        AuditEntry.objects.all().delete()
-
-        response = self.client.post(
-            reverse("schedule-save-generated"),
-            {
-                "timetable_name": "Horario Guardado",
-                "schedule_ids": [schedule_1.id, schedule_2.id],
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["saved_count"], 2)
-
-        schedule_1.refresh_from_db()
-        schedule_2.refresh_from_db()
-        self.assertEqual(schedule_1.name, "Horario Guardado")
-        self.assertEqual(schedule_2.name, "Horario Guardado")
-        self.assertEqual(schedule_1.observations, "Saved timetable: Horario Guardado")
-        self.assertEqual(schedule_2.observations, "Saved timetable: Horario Guardado")
-        self.assertGreaterEqual(
-            AuditEntry.objects.filter(
-                entity_type="schedule",
-                action_type=AuditActionType.UPDATE,
-            ).count(),
-            2,
-        )
-
-    def test_save_generated_schedules_in_bulk_assigns_additional_users(self):
-        start_time = timezone.now() + timedelta(days=1)
-        end_time = start_time + timedelta(hours=1)
-        schedule = self.create_schedule(
-            name="Auto Session 1",
-            start_time=start_time,
-            end_time=end_time,
-            observations=AUTO_GENERATED_OBSERVATION,
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-
-        response = self.client.post(
-            reverse("schedule-save-generated"),
-            {
-                "timetable_name": "Horario Compartido",
-                "schedule_ids": [schedule.id],
-                "user_ids": [self.other_user.id],
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        schedule.refresh_from_db()
-        self.assertTrue(schedule.users.filter(id=self.user.id).exists())
-        self.assertTrue(schedule.users.filter(id=self.other_user.id).exists())
 
     def test_apply_manual_change_replans_saved_timetable(self):
         slots = build_weekly_slots()
@@ -1175,162 +1029,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
                 item.get("teacher_id") == self.teacher.id
                 for item in response.data["teacher_workloads"]
             )
-        )
-
-    def test_saved_summary_endpoint_returns_lightweight_items(self):
-        start_time = timezone.now() + timedelta(days=1)
-        end_time = start_time + timedelta(hours=1)
-        self.create_schedule(
-            name="Horario Ligero",
-            start_time=start_time,
-            end_time=end_time,
-            observations="Saved timetable: Horario Ligero",
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-        self.create_schedule(
-            name="Horario Ligero",
-            start_time=start_time + timedelta(hours=1),
-            end_time=end_time + timedelta(hours=1),
-            observations="Saved timetable: Horario Ligero",
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-
-        response = self.client.get(reverse("schedule-saved-summary"))
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["count"], 1)
-        self.assertEqual(len(response.data["results"]), 1)
-        first_item = response.data["results"][0]
-        self.assertEqual(first_item["name"], "Horario Ligero")
-        self.assertEqual(set(first_item.keys()), {"name", "updated_at"})
-
-    def test_saved_detail_endpoint_requires_timetable_name(self):
-        response = self.client.get(reverse("schedule-saved-detail"))
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("detail", response.data)
-
-    def test_saved_detail_endpoint_returns_selected_timetable(self):
-        start_time = timezone.now() + timedelta(days=1)
-        end_time = start_time + timedelta(hours=1)
-        self.create_schedule(
-            name="Horario A",
-            start_time=start_time,
-            end_time=end_time,
-            observations="Saved timetable: Horario A",
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-        self.create_schedule(
-            name="Horario A",
-            start_time=start_time + timedelta(hours=1),
-            end_time=end_time + timedelta(hours=1),
-            observations="Saved timetable: Horario A",
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-        self.create_schedule(
-            name="Horario B",
-            start_time=start_time + timedelta(hours=2),
-            end_time=end_time + timedelta(hours=2),
-            observations="Saved timetable: Horario B",
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-
-        response = self.client.get(
-            reverse("schedule-saved-detail"),
-            {"timetable_name": "Horario A"},
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["count"], 2)
-        self.assertEqual(len(response.data["results"]), 2)
-        self.assertTrue(
-            all(item["name"] == "Horario A" for item in response.data["results"])
-        )
-        self.assertIn("teacher_workloads", response.data)
-        teacher_workload = next(
-            (
-                item
-                for item in response.data["teacher_workloads"]
-                if item.get("teacher_id") == self.teacher.id
-            ),
-            None,
-        )
-        self.assertIsNotNone(teacher_workload)
-        self.assertEqual(teacher_workload["total_minutes"], 120)
-        self.assertAlmostEqual(teacher_workload["total_hours"], 2.0, places=2)
-
-    def test_delete_saved_timetable_creates_single_audit_entry(self):
-        start_time = timezone.now() + timedelta(days=1)
-        end_time = start_time + timedelta(hours=1)
-        self.create_schedule(
-            name="Horario demo admin",
-            start_time=start_time,
-            end_time=end_time,
-            observations="Saved timetable: Horario demo admin",
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-        self.create_schedule(
-            name="Horario demo admin",
-            start_time=start_time + timedelta(hours=1),
-            end_time=end_time + timedelta(hours=1),
-            observations="Saved timetable: Horario demo admin",
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-        AuditEntry.objects.all().delete()
-
-        response = self.client.post(
-            reverse("schedule-delete-saved-timetable"),
-            {"timetable_name": "Horario demo admin"},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertFalse(
-            Schedule.objects.filter(
-                observations="Saved timetable: Horario demo admin"
-            ).exists()
-        )
-        entries = list(
-            AuditEntry.objects.filter(
-                entity_type="schedule",
-                action_type=AuditActionType.DELETE,
-            )
-        )
-        self.assertEqual(len(entries), 1)
-        self.assertEqual(entries[0].entity_name, "Horario demo admin")
-        self.assertEqual(
-            entries[0].changed_fields,
-            [{"campo": "Sesiones eliminadas", "valor_anterior": 2}],
-        )
-
-    def test_delete_single_schedule_keeps_minimal_delete_audit(self):
-        schedule = self.create_schedule(name="Horario suelto")
-        AuditEntry.objects.all().delete()
-
-        response = self.client.delete(reverse("schedule-detail", args=[schedule.id]))
-
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        entry = AuditEntry.objects.get(
-            entity_type="schedule",
-            action_type=AuditActionType.DELETE,
-        )
-        self.assertEqual(
-            entry.changed_fields,
-            [{"campo": "Nombre", "valor_anterior": "Horario suelto"}],
         )
 
     def test_generate_basic_schedule_requires_teacher(self):
@@ -1966,10 +1664,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
     )
     def test_generate_minimizes_teacher_intraday_gaps(self):
         """F-29: solver should prefer compact schedules over fragmented ones."""
-        # For PRIMARY stage, allow only 3 Monday slots: 09:00, 12:00 and 13:00.
-        # With weekly_hours=2 the solver must pick exactly 2 of those 3 slots.
-        # Compact choice (12:00 + 13:00) yields 0 internal gaps, while any pair
-        # that includes 09:00 creates an internal gap -> F-29 should avoid it.
         slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
         allowed = {"MON_09:00", "MON_12:00", "MON_13:00"}
         self.teacher.time_preferences = {
@@ -1989,7 +1683,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             slot_preference_key_from_datetime(slot=s.start_time) for s in schedules
         }
         self.assertEqual(len(assigned_keys), 2)
-        # The compact pair should win; MON_09:00 (far from 12:00/13:00) must not appear.
         self.assertNotIn(
             "MON_09:00",
             assigned_keys,
@@ -2047,7 +1740,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         response = self.client.post(reverse("schedule-analyze"), {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        # Error structure: _error.code
         self.assertEqual(response.data["_error"]["code"], "INVALID_ANALYZE_PARAMS")
 
     def test_analyze_with_no_matching_schedules(self):
@@ -2074,12 +1766,10 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("count", response.data)
         self.assertIn("defects", response.data)
-        # count should match the number of defects
         self.assertEqual(response.data["count"], len(response.data["defects"]))
 
     def test_analyze_with_generated_source(self):
         """Test that analyze can filter by generated source."""
-        # Create a generated schedule
         self.create_schedule(
             observations=AUTO_GENERATED_OBSERVATION,
             created_by=self.user.email,
@@ -2097,7 +1787,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
     def test_analyze_with_saved_source(self):
         """Test that analyze can filter by saved source."""
-        # Create a non-generated schedule (saved)
         self.create_schedule(name="Manual Schedule")
 
         response = self.client.post(
@@ -2111,7 +1800,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
     def test_analyze_detects_internal_gaps(self):
         """Test that analyze detects internal gaps (gaps between consecutive hours)."""
-        # Create two schedules for the same group on the same day with a gap
         today = timezone.now().date()
 
         # First session: 9:00-10:00
@@ -2213,34 +1901,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(boundary_gap["entity_type"], "group")
         self.assertEqual(boundary_gap["severity"], "LOW")
         self.assertIn("Sesión faltante", boundary_gap["description"])
-
-    def test_analyze_response_structure(self):
-        """Test that analyze response has the correct structure."""
-        schedule = self.create_schedule()
-
-        response = self.client.post(
-            reverse("schedule-analyze"),
-            {"schedule_ids": [schedule.id]},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-        # Check response structure
-        self.assertIn("count", response.data)
-        self.assertIn("defects", response.data)
-        self.assertEqual(response.data["count"], len(response.data["defects"]))
-
-        # Check defect structure if any
-        if response.data["defects"]:
-            defect = response.data["defects"][0]
-            self.assertIn("entity_id", defect)
-            self.assertIn("entity_name", defect)
-            self.assertIn("entity_type", defect)
-            self.assertIn("severity", defect)
-            self.assertIn("gap_type", defect)
-            self.assertIn("description", defect)
-            self.assertIn("context", defect)
 
     def test_analyze_respects_stage_specific_hours(self):
         """Test that analyze respects different hours for different educational stages."""

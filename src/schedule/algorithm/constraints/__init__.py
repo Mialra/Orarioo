@@ -1,3 +1,5 @@
+"""Re-exports all hard and soft constraint functions from the algorithm package."""
+
 from schedule.algorithm.constraints.hard import (
     add_exactly_one_slot_constraints,
     add_group_daily_capacity_constraints,

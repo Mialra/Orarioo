@@ -6,13 +6,12 @@ from rest_framework import serializers
 
 from app.constants import MAX_LENGTH_EXTENDED, STRING_MAX_LENGTH
 from classroom.models import Classroom
+from common.serializers import TeamScopedModelSerializerMixin
 from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
-from common.tenancy import get_active_team
 from common.validators import (
-    collect_invalid_time_preference_entries,
     normalize_optional_text,
-    normalize_time_preferences,
     raise_validation_error,
+    validate_time_preferences,
 )
 from group.models import Group
 from namedEntity.serializers import NamedEntityNameValidationMixin
@@ -37,33 +36,23 @@ SUBJECT_SERIALIZER_FIELDS = with_audit_fields(
 )
 
 
-class SubjectSerializer(NamedEntityNameValidationMixin, serializers.ModelSerializer):
+class SubjectSerializer(
+    TeamScopedModelSerializerMixin,
+    NamedEntityNameValidationMixin,
+    serializers.ModelSerializer,
+):
     """Validate and serialize subjects using the shared NamedEntity rules."""
 
     enforce_case_insensitive_unique_name = True
     name_max_length = MAX_LENGTH_EXTENDED
-
-    team = serializers.PrimaryKeyRelatedField(read_only=True)
+    team_scoped_field_models = {
+        "teacher": Teacher,
+        "group": Group,
+        "allowed_classrooms": Classroom,
+    }
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
     allowed_classroom_names = serializers.SerializerMethodField(read_only=True)
-
-    def __init__(self, *args, **kwargs):
-        """Restrict FK querysets to the active team so only valid related objects are selectable.
-        Input: *args, **kwargs - passed through to ModelSerializer
-        Output: None; side-effect: filters teacher, group, and allowed_classrooms querysets
-        """
-        super().__init__(*args, **kwargs)
-        request = self.context.get("request")
-        if not request or not getattr(request, "user", None):
-            return
-
-        active_team = get_active_team(request)
-        self.fields["teacher"].queryset = Teacher.objects.filter(team=active_team)
-        self.fields["group"].queryset = Group.objects.filter(team=active_team)
-        self.fields["allowed_classrooms"].queryset = Classroom.objects.filter(
-            team=active_team
-        )
 
     class Meta:
         model = Subject
@@ -114,37 +103,10 @@ class SubjectSerializer(NamedEntityNameValidationMixin, serializers.ModelSeriali
         Input: value - dict mapping slot keys to SubjectTimePreferenceState values
         Output: dict normalized preferences; raises ValidationError on invalid keys or states
         """
-        value = normalize_time_preferences(value)
-
-        valid_states = {state.value for state in SubjectTimePreferenceState}
-        invalid_keys, invalid_values = collect_invalid_time_preference_entries(
+        return validate_time_preferences(
             value,
-            valid_states,
+            valid_states={state.value for state in SubjectTimePreferenceState},
         )
-
-        if invalid_keys:
-            raise_validation_error(
-                "time_preferences",
-                "INVALID_TIME_PREFERENCE_KEY",
-                "All time preference keys must be strings.",
-                context={
-                    "field": "time_preferences",
-                    "invalid_keys": invalid_keys,
-                },
-            )
-        if invalid_values:
-            raise_validation_error(
-                "time_preferences",
-                "INVALID_TIME_PREFERENCE_STATE",
-                "One or more time preference states are invalid.",
-                context={
-                    "field": "time_preferences",
-                    "invalid_states": invalid_values,
-                    "allowed": sorted(valid_states),
-                },
-            )
-
-        return value
 
     def get_allowed_classroom_names(self, obj):
         """Return the list of names of classrooms allowed for this subject.
