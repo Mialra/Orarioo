@@ -1,26 +1,30 @@
+"""
+URL routing for user authentication, profile management, and collaboration team endpoints.
+"""
+
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from user.views import (
+    CustomTokenObtainPairView,
+    UserSelfUpdateView,
+    UserViewSet,
+)
+from user.views_account import UserAccountDeletionView
+from user.views_teams import (
     CollaborationTeamCreateView,
     CollaborationTeamInvitationListView,
     CollaborationTeamInvitationRespondView,
     CollaborationTeamInviteView,
     CollaborationTeamLeaveView,
-    CustomTokenObtainPairView,
     SetActiveTeamView,
-    UserAccountDeletionView,
-    UserSelfUpdateView,
-    UserViewSet,
 )
 
-# Create a router for the viewsets
 router = DefaultRouter()
 router.register(r"users", UserViewSet, basename="user")
 
 urlpatterns = [
-    # Router routes
     path("", include(router.urls)),
     path("users/me/update/", UserSelfUpdateView.as_view(), name="user-self-update"),
     path(

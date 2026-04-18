@@ -1,3 +1,7 @@
+"""
+Django admin registration for users, collaboration teams, and data-export audit logs.
+"""
+
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.utils.translation import gettext_lazy as _
@@ -9,7 +13,7 @@ from user.models import CollaborationTeam, User, UserDataExportLog
 
 @admin.register(User)
 class UserAdmin(UserAdmin):
-    """Custom configuration for user management in the admin panel"""
+    """Admin configuration for user management, including security breach notifications and account blocking."""
 
     fieldsets = (
         (None, {"fields": ("email", "password")}),
@@ -82,8 +86,11 @@ class UserAdmin(UserAdmin):
     filter_horizontal = ("groups", "user_permissions")
 
     def get_readonly_fields(self, request, obj=None):
-        """Makes certain fields read-only"""
-        if obj:  # When editing an existing user
+        """Make the email field read-only when editing an existing user.
+        Input: request - HttpRequest; obj - User instance or None for new users
+        Output: tuple of read-only field names, extended with 'email' when editing
+        """
+        if obj:
             return self.readonly_fields + ("email",)
         return self.readonly_fields
 
@@ -91,6 +98,10 @@ class UserAdmin(UserAdmin):
         description="Enviar aviso de brecha de seguridad a todos los usuarios"
     )
     def send_security_breach_notification(self, request, queryset):
+        """Send a security breach notification email to all active users and log a SecurityIncident.
+        Input: request - HttpRequest from the admin; queryset - selected User queryset (unused, broadcast goes to all)
+        Output: None; side-effect: sends emails, creates a SecurityIncident, and shows admin feedback messages
+        """
         recipients = list(
             User.objects.filter(is_enabled=True)
             .exclude(email="")
@@ -149,6 +160,10 @@ class UserAdmin(UserAdmin):
             self.message_user(request, msg, level=messages.ERROR)
 
     def save_model(self, request, obj, form, change):
+        """Send a lockout email and log a SecurityIncident when a user account is deactivated.
+        Input: request - HttpRequest; obj - User instance being saved; form - ModelForm; change - bool True if editing
+        Output: None; side-effect: saves the model and, on deactivation, sends a lockout notification email
+        """
         was_enabled = None
         if change and obj.pk:
             was_enabled = (
@@ -207,6 +222,8 @@ class UserAdmin(UserAdmin):
 
 @admin.register(CollaborationTeam)
 class CollaborationTeamAdmin(admin.ModelAdmin):
+    """Minimal admin configuration for collaboration team search and member management."""
+
     list_display = ("name",)
     search_fields = ("name",)
     filter_horizontal = ("members",)
@@ -214,13 +231,14 @@ class CollaborationTeamAdmin(admin.ModelAdmin):
 
 @admin.register(UserDataExportLog)
 class UserDataExportLogAdmin(admin.ModelAdmin):
-    list_display = ("user", "outcome", "ip_address", "created_at")
+    """Read-only admin view for inspecting GDPR data-export audit log entries."""
+
+    list_display = ("user", "outcome", "created_at")
     list_filter = ("outcome", "created_at")
-    search_fields = ("user__email", "ip_address", "notes")
+    search_fields = ("user__email", "notes")
     readonly_fields = (
         "user",
         "created_at",
-        "ip_address",
         "user_agent",
         "outcome",
         "notes",

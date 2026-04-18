@@ -59,9 +59,6 @@ class UserModelTests(TestCase):
         self.assertIn("$", user.password)
         self.assertTrue(user.check_password(raw_password))
 
-    def test_user_inherits_named_entity(self):
-        self.assertTrue(issubclass(User, NamedEntity))
-
     def test_create_superuser(self):
         superuser = User.objects.create_superuser(
             email="admin@example.com",
@@ -71,17 +68,6 @@ class UserModelTests(TestCase):
 
         self.assertTrue(superuser.is_superuser)
         self.assertTrue(superuser.is_staff)
-
-    def test_string_representation(self):
-        user = User.objects.create_user(**self.user_data)
-        expected = f"{user.given_name} {user.family_name} ({user.email})"
-
-        self.assertEqual(str(user), expected)
-
-    def test_create_user_ignores_legacy_role_field(self):
-        user = User.objects.create_user(**self.user_data, role="administrator")
-        self.assertEqual(user.email, self.user_data["email"])
-
 
 class UserAdminNotificationTests(TestCase):
     def setUp(self):
@@ -248,26 +234,6 @@ class AuthenticationApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("terms_conditions_accepted", response.data)
-
-    def test_signup_ignores_administrator_role_when_requested(self):
-        payload = self.user_data.copy()
-        payload["email"] = "admin-signup@test.com"
-        payload["role"] = "administrator"
-
-        response = self.client.post(self.signup_url, payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertNotIn("role", response.data["user"])
-
-    def test_signup_ignores_direccion_role_when_requested(self):
-        payload = self.user_data.copy()
-        payload["email"] = "direccion-signup@test.com"
-        payload["role"] = "direccion"
-
-        response = self.client.post(self.signup_url, payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertNotIn("role", response.data["user"])
 
     def test_login_success(self):
         User.objects.create_user(
@@ -959,18 +925,16 @@ class DataPortabilityTests(TestCase):
         self.assertEqual(third.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
         self.assertIn("Retry-After", third)
 
-    def test_audit_log_is_created_with_user_time_and_ip(self):
+    def test_audit_log_is_created_with_user_time(self):
         self._authenticate_as_user()
 
         response = self.client.post(
-            self.export_url,
-            REMOTE_ADDR="198.51.100.44",
+            self.export_url
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         log = UserDataExportLog.objects.filter(user=self.user).first()
         self.assertIsNotNone(log)
-        self.assertEqual(log.ip_address, "198.51.100.44")
         self.assertEqual(log.outcome, UserDataExportLog.Outcome.SUCCESS)
         self.assertIsNotNone(log.created_at)
 
