@@ -16,7 +16,6 @@ from auditableEntity.models import AuditEntry
 from classroom.models import Classroom
 from group.models import EducationalStage as GroupEducationalStage
 from group.models import Group
-from namedEntity.models import NamedEntity
 from schedule.models import Schedule
 from subject.models import Subject
 from teacher.models import Teacher
@@ -68,6 +67,7 @@ class UserModelTests(TestCase):
 
         self.assertTrue(superuser.is_superuser)
         self.assertTrue(superuser.is_staff)
+
 
 class UserAdminNotificationTests(TestCase):
     def setUp(self):
@@ -928,9 +928,7 @@ class DataPortabilityTests(TestCase):
     def test_audit_log_is_created_with_user_time(self):
         self._authenticate_as_user()
 
-        response = self.client.post(
-            self.export_url
-        )
+        response = self.client.post(self.export_url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         log = UserDataExportLog.objects.filter(user=self.user).first()
