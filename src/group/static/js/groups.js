@@ -1,6 +1,7 @@
 (function () {
   const admin = window.AdminBase || {};
   const dom = admin.dom;
+  const fv = admin.formUtils && admin.formUtils.validators;
 
   const formElement = document.getElementById("admin-group-form");
   if (!formElement || !admin.createEntityManager || !dom) {
@@ -61,18 +62,6 @@
     return { label: "Primaria", variant: "variant-blue" };
   }
 
-  function createActionButton(className, title, icon) {
-    return dom.createElement("button", {
-      className: className,
-      attrs: {
-        type: "button",
-        title: title,
-        "aria-label": title,
-      },
-      children: [dom.createLucideIcon(icon)],
-    });
-  }
-
   function stagePill(stage) {
     const meta = getStageMeta(stage);
     return dom.createElement("span", {
@@ -113,12 +102,12 @@
                     dom.createElement("div", {
                       className: "admin-actions",
                       children: [
-                        createActionButton(
+                        dom.createActionButton(
                           "btn btn-link text-primary p-0 admin-action-btn admin-action-btn--edit admin-group-edit-btn",
                           "Editar curso",
                           "pencil",
                         ),
-                        createActionButton(
+                        dom.createActionButton(
                           "btn btn-link text-danger p-0 admin-action-btn admin-action-btn--delete admin-group-delete-btn",
                           "Eliminar curso",
                           "trash-2",
@@ -146,12 +135,7 @@
     getItemName: function (item) {
       return resolveGroupName(item);
     },
-    parseList: function (data) {
-      if (Array.isArray(data)) {
-        return data;
-      }
-      return data && Array.isArray(data.results) ? data.results : [];
-    },
+    parseList: admin.api.parseList,
     renderItem: renderGroupItem,
     addButton: elements.addButton,
     alertElement: elements.alertBox,
@@ -205,34 +189,17 @@
           input: elements.nameInput,
           feedback: elements.nameError,
           rules: [
-            {
-              validator: function () {
-                if (!elements.nameInput.value.trim()) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                }
-                if (elements.nameInput.value.length > window.ValidationConstants.STRING_MAX_LENGTH) {
-                  return "Este campo no puede tener más de " + window.ValidationConstants.STRING_MAX_LENGTH + " caracteres.";
-                }
-                return "";
-              },
-            },
+            fv.requiredString(
+              function () { return elements.nameInput; },
+              function () { return window.ValidationConstants.STRING_MAX_LENGTH; },
+            ),
           ],
         },
         {
           name: "stage",
           input: elements.stageInput,
           feedback: elements.stageError,
-          rules: [
-            {
-              validator: function () {
-                const value = elements.stageInput.value || "";
-                if (!value.trim()) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                }
-                return "";
-              },
-            },
-          ],
+          rules: [fv.requiredSelect(function () { return elements.stageInput; })],
         },
       ],
       clearValidationOnInput: [

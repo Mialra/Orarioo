@@ -58,11 +58,77 @@
         });
     }
 
+    function requiredString(getInput, getMaxLength) {
+        return {
+            validator: function () {
+                const input = getInput();
+                if (!input.value.trim()) {
+                    return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
+                }
+                const limit = typeof getMaxLength === "function" ? getMaxLength() : getMaxLength;
+                if (limit && input.value.length > limit) {
+                    return "Este campo no puede tener más de " + limit + " caracteres.";
+                }
+                return "";
+            },
+        };
+    }
+
+    function requiredSelect(getInput) {
+        return {
+            validator: function () {
+                const input = getInput();
+                if (!input || !input.value.trim()) {
+                    return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
+                }
+                return "";
+            },
+        };
+    }
+
+    function requiredPositiveInt(getInput) {
+        return {
+            validator: function () {
+                const input = getInput();
+                const value = input ? input.value.trim() : "";
+                if (!value || !window.OrariooValidators.rules.positiveInteger(value)) {
+                    return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
+                }
+                return "";
+            },
+        };
+    }
+
+    function weeklyHours(getInput) {
+        return {
+            validator: function () {
+                const input = getInput();
+                const raw = input.value.trim();
+                if (!raw) {
+                    return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
+                }
+                if (!window.OrariooValidators.rules.positiveInteger(raw)) {
+                    return window.OrariooErrorHandler.translateEntry({ code: "INVALID_INTEGER" });
+                }
+                if (Number(raw) >= 168) {
+                    return window.OrariooErrorHandler.translateEntry({ code: "WEEKLY_HOURS_EXCEEDS_LIMIT" });
+                }
+                return "";
+            },
+        };
+    }
+
     root.formUtils = {
         setFieldError: setFieldError,
         clearFieldError: clearFieldError,
         clearErrors: clearErrors,
         validateFields: validateFields,
         applyServerErrors: applyServerErrors,
+        validators: {
+            requiredString: requiredString,
+            requiredSelect: requiredSelect,
+            requiredPositiveInt: requiredPositiveInt,
+            weeklyHours: weeklyHours,
+        },
     };
 })();

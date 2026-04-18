@@ -54,9 +54,22 @@
         });
     }
 
+    function createActionButton(className, title, icon) {
+        return createElement("button", {
+            className: className,
+            attrs: {
+                type: "button",
+                title: title,
+                "aria-label": title,
+            },
+            children: [createLucideIcon(icon)],
+        });
+    }
+
     root.dom = {
         createElement: createElement,
         clearElement: clearElement,
         createLucideIcon: createLucideIcon,
+        createActionButton: createActionButton,
     };
 })();

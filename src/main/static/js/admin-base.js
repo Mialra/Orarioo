@@ -16,6 +16,9 @@
         listRenderer: core.listRenderer,
         pagination: core.pagination,
         dom: core.dom,
+        constants: core.constants,
+        createPreferencesManager: core.createPreferencesManager,
+        parsePreferences: core.parsePreferences,
         createEntityManager: createEntityManager,
         paginate: function (items, page, pageSize) {
             const list = items || [];

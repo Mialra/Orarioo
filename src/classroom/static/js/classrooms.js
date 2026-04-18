@@ -1,6 +1,7 @@
 (function () {
     const admin = window.AdminBase || {};
     const dom = admin.dom;
+    const fv = admin.formUtils && admin.formUtils.validators;
 
     const formElement = document.getElementById("admin-classroom-form");
     if (!formElement || !admin.createEntityManager || !dom) {
@@ -33,18 +34,6 @@
 
     function resolveClassroomName(classroom) {
         return classroom.name || "Aula";
-    }
-
-    function createActionButton(className, title, icon) {
-        return dom.createElement("button", {
-            className: className,
-            attrs: {
-                type: "button",
-                title: title,
-                "aria-label": title,
-            },
-            children: [dom.createLucideIcon(icon)],
-        });
     }
 
     function sharedPill(isShared) {
@@ -86,12 +75,12 @@
                                         dom.createElement("div", {
                                             className: "admin-actions",
                                             children: [
-                                                createActionButton(
+                                                dom.createActionButton(
                                                     "btn btn-link text-primary p-0 admin-action-btn admin-action-btn--edit admin-classroom-edit-btn",
                                                     "Editar aula",
                                                     "pencil"
                                                 ),
-                                                createActionButton(
+                                                dom.createActionButton(
                                                     "btn btn-link text-danger p-0 admin-action-btn admin-action-btn--delete admin-classroom-delete-btn",
                                                     "Eliminar aula",
                                                     "trash-2"
@@ -119,12 +108,7 @@
         getItemName: function (item) {
             return resolveClassroomName(item);
         },
-        parseList: function (data) {
-            if (Array.isArray(data)) {
-                return data;
-            }
-            return data && Array.isArray(data.results) ? data.results : [];
-        },
+        parseList: admin.api.parseList,
         renderItem: renderClassroomItem,
         addButton: elements.addButton,
         alertElement: elements.alertBox,
@@ -176,17 +160,10 @@
                     input: elements.nameInput,
                     feedback: elements.nameError,
                     rules: [
-                        {
-                            validator: function () {
-                                if (!elements.nameInput.value.trim()) {
-                                    return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                                }
-                                if (elements.nameInput.value.length > window.ValidationConstants.STRING_MAX_LENGTH) {
-                                    return "Este campo no puede tener más de " + window.ValidationConstants.STRING_MAX_LENGTH + " caracteres.";
-                                }
-                                return "";
-                            },
-                        },
+                        fv.requiredString(
+                            function () { return elements.nameInput; },
+                            function () { return window.ValidationConstants.STRING_MAX_LENGTH; },
+                        ),
                     ],
                 },
             ],

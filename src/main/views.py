@@ -28,6 +28,7 @@ SECTION_CONFIG = {
 }
 
 _ADMIN_CORE_SCRIPTS = [
+    "js/admin-core/constants.js",
     "js/admin-core/dom-helpers.js",
     "js/admin-core/api.js",
     "js/admin-core/ui-state.js",
@@ -35,6 +36,7 @@ _ADMIN_CORE_SCRIPTS = [
     "js/admin-core/modal-utils.js",
     "js/admin-core/list-renderer.js",
     "js/admin-core/pagination.js",
+    "js/admin-core/preferences-manager.js",
     "js/admin-core/crud-module.js",
     "js/admin-base.js",
 ]

@@ -41,11 +41,19 @@
         }
     }
 
+    function parseList(data) {
+        if (Array.isArray(data)) {
+            return data;
+        }
+        return data && Array.isArray(data.results) ? data.results : [];
+    }
+
     root.api = {
         request: request,
         get: function (url) { return request(url, { method: "GET" }); },
         post: function (url, data) { return request(url, { method: "POST", data: data }); },
         patch: function (url, data) { return request(url, { method: "PATCH", data: data }); },
         del: function (url) { return request(url, { method: "DELETE" }); },
+        parseList: parseList,
     };
 })();

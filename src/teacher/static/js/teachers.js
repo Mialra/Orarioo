@@ -1,6 +1,7 @@
 (function () {
   const admin = window.AdminBase || {};
   const dom = admin.dom;
+  const fv = admin.formUtils && admin.formUtils.validators;
 
   const formElement = document.getElementById("admin-teacher-form");
   if (!formElement || !admin.createEntityManager || !dom) {
@@ -45,153 +46,15 @@
     timePreferencesError: document.getElementById("admin-teacher-time-preferences-error"),
   };
 
-  const PREFERENCE_STATES = ["AVAILABLE", "PREFER_YES", "PREFER_NO", "UNAVAILABLE"];
-  const DAYS = ["MON", "TUE", "WED", "THU", "FRI"];
-  const HOURS = [
-    "08:00",
-    "08:30",
-    "09:00",
-    "09:30",
-    "10:00",
-    "10:30",
-    "11:00",
-    "11:30",
-    "12:00",
-    "12:30",
-    "13:00",
-    "13:30",
-    "14:00",
-    "14:30",
-  ];
-  const dayLabels = {
-    MON: "Lunes",
-    TUE: "Martes",
-    WED: "Miércoles",
-    THU: "Jueves",
-    FRI: "Viernes",
-  };
-  const preferenceStateBySlot = {};
+  const prefManager = admin.createPreferencesManager({
+    gridContainer: elements.preferencesGridContainer,
+    brushInput: elements.preferenceBrushInput,
+    timePreferencesInput: elements.timePreferencesInput,
+    defaultBrushState: "AVAILABLE",
+  });
 
   function resolveTeacherName(teacher) {
     return teacher.name || "Profesor";
-  }
-
-  function slotKey(day, hour) {
-    return day + "_" + hour;
-  }
-
-  function getBrushState() {
-    const value = elements.preferenceBrushInput ? elements.preferenceBrushInput.value : "AVAILABLE";
-    return PREFERENCE_STATES.indexOf(value) >= 0 ? value : "AVAILABLE";
-  }
-
-  function applyStateToCell(cell, state) {
-    if (!cell) {
-      return;
-    }
-    PREFERENCE_STATES.forEach(function (candidate) {
-      cell.classList.remove("state-" + candidate);
-      cell.classList.remove("pref-state-" + candidate);
-    });
-    cell.classList.add("state-" + state);
-    cell.classList.add("pref-state-" + state);
-    cell.dataset.state = state;
-  }
-
-  function syncTimePreferencesInput() {
-    const payload = {};
-    Object.keys(preferenceStateBySlot).forEach(function (slot) {
-      const state = preferenceStateBySlot[slot];
-      if (state !== "AVAILABLE") {
-        payload[slot] = state;
-      }
-    });
-    elements.timePreferencesInput.value = JSON.stringify(payload);
-  }
-
-  function setSlotState(slot, state) {
-    preferenceStateBySlot[slot] = state;
-    const cell = elements.preferencesGridContainer
-      ? elements.preferencesGridContainer.querySelector('[data-slot="' + slot + '"]')
-      : null;
-    applyStateToCell(cell, state);
-    syncTimePreferencesInput();
-  }
-
-  function resetPreferencesGrid(preferences) {
-    DAYS.forEach(function (day) {
-      HOURS.forEach(function (hour) {
-        const slot = slotKey(day, hour);
-        const nextState =
-          preferences && PREFERENCE_STATES.indexOf(preferences[slot]) >= 0 ? preferences[slot] : "AVAILABLE";
-        preferenceStateBySlot[slot] = nextState;
-        const cell = elements.preferencesGridContainer
-          ? elements.preferencesGridContainer.querySelector('[data-slot="' + slot + '"]')
-          : null;
-        applyStateToCell(cell, nextState);
-      });
-    });
-    syncTimePreferencesInput();
-  }
-
-  function paintSlot(slot) {
-    setSlotState(slot, getBrushState());
-  }
-
-  function renderPreferencesGrid() {
-    if (!elements.preferencesGridContainer) {
-      return;
-    }
-
-    const headCells = DAYS.map(function (day) {
-      return '<div class="pref-grid-header">' + dayLabels[day] + "</div>";
-    }).join("");
-
-    const bodyCells = HOURS.map(function (hour) {
-      const rowCells = DAYS.map(function (day) {
-        const slot = slotKey(day, hour);
-        return (
-          '<button type="button" class="subject-pref-cell pref-cell state-AVAILABLE pref-state-AVAILABLE" data-slot="' +
-          slot +
-          '" title="' +
-          day +
-          " " +
-          hour +
-          '"></button>'
-        );
-      }).join("");
-
-      return '<div class="pref-hour">' + hour + "</div>" + rowCells;
-    }).join("");
-
-    elements.preferencesGridContainer.innerHTML =
-      '<div class="pref-grid">' +
-      '<div class="pref-grid-header pref-hour">Hora</div>' +
-      headCells +
-      bodyCells +
-      "</div>";
-
-    elements.preferencesGridContainer.addEventListener("click", function (event) {
-      const cell = event.target.closest("[data-slot]");
-      if (!cell) {
-        return;
-      }
-      paintSlot(cell.dataset.slot);
-    });
-
-    resetPreferencesGrid({});
-  }
-
-  function createActionButton(className, title, icon) {
-    return dom.createElement("button", {
-      className: className,
-      attrs: {
-        type: "button",
-        title: title,
-        "aria-label": title,
-      },
-      children: [dom.createLucideIcon(icon)],
-    });
   }
 
   function renderTeacherItem(teacher) {
@@ -231,12 +94,12 @@
                     dom.createElement("div", {
                       className: "admin-actions",
                       children: [
-                        createActionButton(
+                        dom.createActionButton(
                           "btn btn-link text-primary p-0 admin-action-btn admin-action-btn--edit admin-teacher-edit-btn",
                           "Editar profesor",
                           "pencil",
                         ),
-                        createActionButton(
+                        dom.createActionButton(
                           "btn btn-link text-danger p-0 admin-action-btn admin-action-btn--delete admin-teacher-delete-btn",
                           "Eliminar profesor",
                           "trash-2",
@@ -253,25 +116,11 @@
     });
   }
 
-  function parsePreferences(rawValue) {
-    if (rawValue && typeof rawValue === "object") {
-      return rawValue;
-    }
-    if (!rawValue || !String(rawValue).trim()) {
-      return {};
-    }
-    try {
-      return JSON.parse(String(rawValue));
-    } catch (error) {
-      return {};
-    }
-  }
-
-  renderPreferencesGrid();
+  prefManager.render();
 
   if (elements.preferenceClearButton) {
     elements.preferenceClearButton.addEventListener("click", function () {
-      resetPreferencesGrid({});
+      prefManager.reset({});
     });
   }
 
@@ -286,12 +135,7 @@
     getItemName: function (item) {
       return resolveTeacherName(item);
     },
-    parseList: function (data) {
-      if (Array.isArray(data)) {
-        return data;
-      }
-      return data && Array.isArray(data.results) ? data.results : [];
-    },
+    parseList: admin.api.parseList,
     renderItem: renderTeacherItem,
     addButton: elements.addButton,
     alertElement: elements.alertBox,
@@ -345,17 +189,10 @@
           input: elements.nameInput,
           feedback: elements.nameError,
           rules: [
-            {
-              validator: function () {
-                if (!elements.nameInput.value.trim()) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                }
-                if (elements.nameInput.value.length > window.ValidationConstants.STRING_MAX_LENGTH) {
-                  return "Este campo no puede tener más de " + window.ValidationConstants.STRING_MAX_LENGTH + " caracteres.";
-                }
-                return "";
-              },
-            },
+            fv.requiredString(
+              function () { return elements.nameInput; },
+              function () { return window.ValidationConstants.STRING_MAX_LENGTH; },
+            ),
           ],
         },
         {
@@ -378,24 +215,7 @@
           name: "max_weekly_hours",
           input: elements.maxWeeklyHoursInput,
           feedback: elements.maxWeeklyHoursError,
-          rules: [
-            {
-              validator: function () {
-                const raw = elements.maxWeeklyHoursInput.value.trim();
-                if (!raw) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                }
-                if (!window.OrariooValidators.rules.positiveInteger(raw)) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "INVALID_INTEGER" });
-                }
-                const hours = Number(raw);
-                if (hours >= 168) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "WEEKLY_HOURS_EXCEEDS_LIMIT" });
-                }
-                return "";
-              },
-            },
-          ],
+          rules: [fv.weeklyHours(function () { return elements.maxWeeklyHoursInput; })],
         },
         {
           name: "working_hours",
@@ -426,7 +246,7 @@
         }
         elements.maxWeeklyHoursInput.value = "";
         elements.workingHoursInput.value = "0";
-        resetPreferencesGrid({});
+        prefManager.reset({});
       },
       setEditingId: function (id) {
         elements.teacherIdInput.value = id || "";
@@ -448,7 +268,7 @@
         }
         elements.maxWeeklyHoursInput.value = item.max_weekly_hours ?? "";
         elements.workingHoursInput.value = item.working_hours ?? "";
-        resetPreferencesGrid(item.time_preferences || {});
+        prefManager.reset(item.time_preferences || {});
       },
       buildPayload: function () {
         const namePart = elements.nameInput.value.trim();
@@ -457,7 +277,7 @@
           name: [namePart, surnamesPart].filter(Boolean).join(" "),
           max_weekly_hours: Number(elements.maxWeeklyHoursInput.value),
           working_hours: Number(elements.workingHoursInput.value),
-          time_preferences: parsePreferences(elements.timePreferencesInput.value),
+          time_preferences: admin.parsePreferences(elements.timePreferencesInput.value),
         };
       },
     },
