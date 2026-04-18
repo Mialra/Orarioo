@@ -6,8 +6,8 @@ from rest_framework import serializers
 
 from app.constants import MAX_LENGTH_EXTENDED, STRING_MAX_LENGTH
 from classroom.models import Classroom
-from common.serializers import TeamScopedModelSerializerMixin
 from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
+from common.serializers import TeamScopedModelSerializerMixin
 from common.validators import (
     normalize_optional_text,
     raise_validation_error,

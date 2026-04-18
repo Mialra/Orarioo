@@ -105,9 +105,7 @@ def build_export_rows(schedules):
         local_start = (
             timezone.localtime(schedule.start_time) if schedule.start_time else None
         )
-        local_end = (
-            timezone.localtime(schedule.end_time) if schedule.end_time else None
-        )
+        local_end = timezone.localtime(schedule.end_time) if schedule.end_time else None
         rows.append(
             {
                 "day": (
@@ -525,9 +523,7 @@ def build_pdf_units_response(units, filename):
                 ]
             )
 
-        table_data = build_timetable_table_data(
-            unit["schedules"], unit["entity_type"]
-        )
+        table_data = build_timetable_table_data(unit["schedules"], unit["entity_type"])
 
         available_width = document.width
         time_col_width = available_width * 0.15

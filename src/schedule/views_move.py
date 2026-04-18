@@ -15,7 +15,11 @@ from schedule.algorithm.constraints.hard import (
     session_preference_state,
     teacher_preference_state,
 )
-from schedule.algorithm.slots import STAGE_SLOT_WINDOWS, session_stage_code, slot_preference_key_from_datetime
+from schedule.algorithm.slots import (
+    STAGE_SLOT_WINDOWS,
+    session_stage_code,
+    slot_preference_key_from_datetime,
+)
 from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 
@@ -94,9 +98,7 @@ def parse_move_slot(slot_data, slot_label, *, require_schedule_id=False):
         return None, end_error
     if end_time <= start_time:
         return None, Response(
-            {
-                "detail": f"{slot_label}.end must be greater than {slot_label}.start."
-            },
+            {"detail": f"{slot_label}.end must be greater than {slot_label}.start."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -109,6 +111,7 @@ def parse_move_slot(slot_data, slot_label, *, require_schedule_id=False):
         )
     if raw_schedule_id not in (None, ""):
         from schedule.views_generate import parse_positive_int
+
         parsed_schedule_id, parse_error = parse_positive_int(
             raw_schedule_id,
             f"{slot_label}.schedule_id",
@@ -425,9 +428,7 @@ def has_intraday_gap(occupied_indices):
     first_idx = min(occupied_indices)
     last_idx = max(occupied_indices)
     occupied_set = set(occupied_indices)
-    return any(
-        index not in occupied_set for index in range(first_idx, last_idx + 1)
-    )
+    return any(index not in occupied_set for index in range(first_idx, last_idx + 1))
 
 
 def group_schedules_by_id(*, scope_schedules, changed_group_ids):

@@ -18,20 +18,20 @@ logger = logging.getLogger(__name__)
 STAGE_HOURS = {
     "preschool": {
         "name": "Infantil",
-        "start": 9,   # First class at 9:00
-        "end": 13,    # Last class 13:00-14:00
+        "start": 9,  # First class at 9:00
+        "end": 13,  # Last class 13:00-14:00
         "break": (10.5, 11),  # 10:30-11:00
     },
     "primary": {
         "name": "Primaria",
-        "start": 9,   # First class at 9:00
-        "end": 13,    # Last class 13:00-14:00
+        "start": 9,  # First class at 9:00
+        "end": 13,  # Last class 13:00-14:00
         "break": (11.5, 12),  # 11:30-12:00
     },
     "secondary": {
         "name": "ESO",
-        "start": 8,   # First class at 8:00
-        "end": 13,    # Last class 13:30-14:30 (modelled as hour 13)
+        "start": 8,  # First class at 8:00
+        "end": 13,  # Last class 13:30-14:30 (modelled as hour 13)
         "break": (11, 11.5),  # 11:00-11:30
     },
 }

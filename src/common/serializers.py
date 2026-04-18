@@ -29,7 +29,9 @@ class TeamScopedModelSerializerMixin:
 
         for field_name, model in self.team_scoped_field_models.items():
             if field_name in self.fields:
-                self.fields[field_name].queryset = model.objects.filter(team=active_team)
+                self.fields[field_name].queryset = model.objects.filter(
+                    team=active_team
+                )
 
         for field_name, queryset_factory in self.team_scoped_field_querysets.items():
             if field_name in self.fields:

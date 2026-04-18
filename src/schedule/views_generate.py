@@ -49,8 +49,7 @@ def parse_bool_param(raw_value, field_name):
     return False, Response(
         {
             "detail": (
-                f"{field_name} must be a boolean value "
-                "(true/false, 1/0, yes/no)."
+                f"{field_name} must be a boolean value " "(true/false, 1/0, yes/no)."
             )
         },
         status=status.HTTP_400_BAD_REQUEST,
@@ -77,11 +76,7 @@ def parse_generation_int(payload, field_name, *, min_value, max_value):
 
     if value < min_value or value > max_value:
         return None, Response(
-            {
-                "detail": (
-                    f"{field_name} must be between {min_value} and {max_value}."
-                )
-            },
+            {"detail": (f"{field_name} must be between {min_value} and {max_value}.")},
             status=status.HTTP_400_BAD_REQUEST,
         )
     return value, None

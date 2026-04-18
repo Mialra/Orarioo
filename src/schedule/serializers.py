@@ -3,8 +3,8 @@
 from rest_framework import serializers
 
 from classroom.models import Classroom
-from common.serializers import TeamScopedModelSerializerMixin
 from common.serializer_utils import AUDIT_FIELD_NAMES
+from common.serializers import TeamScopedModelSerializerMixin
 from common.validators import normalize_optional_text, raise_validation_error
 from group.models import Group
 from namedEntity.serializers import NamedEntityNameValidationMixin

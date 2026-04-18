@@ -26,10 +26,10 @@ from schedule.models import Schedule
 from subject.models import Subject, SubjectType
 from teacher.models import Teacher
 
-
 # ---------------------------------------------------------------------------
 # Module-level helpers shared by both generator classes
 # ---------------------------------------------------------------------------
+
 
 def _get_or_create_classroom(actor_email: str, team):
     """Return the first classroom for the team, creating a default one if none exist.
@@ -81,6 +81,7 @@ def _build_classroom_pool(*, fallback_classroom, team):
 # ---------------------------------------------------------------------------
 # Generator
 # ---------------------------------------------------------------------------
+
 
 class BasicScheduleGenerator:
     """Generates a complete weekly timetable from scratch using CP-SAT."""
@@ -320,6 +321,7 @@ class BasicScheduleGenerator:
 # ---------------------------------------------------------------------------
 # Replanner
 # ---------------------------------------------------------------------------
+
 
 class ScheduleReplanner:
     """Replan an existing schedule with a fixed manual session-to-slot assignment."""
