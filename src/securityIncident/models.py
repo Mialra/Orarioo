@@ -1,3 +1,7 @@
+"""
+Security incident model for tracking account lockouts and breach events.
+"""
+
 from django.conf import settings
 from django.db import models
 
@@ -34,6 +38,16 @@ class SecurityIncident(models.Model):
             ),
         ]
 
+    def _user_label(self):
+        """Return a short human-readable label identifying the affected user.
+        Input: self - SecurityIncident instance
+        Output: str 'User <email>' if user exists, or 'Deleted user'
+        """
+        return f"User {self.user.email}" if self.user else "Deleted user"
+
     def __str__(self):
-        user_info = f"User {self.user.email}" if self.user else "Deleted user"
-        return f"SecurityIncident {self.id} ({user_info}) - {self.created_at}"
+        """Return a readable representation for admin lists and logs.
+        Input: self - SecurityIncident instance
+        Output: str with id, user label, and timestamp
+        """
+        return f"SecurityIncident {self.id} ({self._user_label()}) - {self.created_at}"
