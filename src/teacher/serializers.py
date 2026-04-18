@@ -1,3 +1,7 @@
+"""
+Serializer for teacher CRUD operations with hour-range validation and audit fields.
+"""
+
 from rest_framework import serializers
 
 from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
@@ -11,6 +15,8 @@ from teacher.models import Teacher, TeacherTimePreferenceState
 
 
 class TeacherSerializer(NamedEntityNameValidationMixin, serializers.ModelSerializer):
+    """Validate and serialize teachers using the shared NamedEntity rules."""
+
     enforce_case_insensitive_unique_name = True
 
     team = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -27,6 +33,10 @@ class TeacherSerializer(NamedEntityNameValidationMixin, serializers.ModelSeriali
         read_only_fields = AUDIT_READ_ONLY_FIELD_NAMES
 
     def validate(self, attrs):
+        """Cross-validate working_hours against max_weekly_hours and normalize time_preferences.
+        Input: attrs - dict of deserialized field values
+        Output: dict validated attrs with normalized time_preferences; raises ValidationError on constraint violations
+        """
         max_weekly_hours = attrs.get(
             "max_weekly_hours",
             self.instance.max_weekly_hours if self.instance else None,
@@ -76,6 +86,10 @@ class TeacherSerializer(NamedEntityNameValidationMixin, serializers.ModelSeriali
         return attrs
 
     def validate_max_weekly_hours(self, value):
+        """Ensure max_weekly_hours is below the 168-hour weekly limit.
+        Input: value - int submitted for max_weekly_hours
+        Output: int validated value; raises ValidationError if >= 168
+        """
         if value >= 168:
             raise_validation_error(
                 "max_weekly_hours",

@@ -1,3 +1,7 @@
+"""
+Domain models for subjects, including type/stage choices and time-preference states.
+"""
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import UniqueConstraint
@@ -74,6 +78,10 @@ class Subject(TeamScopedModel, AuditableEntity):
         ]
 
     def clean(self):
+        """Enforce model-level constraints on duration and weekly_hours.
+        Input: self - Subject instance being validated
+        Output: None; raises ValidationError if duration or weekly_hours are not positive
+        """
         if self.duration <= 0:
             raise ValidationError({"duration": "Duration must be greater than zero."})
         if self.weekly_hours <= 0:
@@ -82,4 +90,8 @@ class Subject(TeamScopedModel, AuditableEntity):
             )
 
     def __str__(self):
+        """Return a human-readable representation including the subject's stage.
+        Input: self - Subject instance
+        Output: str in the format 'name (stage)'
+        """
         return f"{self.name} ({self.stage})"
