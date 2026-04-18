@@ -8,8 +8,7 @@ from datetime import datetime, time, timedelta
 
 from django.utils import timezone
 
-from group.models import EducationalStage as GroupEducationalStage
-from subject.models import EducationalStage as SubjectEducationalStage
+from common.stages import EducationalStage, canonical_educational_stage
 
 DAY_CODE_BY_WEEKDAY = {
     0: "MON",
@@ -19,9 +18,9 @@ DAY_CODE_BY_WEEKDAY = {
     4: "FRI",
 }
 
-STAGE_PRESCHOOL = "PRESCHOOL"
-STAGE_PRIMARY = "PRIMARY"
-STAGE_SECONDARY = "SECONDARY"
+STAGE_PRESCHOOL = EducationalStage.PRESCHOOL
+STAGE_PRIMARY = EducationalStage.PRIMARY
+STAGE_SECONDARY = EducationalStage.SECONDARY
 
 STAGE_SLOT_WINDOWS = {
     # Infantil: 9:00-14:00 with breaks 10:30-11:00 and 13:30-14:00.
@@ -88,21 +87,11 @@ def _normalize_stage_code(*, group_stage=None, subject_stage=None):
     Output: one of STAGE_PRESCHOOL, STAGE_PRIMARY, STAGE_SECONDARY;
             STAGE_PRIMARY as fallback when neither matches
     """
-    if group_stage == GroupEducationalStage.PRESCHOOL:
-        return STAGE_PRESCHOOL
-    if group_stage == GroupEducationalStage.PRIMARY:
-        return STAGE_PRIMARY
-    if group_stage == GroupEducationalStage.SECONDARY:
-        return STAGE_SECONDARY
-
-    if subject_stage == SubjectEducationalStage.PRESCHOOL:
-        return STAGE_PRESCHOOL
-    if subject_stage == SubjectEducationalStage.PRIMARY:
-        return STAGE_PRIMARY
-    if subject_stage == SubjectEducationalStage.SECONDARY:
-        return STAGE_SECONDARY
-
-    return STAGE_PRIMARY
+    return canonical_educational_stage(
+        group_stage=group_stage,
+        subject_stage=subject_stage,
+        default=STAGE_PRIMARY,
+    )
 
 
 def session_stage_code(*, session):

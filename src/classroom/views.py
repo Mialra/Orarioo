@@ -4,18 +4,13 @@ Admin page entrypoint and API viewset for classrooms.
 
 from classroom.models import Classroom
 from classroom.serializers import ClassroomSerializer
-from common.drf import StandardPagination, TeamScopedAuditableModelViewSet
-from main.views import render_admin_dashboard
+from common.admin import StandardTeamScopedCrudViewSet, build_admin_tab_view
+
+admin_classrooms = build_admin_tab_view("classrooms")
 
 
-def admin_classrooms(request):
-    """Render the administration dashboard with the classroom tab selected."""
-    return render_admin_dashboard(request, "classrooms")
-
-
-class ClassroomViewSet(TeamScopedAuditableModelViewSet):
+class ClassroomViewSet(StandardTeamScopedCrudViewSet):
     """CRUD API for classrooms."""
 
     queryset = Classroom.objects.all()
     serializer_class = ClassroomSerializer
-    pagination_class = StandardPagination

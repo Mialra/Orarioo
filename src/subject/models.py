@@ -8,14 +8,7 @@ from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
 
 from auditableEntity.models import AuditableEntity, TeamScopedModel
-
-
-class EducationalStage(models.TextChoices):
-    """Educational stages for subjects."""
-
-    PRESCHOOL = "PRESCHOOL", "Preschool"
-    PRIMARY = "PRIMARY", "Primary"
-    SECONDARY = "SECONDARY", "Secondary"
+from common.stages import EducationalStage
 
 
 class SubjectType(models.TextChoices):

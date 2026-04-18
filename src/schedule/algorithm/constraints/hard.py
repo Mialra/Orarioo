@@ -4,7 +4,7 @@ Provides capacity validation (pre-solver) and model-level constraints that
 must be satisfied for a schedule to be considered feasible.
 """
 
-from group.models import EducationalStage
+from common.stages import EducationalStage, canonical_group_stage
 from schedule.algorithm.errors import ScheduleCapacityError, ScheduleGenerationError
 from schedule.algorithm.slots import (
     build_slot_day_index,
@@ -35,7 +35,7 @@ def group_weekly_limit(group):
     Input: group - Group model instance with a 'stage' attribute
     Output: integer weekly session limit (25 for preschool/primary, 30 for secondary)
     """
-    if group.stage in PRESCHOOL_AND_PRIMARY_STAGES:
+    if canonical_group_stage(group.stage) in PRESCHOOL_AND_PRIMARY_STAGES:
         return 25
     return 30
 
@@ -45,7 +45,7 @@ def group_daily_limit(group):
     Input: group - Group model instance with a 'stage' attribute
     Output: integer daily session limit (5 for preschool/primary, 6 for secondary)
     """
-    if group.stage in PRESCHOOL_AND_PRIMARY_STAGES:
+    if canonical_group_stage(group.stage) in PRESCHOOL_AND_PRIMARY_STAGES:
         return 5
     return 6
 
@@ -92,8 +92,9 @@ def _apply_recess_supervision_capacity(
         group = session.get("group")
         if teacher is None or group is None:
             continue
-        if group.stage in teachers_by_stage:
-            teachers_by_stage[group.stage].add(teacher.id)
+        group_stage = canonical_group_stage(group.stage)
+        if group_stage in teachers_by_stage:
+            teachers_by_stage[group_stage].add(teacher.id)
 
     for stage, teacher_ids in teachers_by_stage.items():
         required_supervisors = int(
