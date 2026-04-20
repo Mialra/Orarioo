@@ -136,4 +136,6 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             {item["name"] for item in options_response.data},
             {"Ana Perez", "Carlos Gomez"},
         )
-        self.assertTrue(all(set(item.keys()) == {"id", "name"} for item in options_response.data))
+        self.assertTrue(
+            all(set(item.keys()) == {"id", "name"} for item in options_response.data)
+        )

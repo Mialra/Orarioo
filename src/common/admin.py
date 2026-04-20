@@ -2,9 +2,10 @@
 Shared admin-page and simple CRUD view helpers.
 """
 
+from rest_framework.response import Response
+
 from common.drf import StandardPagination, TeamScopedAuditableModelViewSet
 from main.views import render_admin_dashboard
-from rest_framework.response import Response
 
 
 def build_admin_tab_view(admin_tab):

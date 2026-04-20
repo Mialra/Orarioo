@@ -508,14 +508,14 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         """
         saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
         schedules = list(
-            Schedule.objects
-            .select_related("teacher", "classroom", "group", "subject")
+            Schedule.objects.select_related("teacher", "classroom", "group", "subject")
             .prefetch_related("users")
             .filter(
                 users=request_user,
                 observations=saved_observation,
                 team=team,
-            ).order_by("id")
+            )
+            .order_by("id")
         )
         if not schedules:
             return None, Response(
@@ -649,7 +649,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             )
         return target_users, None
 
-    def _fetch_eligible_schedules(self, normalized_ids, request_user, actor_email, team):
+    def _fetch_eligible_schedules(
+        self, normalized_ids, request_user, actor_email, team
+    ):
         """Fetch auto-generated schedules that are eligible to be saved.
         Input: normalized_ids - list of schedule PKs; request_user - User instance;
                actor_email - email of the actor; team - Team instance
@@ -680,7 +682,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         return schedules, None
 
     @staticmethod
-    def _persist_saved_schedules(*, schedules, timetable_name, actor_email, target_users):
+    def _persist_saved_schedules(
+        *, schedules, timetable_name, actor_email, target_users
+    ):
         """Update schedule records to mark them as a saved timetable.
         Input: schedules - list of Schedule instances; timetable_name - name to assign;
                actor_email - email for updated_by; target_users - User instances to associate
