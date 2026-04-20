@@ -508,7 +508,10 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         """
         saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
         schedules = list(
-            Schedule.objects.filter(
+            Schedule.objects
+            .select_related("teacher", "classroom", "group", "subject")
+            .prefetch_related("users")
+            .filter(
                 users=request_user,
                 observations=saved_observation,
                 team=team,
@@ -646,8 +649,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             )
         return target_users, None
 
-    @staticmethod
-    def _fetch_eligible_schedules(normalized_ids, request_user, actor_email, team):
+    def _fetch_eligible_schedules(self, normalized_ids, request_user, actor_email, team):
         """Fetch auto-generated schedules that are eligible to be saved.
         Input: normalized_ids - list of schedule PKs; request_user - User instance;
                actor_email - email of the actor; team - Team instance
@@ -655,7 +657,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         """
         requested_ids = set(normalized_ids)
         schedules = list(
-            Schedule.objects.filter(
+            self.get_queryset()
+            .prefetch_related("users")
+            .filter(
                 id__in=normalized_ids,
                 users=request_user,
                 created_by=actor_email,
@@ -676,23 +680,49 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         return schedules, None
 
     @staticmethod
-    def _persist_saved_schedules(
-        *, schedules, timetable_name, actor_email, target_users
-    ):
+    def _persist_saved_schedules(*, schedules, timetable_name, actor_email, target_users):
         """Update schedule records to mark them as a saved timetable.
         Input: schedules - list of Schedule instances; timetable_name - name to assign;
                actor_email - email for updated_by; target_users - User instances to associate
         Output: None; side-effect: saves each schedule and links target_users
         """
+        if not schedules:
+            return
+
         saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
+        updated_at = timezone.now()
+        schedule_ids = [schedule.id for schedule in schedules]
+        target_user_ids = sorted({user.id for user in target_users})
+        through_model = Schedule.users.through
+
         for schedule in schedules:
             schedule.name = timetable_name
             schedule.observations = saved_observation
             schedule.updated_by = actor_email
-            schedule.save(
-                update_fields=["name", "observations", "updated_by", "updated_at"]
+            schedule.updated_at = updated_at
+
+        with transaction.atomic():
+            Schedule.objects.filter(id__in=schedule_ids).update(
+                name=timetable_name,
+                observations=saved_observation,
+                updated_by=actor_email,
+                updated_at=updated_at,
             )
-            schedule.users.add(*target_users)
+
+            existing_pairs = set(
+                through_model.objects.filter(
+                    schedule_id__in=schedule_ids,
+                    user_id__in=target_user_ids,
+                ).values_list("schedule_id", "user_id")
+            )
+            missing_pairs = [
+                through_model(schedule_id=schedule_id, user_id=user_id)
+                for schedule_id in schedule_ids
+                for user_id in target_user_ids
+                if (schedule_id, user_id) not in existing_pairs
+            ]
+            if missing_pairs:
+                through_model.objects.bulk_create(missing_pairs, ignore_conflicts=True)
 
     @staticmethod
     def _saved_timetable_name_exists(*, request_user, timetable_name, team):
@@ -757,12 +787,15 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             normalized_user_ids,
         )
 
-        target_users, error_response = self._fetch_target_users(
-            normalized_user_ids,
-            active_team,
-        )
-        if error_response is not None:
-            return error_response
+        if normalized_user_ids == [request.user.id]:
+            target_users = [request.user]
+        else:
+            target_users, error_response = self._fetch_target_users(
+                normalized_user_ids,
+                active_team,
+            )
+            if error_response is not None:
+                return error_response
 
         schedules, error_response = self._fetch_eligible_schedules(
             normalized_ids,

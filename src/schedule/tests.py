@@ -17,7 +17,7 @@ from schedule.algorithm.slots import (
     build_weekly_slots,
     slot_preference_key_from_datetime,
 )
-from schedule.constants import AUTO_GENERATED_OBSERVATION
+from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule
 from subject.models import EducationalStage as SubjectEducationalStage
 from subject.models import Subject, SubjectTimePreferenceState, SubjectType
@@ -983,6 +983,52 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("timetable_name", response.data)
         auto_schedule.refresh_from_db()
         self.assertEqual(auto_schedule.observations, AUTO_GENERATED_OBSERVATION)
+
+    def test_save_generated_persists_timetable_and_assigns_target_users(self):
+        start_time = timezone.now() + timedelta(days=1)
+        first_schedule = self.create_schedule(
+            name="Auto Session 1",
+            start_time=start_time,
+            end_time=start_time + timedelta(hours=1),
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+        second_schedule = self.create_schedule(
+            name="Auto Session 2",
+            start_time=start_time + timedelta(hours=1),
+            end_time=start_time + timedelta(hours=2),
+            observations=AUTO_GENERATED_OBSERVATION,
+            created_by=self.user.email,
+            updated_by=self.user.email,
+            users=[self.user],
+        )
+
+        response = self.client.post(
+            reverse("schedule-save-generated"),
+            {
+                "timetable_name": "Horario Compartido",
+                "schedule_ids": [first_schedule.id, second_schedule.id],
+                "user_ids": [self.other_user.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["saved_count"], 2)
+        self.assertEqual(len(response.data["schedules"]), 2)
+
+        expected_observation = f"{SAVED_TIMETABLE_PREFIX}: Horario Compartido"
+        for schedule in (first_schedule, second_schedule):
+            schedule.refresh_from_db()
+            self.assertEqual(schedule.name, "Horario Compartido")
+            self.assertEqual(schedule.observations, expected_observation)
+            self.assertEqual(schedule.updated_by, self.user.email)
+            self.assertEqual(
+                set(schedule.users.values_list("id", flat=True)),
+                {self.user.id, self.other_user.id},
+            )
 
     def test_saved_endpoint_returns_only_saved_schedules_for_current_user(self):
         start_time = timezone.now() + timedelta(days=1)

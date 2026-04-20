@@ -1,3 +1,6 @@
+/**
+ * Admin page entrypoint for teacher CRUD management with time-preference grid.
+ */
 (function () {
   const admin = window.AdminBase || {};
   const dom = admin.dom;
@@ -23,13 +26,9 @@
     maxWeeklyHoursInput: document.getElementById("admin-teacher-max-weekly-hours"),
     workingHoursInput: document.getElementById("admin-teacher-working-hours"),
     timePreferencesInput: document.getElementById("admin-teacher-time-preferences"),
-    preferenceBrushInput:
-      document.getElementById("admin-teacher-preference-brush") || document.getElementById("teacherPreferenceBrush"),
-    preferenceClearButton:
-      document.getElementById("admin-teacher-preference-clear-btn") ||
-      document.getElementById("teacherPreferenceClearBtn"),
-    preferencesGridContainer:
-      document.getElementById("admin-teacher-preferences-grid") || document.getElementById("teacherPreferencesGrid"),
+    preferenceBrushInput: document.getElementById("admin-teacher-preference-brush"),
+    preferenceClearButton: document.getElementById("admin-teacher-preference-clear-btn"),
+    preferencesGridContainer: document.getElementById("admin-teacher-preferences-grid"),
     submitButton: document.getElementById("admin-teacher-submit-btn"),
     submitText: document.getElementById("admin-teacher-submit-text"),
     submitSpinner: document.getElementById("admin-teacher-submit-spinner"),
@@ -53,10 +52,20 @@
     defaultBrushState: "AVAILABLE",
   });
 
+  /**
+   * Returns the display name for a teacher.
+   * Input: teacher - teacher object from the API
+   * Output: string display name, defaults to "Profesor" if missing
+   */
   function resolveTeacherName(teacher) {
     return teacher.name || "Profesor";
   }
 
+  /**
+   * Renders a single teacher card for the admin list.
+   * Input: teacher - teacher object from the API
+   * Output: DOM div element representing the teacher card
+   */
   function renderTeacherItem(teacher) {
     return dom.createElement("div", {
       className: "col",

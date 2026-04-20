@@ -14,3 +14,4 @@ class SubjectViewSet(StandardTeamScopedCrudViewSet):
 
     queryset = Subject.objects.all().select_related("teacher", "group")
     serializer_class = SubjectSerializer
+    summary_option_fields = ("name", "type")

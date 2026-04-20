@@ -1,3 +1,6 @@
+/**
+ * Audit log page: filterable, paginated change-history table with date-range picker and CSV/PDF export.
+ */
 (function () {
     const filtersForm = document.getElementById("audit-filters-form");
     const entityFilter = document.getElementById("audit-filter-entity");
@@ -38,6 +41,10 @@
             ? new window.bootstrap.Modal(detailModalElement)
             : null;
 
+    /**
+     * Shows or hides the page-level error banner with the given message.
+     * Input: message - error string; empty string clears the banner
+     */
     function setError(message) {
         if (!errorNode) {
             return;
@@ -53,6 +60,10 @@
         errorNode.classList.remove("d-none");
     }
 
+    /**
+     * Replaces the table body with a single full-width loading/message row.
+     * Input: message - text to display in the placeholder row
+     */
     function setLoading(message) {
         tableBody.innerHTML = "";
         const row = document.createElement("tr");
@@ -64,15 +75,11 @@
         tableBody.appendChild(row);
     }
 
-    function escapeHtml(value) {
-        return String(value || "")
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;")
-            .replaceAll('"', "&quot;")
-            .replaceAll("'", "&#39;");
-    }
-
+    /**
+     * Formats an ISO date string as a localised es-ES date-time string.
+     * Input: value - ISO date string or null/undefined
+     * Output: formatted date string, or "-" for empty/invalid input
+     */
     function toDisplayDate(value) {
         if (!value) {
             return "-";
@@ -124,6 +131,11 @@
         return String(rawValue || "");
     }
 
+    /**
+     * Converts an audit field value (scalar, array, or object) to a human-readable string.
+     * Input: value - any audit field value
+     * Output: display string, or "-" for null/empty values
+     */
     function formatAuditValue(value) {
         if (Array.isArray(value)) {
             return value.length
@@ -195,6 +207,11 @@
         return localizeDisplayToken(value);
     }
 
+    /**
+     * Formats a single audit change object into a field name and descriptive text pair.
+     * Input: change - object with campo, valor_anterior, and/or valor_nuevo
+     * Output: object with field and text string properties
+     */
     function formatAuditChangeLine(change) {
         const field = change.campo || "Campo";
         const previousValue = formatAuditValue(change.valor_anterior);
@@ -223,6 +240,11 @@
         };
     }
 
+    /**
+     * Filters team-related changes and formats the remaining entries into display line objects.
+     * Input: changes - array of change objects with campo, valor_anterior, valor_nuevo
+     * Output: array of { field, text } objects, or "-" if no displayable changes
+     */
     function formatAuditChanges(changes) {
         if (!Array.isArray(changes) || !changes.length) {
             return "-";
@@ -303,6 +325,10 @@
             .replace(/\s+(Campos modificados:)/i, "\n$1");
     }
 
+    /**
+     * Opens the audit detail modal for the entry at the given index in currentResults.
+     * Input: index - numeric index into state.currentResults
+     */
     function openAuditDetailModal(index) {
         const entry = state.currentResults[index];
         if (!entry || !detailModal || !detailBody || !detailSubtitle) {
@@ -324,9 +350,9 @@
                     .map(function (line) {
                         return (
                             "<li><strong>" +
-                            escapeHtml(line.field) +
+                            window.OrariooErrorHandler.escapeHtml(line.field) +
                             ":</strong> " +
-                            escapeHtml(line.text) +
+                            window.OrariooErrorHandler.escapeHtml(line.text) +
                             "</li>"
                         );
                     })
@@ -337,31 +363,11 @@
         detailModal.show();
     }
 
-    function parseApiError(payload, fallbackMessage) {
-        if (!payload) {
-            return fallbackMessage;
-        }
-
-        if (typeof payload.detail === "string" && payload.detail.trim()) {
-            return payload.detail;
-        }
-
-        const firstKey = Object.keys(payload)[0];
-        if (!firstKey) {
-            return fallbackMessage;
-        }
-
-        const value = payload[firstKey];
-        if (Array.isArray(value) && value.length > 0) {
-            return String(value[0]);
-        }
-        if (typeof value === "string") {
-            return value;
-        }
-
-        return fallbackMessage;
-    }
-
+    /**
+     * Returns the CSS class string for an audit action badge based on the action type.
+     * Input: action - action type string (e.g. "creacion", "modificacion", "borrado")
+     * Output: CSS class string
+     */
     function getActionBadgeClass(action) {
         const normalized = normalizeToken(action);
 
@@ -492,21 +498,21 @@
             const row = document.createElement("tr");
             row.innerHTML =
                 "<td>" +
-                escapeHtml(toDisplayDate(entry.fecha)) +
+                window.OrariooErrorHandler.escapeHtml(toDisplayDate(entry.fecha)) +
                 "</td>" +
                 "<td>" +
-                escapeHtml(entry.usuario || "-") +
+                window.OrariooErrorHandler.escapeHtml(entry.usuario || "-") +
                 "</td>" +
                 "<td>" +
-                escapeHtml(entry.tipo_entidad || "-") +
+                window.OrariooErrorHandler.escapeHtml(entry.tipo_entidad || "-") +
                 "</td>" +
                 "<td><span class=\"" +
                 getActionBadgeClass(actionLabel) +
                 "\">" +
-                escapeHtml(actionLabel) +
+                window.OrariooErrorHandler.escapeHtml(actionLabel) +
                 "</span></td>" +
                 "<td class=\"audit-cell-detail\">" +
-                escapeHtml(detailText) +
+                window.OrariooErrorHandler.escapeHtml(detailText) +
                 "</td>" +
                 "<td><button type=\"button\" class=\"btn btn-sm btn-outline-secondary audit-detail-button\" data-audit-detail-index=\"" +
                 String(index) +
@@ -759,7 +765,7 @@
         });
 
         if (!response.ok) {
-            throw new Error(parseApiError(payload, "No se pudieron cargar los usuarios."));
+            throw new Error(window.OrariooErrorHandler.parseApiError(payload, { fallbackMessage: "No se pudieron cargar los usuarios." }).message);
         }
 
         if (!userFilter) {
@@ -792,7 +798,7 @@
 
         if (!response.ok) {
             throw new Error(
-                parseApiError(payload, "No se pudo cargar el registro de cambios.")
+                window.OrariooErrorHandler.parseApiError(payload, { fallbackMessage: "No se pudo cargar el registro de cambios." }).message
             );
         }
 
@@ -821,7 +827,7 @@
                 return null;
             });
             throw new Error(
-                parseApiError(payload, "No se pudo exportar el registro de cambios.")
+                window.OrariooErrorHandler.parseApiError(payload, { fallbackMessage: "No se pudo exportar el registro de cambios." }).message
             );
         }
 

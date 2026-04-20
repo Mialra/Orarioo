@@ -245,8 +245,8 @@
     <script src="{% static 'js/dashboard-selects.js' %}?v=20260406_dashboard_selects_1"></script>
     <script src="{% static 'js/dashboard.js' %}"></script>
     {% for script in dashboard_extra_scripts %}
-        {% if script == 'js/schedules.js' %}
-            <script src="{% static script %}?v=20260406_schedule_filters_2"></script>
+        {% if script == 'js/schedules.js' or script == 'js/schedule-utils.js' or script == 'js/schedule-board.js' or script == 'js/schedule-workspace.js' or script == 'js/schedule-analysis.js' or script == 'js/schedule-filter-dropdown.js' or script == 'js/schedule-saved.js' or script == 'js/schedule-export.js' %}
+            <script src="{% static script %}?v=20260420_schedule_split_2"></script>
         {% else %}
             <script src="{% static script %}"></script>
         {% endif %}

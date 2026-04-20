@@ -1,9 +1,16 @@
+/**
+ * Login page: handles form submission, session redirect, and friendly API error display.
+ */
 (function () {
   const form = document.getElementById("login-form");
   const submitButton = document.getElementById("login-submit");
   const alertBox = document.getElementById("auth-alert");
   const errorHandler = window.OrariooErrorHandler || {};
 
+  /**
+   * Toggles the submit button's loading class and disabled state.
+   * Input: isLoading - boolean
+   */
   function setLoadingState(isLoading) {
     submitButton.classList.toggle("is-loading", isLoading);
     submitButton.disabled = isLoading;
@@ -20,6 +27,11 @@
     alertBox.classList.remove("error", "info");
   }
 
+  /**
+   * Returns a localised error string from a failed login API response.
+   * Input: responseData - parsed JSON response body or null
+   * Output: user-facing error string
+   */
   function getFriendlyLoginError(responseData) {
     if (errorHandler && typeof errorHandler.parseApiError === "function") {
       return errorHandler.parseApiError(responseData, {
@@ -50,6 +62,10 @@
     return "Credenciales inválidas. Revisa tu correo y contraseña.";
   }
 
+  /**
+   * Validates credentials, calls the login endpoint, and redirects on success.
+   * Input: event - form submit Event
+   */
   async function submitLogin(event) {
     event.preventDefault();
     clearAlert();
@@ -102,6 +118,9 @@
     }
   }
 
+  /**
+   * Redirects to /dashboard/ if the current session is already valid.
+   */
   async function redirectIfAlreadyAuthenticated() {
     const tokens = window.orariooAuth.getTokens();
     if (!tokens.access && !tokens.refresh) {
@@ -127,7 +146,6 @@
     }
   }
 
-  // Event listeners
   window.orariooAuth.initPasswordToggle({
     inputId: "password",
     buttonId: "password-toggle",

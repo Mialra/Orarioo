@@ -1,3 +1,6 @@
+/**
+ * Admin page entrypoint for subject CRUD management with relation data loading.
+ */
 (function () {
   const admin = window.AdminBase || {};
   const dom = admin.dom;
@@ -13,6 +16,7 @@
     groups: [],
     classrooms: [],
     loaded: false,
+    loadPromise: null,
   };
 
   const elements = {
@@ -61,10 +65,20 @@
     defaultBrushState: "PREFER_YES",
   });
 
+  /**
+   * Returns the display name for a subject.
+   * Input: subject - subject object from the API
+   * Output: string display name, defaults to "Asignatura" if missing
+   */
   function resolveSubjectName(subject) {
     return subject.name || "Asignatura";
   }
 
+  /**
+   * Normalizes a stage value to a known uppercase key.
+   * Input: stage - raw stage string from the API or form
+   * Output: string one of "PRESCHOOL", "PRIMARY", or "SECONDARY"; defaults to "PRIMARY"
+   */
   function normalizeStage(stage) {
     const value = (stage || "").toString().trim().toUpperCase();
     if (value === "PRESCHOOL" || value === "PRIMARY" || value === "SECONDARY") {
@@ -73,6 +87,11 @@
     return "PRIMARY";
   }
 
+  /**
+   * Normalizes a subject type value to a known uppercase key.
+   * Input: subjectType - raw type string from the API or form
+   * Output: string one of "NORMAL" or "TC"; defaults to "NORMAL"
+   */
   function normalizeType(subjectType) {
     const value = (subjectType || "").toString().trim().toUpperCase();
     if (value === "NORMAL" || value === "TC") {
@@ -81,16 +100,28 @@
     return "NORMAL";
   }
 
+  /**
+   * Refreshes a custom select UI widget after its value changes programmatically.
+   * Input: selectElement - native select DOM element to refresh
+   */
   function refreshCustomSelect(selectElement) {
     if (window.OrariooSelects && typeof window.OrariooSelects.refresh === "function" && selectElement) {
       window.OrariooSelects.refresh(selectElement);
     }
   }
 
+  /**
+   * Refreshes all custom select inputs in the subject form.
+   */
   function refreshSubjectSelects() {
     [elements.stageInput, elements.typeInput, elements.teacherInput, elements.groupInput].forEach(refreshCustomSelect);
   }
 
+  /**
+   * Returns the display label and pill variant for a stage value.
+   * Input: stage - stage string (PRESCHOOL, PRIMARY, or SECONDARY)
+   * Output: object with label (string) and variant (CSS class suffix)
+   */
   function getStageMeta(stage) {
     const value = normalizeStage(stage);
     if (value === "PRESCHOOL") {
@@ -102,6 +133,11 @@
     return { label: "Primaria", variant: "variant-blue" };
   }
 
+  /**
+   * Returns the display label and pill variant for a subject type value.
+   * Input: subjectType - type string (NORMAL or TC)
+   * Output: object with label (string) and variant (CSS class suffix)
+   */
   function getTypeMeta(subjectType) {
     const value = normalizeType(subjectType);
     if (value === "TC") {
@@ -110,6 +146,11 @@
     return { label: "Normal", variant: "variant-gray" };
   }
 
+  /**
+   * Renders a single subject card for the admin list.
+   * Input: subject - subject object from the API
+   * Output: DOM div element representing the subject card
+   */
   function renderSubjectItem(subject) {
     const stageMeta = getStageMeta(subject.stage);
     const typeMeta = getTypeMeta(subject.type);
@@ -188,6 +229,12 @@
     });
   }
 
+  /**
+   * Populates a select element with items from a list, preserving the current selection.
+   * Input: selectElement - native select DOM element to populate
+   *        items - array of objects with id and name properties
+   *        placeholder - optional string for the empty first option
+   */
   function fillSelect(selectElement, items, placeholder) {
     if (!selectElement) {
       return;
@@ -210,6 +257,11 @@
     refreshCustomSelect(selectElement);
   }
 
+  /**
+   * Populates the allowed-classrooms checkbox list, preserving current checked state.
+   * Input: selectElement - container DOM element for the checkbox list
+   *        items - array of classroom objects with id and name properties
+   */
   function fillAllowedClassrooms(selectElement, items) {
     if (!selectElement) {
       return;
@@ -245,6 +297,11 @@
       .join("");
   }
 
+  /**
+   * Sets the checked state of checkboxes in a container to match the given values.
+   * Input: selectElement - container DOM element with checkbox inputs
+   *        values - array of values to mark as checked
+   */
   function setMultiSelectValues(selectElement, values) {
     if (!selectElement) {
       return;
@@ -260,6 +317,11 @@
     });
   }
 
+  /**
+   * Returns the IDs of all checked classrooms in the allowed-classrooms container.
+   * Input: selectElement - container DOM element with checkbox inputs
+   * Output: array of positive integers representing selected classroom IDs
+   */
   function getSelectedAllowedClassrooms(selectElement) {
     if (!selectElement) {
       return [];
@@ -274,38 +336,56 @@
       });
   }
 
+  /**
+   * Loads teachers, groups, and classrooms from the API and populates the form selects.
+   * Output: populates relationState and form select/checkbox inputs; resolves when all requests complete
+   */
   async function loadRelationData() {
+    if (relationState.loaded) {
+      return relationState;
+    }
+    if (relationState.loadPromise) {
+      return relationState.loadPromise;
+    }
+
     const endpoints = [
-      "/api/teachers/?page=1&page_size=200",
-      "/api/groups/?page=1&page_size=200",
-      "/api/classrooms/?page=1&page_size=200",
+      "/api/teachers/?summary=options",
+      "/api/groups/?summary=options",
+      "/api/classrooms/?summary=options",
     ];
 
-    const responses = await Promise.all(
+    relationState.loadPromise = Promise.all(
       endpoints.map(function (endpoint) {
         return admin.api.get(endpoint);
       }),
-    );
+    )
+      .then(function (responses) {
+        const teachersResponse = responses[0];
+        const groupsResponse = responses[1];
+        const classroomsResponse = responses[2];
 
-    const teachersResponse = responses[0];
-    const groupsResponse = responses[1];
-    const classroomsResponse = responses[2];
+        if (teachersResponse.ok) {
+          relationState.teachers = admin.api.parseList(teachersResponse.data);
+        }
+        if (groupsResponse.ok) {
+          relationState.groups = admin.api.parseList(groupsResponse.data);
+        }
+        if (classroomsResponse.ok) {
+          relationState.classrooms = admin.api.parseList(classroomsResponse.data);
+        }
 
-    if (teachersResponse.ok) {
-      relationState.teachers = admin.api.parseList(teachersResponse.data);
-    }
-    if (groupsResponse.ok) {
-      relationState.groups = admin.api.parseList(groupsResponse.data);
-    }
-    if (classroomsResponse.ok) {
-      relationState.classrooms = admin.api.parseList(classroomsResponse.data);
-    }
+        fillSelect(elements.teacherInput, relationState.teachers, "Selecciona profesor");
+        fillSelect(elements.groupInput, relationState.groups, "Selecciona curso");
+        fillAllowedClassrooms(elements.allowedClassroomsInput, relationState.classrooms);
 
-    fillSelect(elements.teacherInput, relationState.teachers, "Selecciona profesor");
-    fillSelect(elements.groupInput, relationState.groups, "Selecciona curso");
-    fillAllowedClassrooms(elements.allowedClassroomsInput, relationState.classrooms);
+        relationState.loaded = teachersResponse.ok && groupsResponse.ok && classroomsResponse.ok;
+        return relationState;
+      })
+      .finally(function () {
+        relationState.loadPromise = null;
+      });
 
-    relationState.loaded = teachersResponse.ok || groupsResponse.ok || classroomsResponse.ok;
+    return relationState.loadPromise;
   }
 
   prefManager.render();

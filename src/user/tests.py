@@ -720,6 +720,56 @@ class CollaborationTeamApiTests(APITestCase):
         self.assertEqual(response.data["pending_count"], 1)
         self.assertEqual(response.data["count"], 1)
 
+    def test_list_invitations_can_filter_pending_status(self):
+        CollaborationTeamInvitation.objects.create(
+            team=self.team,
+            invited_user=self.member,
+            invited_by=self.admin,
+            status=CollaborationTeamInvitationStatus.PENDING,
+        )
+        CollaborationTeamInvitation.objects.create(
+            team=self.team,
+            invited_user=self.member,
+            invited_by=self.admin,
+            status=CollaborationTeamInvitationStatus.ACCEPTED,
+        )
+
+        self.client.force_authenticate(user=self.member)
+        response = self.client.get(
+            reverse("list-collaboration-team-invitations") + "?status=pending"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["pending_count"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(
+            response.data["results"][0]["status"],
+            CollaborationTeamInvitationStatus.PENDING,
+        )
+
+    def test_list_invitations_can_return_summary_count(self):
+        CollaborationTeamInvitation.objects.create(
+            team=self.team,
+            invited_user=self.member,
+            invited_by=self.admin,
+            status=CollaborationTeamInvitationStatus.PENDING,
+        )
+        CollaborationTeamInvitation.objects.create(
+            team=self.team,
+            invited_user=self.member,
+            invited_by=self.admin,
+            status=CollaborationTeamInvitationStatus.ACCEPTED,
+        )
+
+        self.client.force_authenticate(user=self.member)
+        response = self.client.get(
+            reverse("list-collaboration-team-invitations") + "?summary=count"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {"count": 2, "pending_count": 1})
+
     def test_accept_invitation_adds_membership(self):
         invitation = CollaborationTeamInvitation.objects.create(
             team=self.team,

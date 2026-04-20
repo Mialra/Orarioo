@@ -103,3 +103,37 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("name", response.data)
+
+    def test_list_summary_count_and_options_are_team_scoped(self):
+        Teacher.objects.create(
+            name="Ana Perez",
+            max_weekly_hours=20,
+            working_hours=10,
+            team=self.team,
+        )
+        Teacher.objects.create(
+            name="Carlos Gomez",
+            max_weekly_hours=18,
+            working_hours=12,
+            team=self.team,
+        )
+        _, isolated_team = self.create_isolated_user(email_prefix="teacher-summary")
+        Teacher.objects.create(
+            name="Fuera de equipo",
+            max_weekly_hours=16,
+            working_hours=8,
+            team=isolated_team,
+        )
+
+        count_response = self.client.get(reverse("teacher-list") + "?summary=count")
+        options_response = self.client.get(reverse("teacher-list") + "?summary=options")
+
+        self.assertEqual(count_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(count_response.data, {"count": 2})
+        self.assertEqual(options_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(options_response.data), 2)
+        self.assertEqual(
+            {item["name"] for item in options_response.data},
+            {"Ana Perez", "Carlos Gomez"},
+        )
+        self.assertTrue(all(set(item.keys()) == {"id", "name"} for item in options_response.data))

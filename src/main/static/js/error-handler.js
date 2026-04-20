@@ -1,6 +1,15 @@
+/**
+ * Centralised API error handler: code translation, form error mapping, and alert rendering.
+ * Exposed as window.OrariooErrorHandler.
+ */
 (function () {
   const root = (window.OrariooErrorHandler = window.OrariooErrorHandler || {});
 
+  /**
+   * Escapes special HTML characters in a string to prevent XSS in innerHTML contexts.
+   * Input: value - any value; coerced to string
+   * Output: escaped string safe for HTML insertion
+   */
   function escapeHtml(value) {
     return String(value || "")
       .replace(/&/g, "&amp;")
@@ -183,6 +192,12 @@
     },
   };
 
+  /**
+   * Extracts the first error entry for a specific field from a structured or legacy API response.
+   * Input: payload - API error response object
+   *        fieldName - field key string to look up
+   * Output: error entry object with code, message, and context; or null if no error found
+   */
   function getFirstFieldEntry(payload, fieldName) {
     if (!payload || typeof payload !== "object") {
       return null;
@@ -218,6 +233,12 @@
     return null;
   }
 
+  /**
+   * Extracts a general (non-field) error entry from a structured API response.
+   * Input: payload - API error response object or null
+   *        fallbackMessage - string to use when no specific message is found
+   * Output: error entry object with code, message, and context
+   */
   function getGeneralEntry(payload, fallbackMessage) {
     if (!payload || typeof payload !== "object") {
       return {
@@ -248,6 +269,12 @@
     };
   }
 
+  /**
+   * Translates a structured error entry into a localised user-facing string.
+   * Input: entry - error entry object with code, message, and context
+   *        fallbackMessage - string returned when no translation matches
+   * Output: localised error string
+   */
   function translateEntry(entry, fallbackMessage) {
     const safeEntry = entry || {};
     const code = normalizeCode(safeEntry.code);
@@ -304,6 +331,12 @@
     return fallbackMessage || "Se ha producido un error.";
   }
 
+  /**
+   * Parses a full API error response into a structured error object.
+   * Input: payload - API error response body object or null
+   *        options - object with optional fallbackMessage string
+   * Output: object with code, message, backendMessage, suggestions, status, and raw fields
+   */
   function parseApiError(payload, options) {
     const config = options || {};
     const fallbackMessage = config.fallbackMessage || "Se ha producido un error.";
@@ -320,6 +353,11 @@
     };
   }
 
+  /**
+   * Applies per-field server errors from an API response to matching form field elements.
+   * Input: fields - array of field descriptor objects with name, input, and feedback
+   *        payload - API error response body object
+   */
   function applyFormErrors(fields, payload) {
     const validators = window.OrariooValidators;
 
@@ -341,6 +379,11 @@
     });
   }
 
+  /**
+   * Builds an HTML string for an alert from a parsed error info object, including suggestions.
+   * Input: errorInfo - object with message string and optional suggestions array
+   * Output: HTML string safe to set as innerHTML of an alert element
+   */
   function renderAlertContent(errorInfo) {
     const info = errorInfo || {};
     const parts = ["<div>" + escapeHtml(info.message || "Se ha producido un error.") + "</div>"];

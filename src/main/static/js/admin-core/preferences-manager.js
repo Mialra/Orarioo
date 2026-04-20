@@ -1,6 +1,14 @@
+/**
+ * Time-preference grid manager: renders, resets, and serializes slot states for scheduling forms.
+ */
 (function () {
     const root = window.OrariooAdmin = window.OrariooAdmin || {};
 
+    /**
+     * Parses a raw preference value into a slot-state map object.
+     * Input: rawValue - JSON string, plain object, or empty/null value
+     * Output: object mapping slot keys to preference state strings; empty object on parse failure
+     */
     function parsePreferences(rawValue) {
         if (rawValue && typeof rawValue === "object") {
             return rawValue;
@@ -15,8 +23,12 @@
         }
     }
 
+    /**
+     * Creates a preferences grid manager that renders an interactive day/hour slot grid.
+     * Input: config - object with gridContainer, brushInput, timePreferencesInput, and optional defaultBrushState
+     * Output: object with render() and reset(preferences) methods
+     */
     function createPreferencesManager(config) {
-        // config: { gridContainer, brushInput, timePreferencesInput, defaultBrushState? }
         const constants = root.constants;
         const DAYS = constants.DAYS;
         const HOURS = constants.HOURS;

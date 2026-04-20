@@ -1,15 +1,15 @@
+/**
+ * Custom accessible select widget: replaces native <select> elements with a styled dropdown.
+ * Exposed as window.OrariooSelects.
+ */
 (function () {
     const SELECTOR = "select.orarioo-custom-select";
 
-    function escapeHtml(value) {
-        return String(value || "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#39;");
-    }
-
+    /**
+     * Resolves a native select element from an HTMLSelectElement or an ID string.
+     * Input: selectOrId - HTMLSelectElement or string ID
+     * Output: HTMLSelectElement, or null if not found
+     */
     function getSelectFromInput(selectOrId) {
         if (selectOrId instanceof HTMLSelectElement) {
             return selectOrId;
@@ -170,6 +170,10 @@
         openDropdown(wrapper);
     }
 
+    /**
+     * Rebuilds the custom dropdown trigger label and menu to match the native select's current state.
+     * Input: select - the native HTMLSelectElement to synchronise
+     */
     function syncSelect(select) {
         const wrapper = getWrapper(select);
         if (!wrapper) {
@@ -209,7 +213,7 @@
                     '"' +
                     disabledAttr +
                     ">" +
-                    escapeHtml(label) +
+                    window.OrariooErrorHandler.escapeHtml(label) +
                     "</button>"
                 );
             })
@@ -243,6 +247,11 @@
         });
     }
 
+    /**
+     * Wraps a native select with the custom dropdown markup and wires all event listeners.
+     * Input: select - the native HTMLSelectElement to enhance
+     * Output: the wrapper div element
+     */
     function enhanceSelect(select) {
         const existingWrapper = getWrapper(select);
         if (select.dataset.orariooSelectReady === "true" && existingWrapper) {
@@ -377,6 +386,11 @@
         return wrapper;
     }
 
+    /**
+     * Returns all matching native select elements within the given root element.
+     * Input: root - DOM element or document to search within
+     * Output: array of HTMLSelectElement instances
+     */
     function collectSelects(root) {
         if (!root) {
             return [];
@@ -393,12 +407,20 @@
         return [];
     }
 
+    /**
+     * Enhances all matching select elements within root (defaults to document).
+     * Input: root - optional DOM element or document to scope the initialisation
+     */
     function init(root) {
         collectSelects(root || document).forEach(function (select) {
             enhanceSelect(select);
         });
     }
 
+    /**
+     * Re-enhances and re-syncs a single select identified by element or ID string.
+     * Input: selectOrId - HTMLSelectElement or string ID
+     */
     function refresh(selectOrId) {
         const select = getSelectFromInput(selectOrId);
         if (!select || !select.matches(SELECTOR)) {
@@ -409,6 +431,10 @@
         syncSelect(select);
     }
 
+    /**
+     * Re-enhances and re-syncs all matching selects within root (defaults to document).
+     * Input: root - optional DOM element to scope the refresh
+     */
     function refreshAll(root) {
         collectSelects(root || document).forEach(function (select) {
             refresh(select);

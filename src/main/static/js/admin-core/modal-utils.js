@@ -1,6 +1,14 @@
+/**
+ * Bootstrap modal controller factories for form (create/edit) and confirm (delete) dialogs.
+ */
 (function () {
     const root = window.OrariooAdmin = window.OrariooAdmin || {};
 
+    /**
+     * Returns a Bootstrap Modal instance for the given element, creating it if necessary.
+     * Input: element - modal DOM element
+     * Output: Bootstrap.Modal instance, or null if Bootstrap is unavailable
+     */
     function getModalInstance(element) {
         if (!window.bootstrap || !element) {
             return null;
@@ -8,6 +16,11 @@
         return window.bootstrap.Modal.getOrCreateInstance(element);
     }
 
+    /**
+     * Creates a controller for a create/edit form modal that swaps titles and button labels by mode.
+     * Input: config - object with modalElement, modeInput, titleElement, submitTextElement, and labels
+     * Output: object with show, hide, setMode, getMode, and element
+     */
     function createFormModalController(config) {
         const modalElement = config.modalElement;
         const modeInput = config.modeInput;
@@ -56,6 +69,11 @@
         };
     }
 
+    /**
+     * Creates a controller for a delete-confirmation modal that tracks the pending item ID.
+     * Input: config - object with modalElement, nameElement, actionTextElement, and labels
+     * Output: object with open, hide, clear, getPendingId, and element
+     */
     function createConfirmModalController(config) {
         const modalElement = config.modalElement;
         const nameElement = config.nameElement;

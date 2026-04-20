@@ -196,11 +196,50 @@ class CollaborationTeamInvitationListView(APIView):
         invitations = CollaborationTeamInvitation.objects.filter(
             invited_user=request.user
         ).select_related("team", "invited_by")
+
+        status_filter = (request.query_params.get("status") or "").strip().lower()
+        if status_filter:
+            allowed_statuses = {
+                CollaborationTeamInvitationStatus.PENDING,
+                CollaborationTeamInvitationStatus.ACCEPTED,
+                CollaborationTeamInvitationStatus.REJECTED,
+            }
+            if status_filter not in allowed_statuses:
+                raise ValidationAppError(
+                    "INVALID_CHOICE",
+                    "status must be one of: pending, accepted, rejected.",
+                    field_name="status",
+                    context={"field": "status", "value": status_filter},
+                )
+            invitations = invitations.filter(status=status_filter)
+
+        summary_mode = (request.query_params.get("summary") or "").strip().lower()
+        if summary_mode == "count":
+            count = invitations.count()
+            pending_count = (
+                count
+                if status_filter == CollaborationTeamInvitationStatus.PENDING
+                else invitations.filter(
+                    status=CollaborationTeamInvitationStatus.PENDING
+                ).count()
+            )
+            return Response(
+                {
+                    "count": count,
+                    "pending_count": pending_count,
+                },
+                status=status.HTTP_200_OK,
+            )
+
         serializer = CollaborationTeamInvitationSerializer(invitations, many=True)
-        pending_count = sum(
-            1
-            for item in serializer.data
-            if item["status"] == CollaborationTeamInvitationStatus.PENDING
+        pending_count = (
+            len(serializer.data)
+            if status_filter == CollaborationTeamInvitationStatus.PENDING
+            else sum(
+                1
+                for item in serializer.data
+                if item["status"] == CollaborationTeamInvitationStatus.PENDING
+            )
         )
         return Response(
             {

@@ -1,3 +1,6 @@
+/**
+ * Admin page entrypoint for group CRUD management.
+ */
 (function () {
   const admin = window.AdminBase || {};
   const dom = admin.dom;
@@ -33,10 +36,20 @@
     stageError: document.getElementById("admin-group-stage-error"),
   };
 
+  /**
+   * Returns the display name for a group.
+   * Input: group - group object from the API
+   * Output: string display name, defaults to "Curso" if missing
+   */
   function resolveGroupName(group) {
     return group.name || "Curso";
   }
 
+  /**
+   * Normalizes a stage value to a known lowercase key.
+   * Input: stage - raw stage string from the API or form
+   * Output: string one of "preschool", "primary", or "secondary"; defaults to "primary"
+   */
   function normalizeStage(stage) {
     const value = (stage || "").toString().trim().toLowerCase();
     if (value === "preschool" || value === "primary" || value === "secondary") {
@@ -45,12 +58,21 @@
     return "primary";
   }
 
+  /**
+   * Refreshes a custom select UI widget after its value changes programmatically.
+   * Input: selectElement - native select DOM element to refresh
+   */
   function refreshCustomSelect(selectElement) {
     if (window.OrariooSelects && typeof window.OrariooSelects.refresh === "function" && selectElement) {
       window.OrariooSelects.refresh(selectElement);
     }
   }
 
+  /**
+   * Returns the display label and pill variant for a stage value.
+   * Input: stage - stage string (preschool, primary, or secondary)
+   * Output: object with label (string) and variant (CSS class suffix)
+   */
   function getStageMeta(stage) {
     const normalized = normalizeStage(stage);
     if (normalized === "preschool") {
@@ -62,6 +84,11 @@
     return { label: "Primaria", variant: "variant-blue" };
   }
 
+  /**
+   * Builds a pill badge for the given stage.
+   * Input: stage - stage string from the API
+   * Output: DOM span element with the appropriate admin-pill variant
+   */
   function stagePill(stage) {
     const meta = getStageMeta(stage);
     return dom.createElement("span", {
@@ -70,6 +97,11 @@
     });
   }
 
+  /**
+   * Renders a single group card for the admin list.
+   * Input: group - group object from the API
+   * Output: DOM div element representing the group card
+   */
   function renderGroupItem(group) {
     return dom.createElement("div", {
       className: "col",

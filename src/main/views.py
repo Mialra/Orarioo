@@ -6,18 +6,29 @@ from urllib.parse import unquote
 
 from django.shortcuts import redirect, render
 
+_SCHEDULE_SCRIPTS = [
+    "js/schedule-utils.js",
+    "js/schedule-board.js",
+    "js/schedule-filter-dropdown.js",
+    "js/schedule-workspace.js",
+    "js/schedule-analysis.js",
+    "js/schedule-saved.js",
+    "js/schedule-export.js",
+    "js/schedules.js",
+]
+
 SECTION_CONFIG = {
     "schedules": {
         "title": "Horarios",
         "template": "main/tabs/schedules.html",
         "extra_css": ["css/schedules.css"],
-        "extra_scripts": ["js/schedules.js"],
+        "extra_scripts": _SCHEDULE_SCRIPTS,
     },
     "saved": {
         "title": "Guardados",
         "template": "main/tabs/saved.html",
         "extra_css": ["css/schedules.css"],
-        "extra_scripts": ["js/schedules.js"],
+        "extra_scripts": _SCHEDULE_SCRIPTS,
     },
     "audit": {
         "title": "Registro de cambios",

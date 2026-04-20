@@ -1,3 +1,6 @@
+/**
+ * Shared scheduling constants for days, hours, preference states, and day labels.
+ */
 (function () {
     const root = window.OrariooAdmin = window.OrariooAdmin || {};
 
