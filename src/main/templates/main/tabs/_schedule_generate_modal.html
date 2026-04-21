@@ -6,27 +6,182 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content schedule-modal-content schedule-generate-modal-content">
             <div class="modal-header">
-                <h5 id="scheduleGenerateModalTitle" class="modal-title">Generar horario</h5>
+                <div>
+                    <h3 class="modal-title h4 mb-0" id="scheduleGenerateModalTitle">Generar horario</h3>
+                    <p id="scheduleGenerateModalText" class="text-secondary small mb-0 mt-1">
+                        Se lanzará una nueva generación con las restricciones actuales.
+                    </p>
+                </div>
                 <button type="button"
                         class="btn-close"
                         data-bs-dismiss="modal"
                         aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <p id="scheduleGenerateModalText" class="text-secondary mb-2">
-                    Se lanzará una nueva generación automática del horario con las restricciones actuales.
-                </p>
-                <p id="scheduleGenerateModalHint" class="small text-secondary mb-0">
-                    Este proceso puede tardar unos segundos si el problema es complejo.
-                </p>
+                <p class="text-uppercase text-muted gen-opt-section-label mb-2">Restricciones siempre activas</p>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <span class="badge rounded-pill small gen-opt-badge"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          data-bs-title="Garantiza que cada sesión queda asignada a exactamente un hueco del horario semanal.">
+                        • Cada sesión ocupa exactamente un hueco
+                    </span>
+                    <span class="badge rounded-pill small gen-opt-badge"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          data-bs-title="Las sesiones de cada etapa solo pueden asignarse dentro del horario definido para ella.">
+                        • Sesiones solo en el horario de su etapa
+                    </span>
+                    <span class="badge rounded-pill small gen-opt-badge"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          data-bs-title="Ningún profesor, grupo ni aula puede estar ocupado en dos sesiones al mismo tiempo.">
+                        • Sin solapamiento de sesiones, profesores y aulas
+                    </span>
+                    <span class="badge rounded-pill small gen-opt-badge"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          data-bs-title="Un curso no puede superar 5 sesiones diarias (Infantil/Primaria) ni 6 (Secundaria).">
+                        • Máximo de sesiones por día por grupo
+                    </span>
+                    <span class="badge rounded-pill small gen-opt-badge"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          data-bs-title="Un curso no puede superar las 25 o 30 sesiones semanales según etapa, al igual que un profesor no puede exceder sus horas máximas.">
+                        • Máximo de horas semanales por profesor y grupo
+                    </span>
+                </div>
+                <hr class="my-3">
+                <p class="text-uppercase text-muted gen-opt-section-label mb-2">Restricciones de factibilidad</p>
+                <div class="mb-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="gen-opt-no-intraday-gaps"
+                               checked>
+                        <label class="form-check-label small" for="gen-opt-no-intraday-gaps">
+                            Los cursos no pueden tener huecos entre sus sesiones
+                            <i data-lucide="info"
+                               class="gen-opt-info-icon"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               data-bs-title="Si un grupo tiene clase a las 9:00 y a las 11:00 pero no a las 10:00, ese hueco intermedio queda libre. Esta restricción lo impide garantizando bloques contiguos."></i>
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="gen-opt-subject-unavailable"
+                               checked>
+                        <label class="form-check-label small" for="gen-opt-subject-unavailable">
+                            Respetar horarios no disponibles de asignaturas
+                            <i data-lucide="info"
+                               class="gen-opt-info-icon"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               data-bs-title="Si una asignatura tiene una hora marcada como NO DISPONIBLE en sus preferencias horarias, el algoritmo no le asignará sesiones en ese horario."></i>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="gen-opt-teacher-unavailable"
+                               checked>
+                        <label class="form-check-label small" for="gen-opt-teacher-unavailable">
+                            Respetar horarios no disponibles de profesores
+                            <i data-lucide="info"
+                               class="gen-opt-info-icon"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               data-bs-title="Si un profesor tiene una hora marcada como NO DISPONIBLE en sus preferencias horarias, el algoritmo no le asignará sesiones en ese horario."></i>
+                        </label>
+                    </div>
+                </div>
+                <hr class="my-3">
+                <p class="text-uppercase text-muted gen-opt-section-label mb-2">Preferencias de optimización</p>
+                <div class="mb-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="gen-opt-tc-distribution"
+                               checked>
+                        <label class="form-check-label small" for="gen-opt-tc-distribution">
+                            Distribución de sesiones TC
+                            <i data-lucide="info"
+                               class="gen-opt-info-icon"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               data-bs-title="Incentiva repartir las sesiones de Trabajo de Centro en distintos intervalos del día y penaliza que un mismo profesor tenga varias TC consecutivas."></i>
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="gen-opt-subject-preferences"
+                               checked>
+                        <label class="form-check-label small" for="gen-opt-subject-preferences">
+                            Preferencias horarias de asignaturas
+                            <i data-lucide="info"
+                               class="gen-opt-info-icon"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               data-bs-title="Si una asignatura tiene horas marcadas como PREFERIBLEMENTE SÍ o PREFERIBLEMENTE NO, el algoritmo intenta respetar esas preferencias al optimizar el horario."></i>
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="gen-opt-teacher-preferences"
+                               checked>
+                        <label class="form-check-label small" for="gen-opt-teacher-preferences">
+                            Preferencias horarias de profesores
+                            <i data-lucide="info"
+                               class="gen-opt-info-icon"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               data-bs-title="Si un profesor tiene horas marcadas como PREFERIBLEMENTE SÍ o PREFERIBLEMENTE NO, el algoritmo intenta respetar esas preferencias al optimizar el horario."></i>
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="gen-opt-day-spread"
+                               checked>
+                        <label class="form-check-label small" for="gen-opt-day-spread">
+                            Distribuir sesiones de la misma asignatura en días distintos
+                            <i data-lucide="info"
+                               class="gen-opt-info-icon"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               data-bs-title="Evita que todas las sesiones de una misma asignatura se concentren en el mismo día, repartiéndolas a lo largo de la semana."></i>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="gen-opt-gap-minimization"
+                               checked>
+                        <label class="form-check-label small" for="gen-opt-gap-minimization">
+                            Minimizar huecos en la jornada del profesor
+                            <i data-lucide="info"
+                               class="gen-opt-info-icon"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               data-bs-title="Penaliza los huecos intermedios libres en el horario de un profesor."></i>
+                        </label>
+                    </div>
+                </div>
+                <div id="scheduleGenerateModalHint"
+                     class="d-flex align-items-start gap-2 rounded p-2 small gen-opt-hint">
+                    <i data-lucide="info" class="gen-opt-hint-icon"></i>
+                    <span id="scheduleGenerateModalHintText">Este proceso puede tardar bastante tiempo si el problema es complejo.</span>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button"
                         class="btn btn-outline-secondary"
                         data-bs-dismiss="modal">Cancelar</button>
-                <button type="button"
-                        id="confirmScheduleGenerateBtn"
-                        class="btn btn-primary">Generar horario</button>
+                <button type="button" id="confirmScheduleGenerateBtn" class="btn btn-primary">Generar horario</button>
             </div>
         </div>
     </div>

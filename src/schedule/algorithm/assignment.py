@@ -163,24 +163,29 @@ def _cp_sat_session_assignment(
         sessions=sessions,
         slots=slots,
     )
-    add_group_no_intraday_gap_constraints(
-        model=model,
-        x=x,
-        sessions=sessions,
-        slots=slots,
-    )
-    add_subject_time_hard_constraints(
-        model=model,
-        x=x,
-        sessions=sessions,
-        slots=slots,
-    )
-    add_teacher_time_hard_constraints(
-        model=model,
-        x=x,
-        sessions=sessions,
-        slots=slots,
-    )
+    opts = generation_options or {}
+
+    if opts.get("enable_no_intraday_gaps", True):
+        add_group_no_intraday_gap_constraints(
+            model=model,
+            x=x,
+            sessions=sessions,
+            slots=slots,
+        )
+    if opts.get("enable_subject_unavailable_times", True):
+        add_subject_time_hard_constraints(
+            model=model,
+            x=x,
+            sessions=sessions,
+            slots=slots,
+        )
+    if opts.get("enable_teacher_unavailable_times", True):
+        add_teacher_time_hard_constraints(
+            model=model,
+            x=x,
+            sessions=sessions,
+            slots=slots,
+        )
 
     timeout_seconds = _cp_sat_timeout_seconds(
         session_count=session_count,
@@ -228,6 +233,7 @@ def _cp_sat_session_assignment(
         x=x,
         sessions=sessions,
         slots=slots,
+        generation_options=generation_options,
         extra_objective_terms=stability_terms,
     )
     _add_solution_hints(

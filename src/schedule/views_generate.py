@@ -99,11 +99,21 @@ def parse_generation_bool(payload, field_name):
 
 
 def parse_base_generation_bool_options(payload, options):
-    """Parse boolean generation options (include_tc) from the payload into options dict.
+    """Parse boolean generation options from the payload into options dict.
     Input: payload - request data dict; options - mutable options dict to update
     Output: None on success, or Response with HTTP 400 on validation failure
     """
-    for field_name in ["include_tc"]:
+    for field_name in [
+        "include_tc",
+        "enable_no_intraday_gaps",
+        "enable_subject_unavailable_times",
+        "enable_teacher_unavailable_times",
+        "enable_tc_distribution",
+        "enable_subject_time_preferences",
+        "enable_teacher_time_preferences",
+        "enable_subject_day_spread",
+        "enable_teacher_gap_minimization",
+    ]:
         parsed, error_response = parse_generation_bool(payload, field_name)
         if error_response is not None:
             return error_response
@@ -144,6 +154,14 @@ DEFAULT_GENERATION_OPTIONS = {
     "recess_supervisors_primary": 0,
     "include_tc": True,
     "tc_capacity": 1,
+    "enable_no_intraday_gaps": True,
+    "enable_subject_unavailable_times": True,
+    "enable_teacher_unavailable_times": True,
+    "enable_tc_distribution": True,
+    "enable_subject_time_preferences": True,
+    "enable_teacher_time_preferences": True,
+    "enable_subject_day_spread": True,
+    "enable_teacher_gap_minimization": True,
 }
 
 

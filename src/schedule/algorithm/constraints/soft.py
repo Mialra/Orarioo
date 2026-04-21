@@ -31,31 +31,41 @@ SUBJECT_DAY_SPREAD_WEIGHT = 3
 TEACHER_GAP_PENALTY_WEIGHT = 4
 
 
-def apply_soft_constraints(*, model, x, sessions, slots, extra_objective_terms=None):
+def apply_soft_constraints(
+    *, model, x, sessions, slots, generation_options=None, extra_objective_terms=None
+):
     """Collect all soft objective terms and set the model's maximisation objective.
     Input: model - CP-SAT CpModel; x - slot decision variables;
            sessions - list of session dicts; slots - list of slot dicts;
+           generation_options - dict of generation parameters controlling which terms to include;
            extra_objective_terms - optional list of additional weighted CP-SAT expressions
     Output: None; side-effect: calls model.Maximize with the combined objective
     """
+    opts = generation_options or {}
     objective_terms = []
-    objective_terms.extend(
-        _tc_distribution_terms(model=model, x=x, sessions=sessions, slots=slots)
-    )
-    objective_terms.extend(
-        _subject_time_preference_terms(x=x, sessions=sessions, slots=slots)
-    )
-    objective_terms.extend(
-        _teacher_time_preference_terms(x=x, sessions=sessions, slots=slots)
-    )
-    objective_terms.extend(
-        _subject_day_spread_terms(model=model, x=x, sessions=sessions, slots=slots)
-    )
-    objective_terms.extend(
-        _teacher_gap_minimization_terms(
-            model=model, x=x, sessions=sessions, slots=slots
+
+    if opts.get("enable_tc_distribution", True):
+        objective_terms.extend(
+            _tc_distribution_terms(model=model, x=x, sessions=sessions, slots=slots)
         )
-    )
+    if opts.get("enable_subject_time_preferences", True):
+        objective_terms.extend(
+            _subject_time_preference_terms(x=x, sessions=sessions, slots=slots)
+        )
+    if opts.get("enable_teacher_time_preferences", True):
+        objective_terms.extend(
+            _teacher_time_preference_terms(x=x, sessions=sessions, slots=slots)
+        )
+    if opts.get("enable_subject_day_spread", True):
+        objective_terms.extend(
+            _subject_day_spread_terms(model=model, x=x, sessions=sessions, slots=slots)
+        )
+    if opts.get("enable_teacher_gap_minimization", True):
+        objective_terms.extend(
+            _teacher_gap_minimization_terms(
+                model=model, x=x, sessions=sessions, slots=slots
+            )
+        )
     if extra_objective_terms:
         objective_terms.extend(extra_objective_terms)
 

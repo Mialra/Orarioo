@@ -89,11 +89,8 @@
 
   const { renderScheduleBoard } = window.ScheduleBoard;
 
-  const {
-    initScheduleFilterDropdowns,
-    syncScheduleFilterDropdown,
-    enhanceScheduleFilterSelect,
-  } = window.ScheduleFilterDropdown;
+  const { initScheduleFilterDropdowns, syncScheduleFilterDropdown, enhanceScheduleFilterSelect } =
+    window.ScheduleFilterDropdown;
 
   // ── Saved / export managers ────────────────────────────────────────────────
   const savedManager = window.ScheduleSaved.createSavedManager({
@@ -124,17 +121,35 @@
     outputId: "generatedWorkspaceOutput",
     filterIds: generatedFilterIds,
     detailTitle: "Detalle de sesiones generadas",
-    getDetailPage: function () { return state.generatedDetailPage; },
-    setDetailPage: function (p) { state.generatedDetailPage = p; },
-    getDetailPageSize: function () { return state.detailPageSize; },
-    getMoveInFlight: function () { return state.generatedMoveInFlight; },
-    setMoveInFlight: function (v) { state.generatedMoveInFlight = v; },
-    getDragState: function () { return state.generatedDragState; },
+    getDetailPage: function () {
+      return state.generatedDetailPage;
+    },
+    setDetailPage: function (p) {
+      state.generatedDetailPage = p;
+    },
+    getDetailPageSize: function () {
+      return state.detailPageSize;
+    },
+    getMoveInFlight: function () {
+      return state.generatedMoveInFlight;
+    },
+    setMoveInFlight: function (v) {
+      state.generatedMoveInFlight = v;
+    },
+    getDragState: function () {
+      return state.generatedDragState;
+    },
     resetDragState: resetGeneratedDragState,
-    getSessions: function () { return state.latestGeneratedSchedules; },
+    getSessions: function () {
+      return state.latestGeneratedSchedules;
+    },
     upsertSessions: upsertGeneratedSchedules,
-    getTeacherWorkloads: function () { return state.generatedTeacherWorkloadsByName; },
-    setTeacherWorkloads: function (w) { state.generatedTeacherWorkloadsByName = w; },
+    getTeacherWorkloads: function () {
+      return state.generatedTeacherWorkloadsByName;
+    },
+    setTeacherWorkloads: function (w) {
+      state.generatedTeacherWorkloadsByName = w;
+    },
     onDropComplete: function () {},
     showAlert: showAlert,
     apiJson: apiJson,
@@ -147,21 +162,39 @@
     outputId: "savedWorkspaceOutput",
     filterIds: savedFilterIds,
     detailTitle: "Detalle de sesiones guardadas",
-    getDetailPage: function () { return state.savedDetailPage; },
-    setDetailPage: function (p) { state.savedDetailPage = p; },
-    getDetailPageSize: function () { return state.detailPageSize; },
-    getMoveInFlight: function () { return state.savedMoveInFlight; },
-    setMoveInFlight: function (v) { state.savedMoveInFlight = v; },
-    getDragState: function () { return state.savedDragState; },
+    getDetailPage: function () {
+      return state.savedDetailPage;
+    },
+    setDetailPage: function (p) {
+      state.savedDetailPage = p;
+    },
+    getDetailPageSize: function () {
+      return state.detailPageSize;
+    },
+    getMoveInFlight: function () {
+      return state.savedMoveInFlight;
+    },
+    setMoveInFlight: function (v) {
+      state.savedMoveInFlight = v;
+    },
+    getDragState: function () {
+      return state.savedDragState;
+    },
     resetDragState: resetSavedDragState,
     getSessions: function () {
       const group = savedManager.getSelectedSavedGroup();
       return group && Array.isArray(group.sessions) ? group.sessions : [];
     },
     upsertSessions: upsertSelectedSavedSchedules,
-    getTeacherWorkloads: function () { return state.savedTeacherWorkloadsByName; },
-    setTeacherWorkloads: function (w) { state.savedTeacherWorkloadsByName = w; },
-    onDropComplete: function () { savedManager.onAfterDropComplete(); },
+    getTeacherWorkloads: function () {
+      return state.savedTeacherWorkloadsByName;
+    },
+    setTeacherWorkloads: function (w) {
+      state.savedTeacherWorkloadsByName = w;
+    },
+    onDropComplete: function () {
+      savedManager.onAfterDropComplete();
+    },
     showAlert: showAlert,
     apiJson: apiJson,
     getFilteredSessions: getFilteredSessions,
@@ -593,10 +626,22 @@
   function populateWorkspaceFiltersFromSessions(sessions, filterIds, options) {
     const safeOptions = options || {};
     const courseNames = Array.from(
-      new Set((sessions || []).map(function (s) { return s.group_name; }).filter(Boolean)),
+      new Set(
+        (sessions || [])
+          .map(function (s) {
+            return s.group_name;
+          })
+          .filter(Boolean),
+      ),
     );
     const teacherNames = Array.from(
-      new Set((sessions || []).map(function (s) { return s.teacher_name; }).filter(Boolean)),
+      new Set(
+        (sessions || [])
+          .map(function (s) {
+            return s.teacher_name;
+          })
+          .filter(Boolean),
+      ),
     );
     const teacherWorkloadsByName =
       safeOptions.teacherWorkloadsByName || buildTeacherWorkloadsByNameFromSessions(sessions);
@@ -610,10 +655,22 @@
       return acc;
     }, {});
     const classroomNames = Array.from(
-      new Set((sessions || []).map(function (s) { return s.classroom_name; }).filter(Boolean)),
+      new Set(
+        (sessions || [])
+          .map(function (s) {
+            return s.classroom_name;
+          })
+          .filter(Boolean),
+      ),
     );
     const subjectNames = Array.from(
-      new Set((sessions || []).map(function (s) { return s.subject_name; }).filter(Boolean)),
+      new Set(
+        (sessions || [])
+          .map(function (s) {
+            return s.subject_name;
+          })
+          .filter(Boolean),
+      ),
     );
     if (hasWorkCenterSubjects(sessions) && subjectNames.indexOf(WORK_CENTER_SUBJECT) < 0) {
       subjectNames.push(WORK_CENTER_SUBJECT);
@@ -846,9 +903,9 @@
     const modal = document.getElementById("scheduleGenerateModal");
     const title = document.getElementById("scheduleGenerateModalTitle");
     const text = document.getElementById("scheduleGenerateModalText");
-    const hint = document.getElementById("scheduleGenerateModalHint");
+    const hintText = document.getElementById("scheduleGenerateModalHintText");
     const confirmButton = document.getElementById("confirmScheduleGenerateBtn");
-    if (!modal || !title || !text || !hint || !confirmButton) {
+    if (!modal || !title || !text || !confirmButton) {
       handleGenerate();
       return;
     }
@@ -858,16 +915,19 @@
       text.textContent = state.generatedSaved
         ? "Se generará una nueva propuesta en borrador. El horario guardado actual seguirá disponible."
         : "Se generará una nueva propuesta y reemplazará el borrador actual que estás viendo.";
-      hint.textContent = "Usará las restricciones actuales y puede tardar unos segundos si el problema es complejo.";
+      if (hintText) { hintText.textContent = "Usará las restricciones actuales y puede tardar unos segundos si el problema es complejo."; }
       confirmButton.textContent = "Regenerar horario";
     } else {
       title.textContent = "Generar horario";
-      text.textContent = "Se lanzará una nueva generación automática del horario con las restricciones actuales.";
-      hint.textContent = "Este proceso puede tardar unos segundos si el problema es complejo.";
+      text.textContent = "Se lanzará una nueva generación con las restricciones actuales.";
+      if (hintText) { hintText.textContent = "Este proceso puede tardar unos segundos si el problema es complejo."; }
       confirmButton.textContent = "Generar horario";
     }
     showModalElement(modal, function () {
       confirmButton.focus();
+      if (window.orariooAuth && typeof window.orariooAuth.initBootstrapTooltips === "function") {
+        window.orariooAuth.initBootstrapTooltips();
+      }
     });
   }
 
@@ -914,34 +974,53 @@
     const timetableName = String(nameInput ? nameInput.value : "").trim();
     if (!timetableName) {
       showAlert("warning", "Indica un nombre para guardar el horario.");
-      if (nameInput) { nameInput.focus(); }
+      if (nameInput) {
+        nameInput.focus();
+      }
       return;
     }
     const hasSavedSummary = await savedManager.ensureSavedSchedulesLoaded().catch(function () {
       return false;
     });
     if (hasSavedSummary && savedManager.hasSavedTimetableNameCollision(timetableName)) {
-      showAlert("error", "Ya existe un horario guardado con ese nombre. Usa otro nombre o elimina el horario anterior.");
-      if (nameInput) { nameInput.focus(); nameInput.select(); }
+      showAlert(
+        "error",
+        "Ya existe un horario guardado con ese nombre. Usa otro nombre o elimina el horario anterior.",
+      );
+      if (nameInput) {
+        nameInput.focus();
+        nameInput.select();
+      }
       return;
     }
     const scheduleIds = state.latestGeneratedSchedules
-      .map(function (session) { return session.id; })
-      .filter(function (id) { return Number.isInteger(id); });
+      .map(function (session) {
+        return session.id;
+      })
+      .filter(function (id) {
+        return Number.isInteger(id);
+      });
     if (!scheduleIds.length) {
       showAlert("error", "No se encontraron sesiones para guardar.");
       return;
     }
-    if (confirmButton) { confirmButton.disabled = true; }
+    if (confirmButton) {
+      confirmButton.disabled = true;
+    }
     const result = await apiJson("/schedules/save-generated/", "POST", {
       timetable_name: timetableName,
       schedule_ids: scheduleIds,
       user_ids: [],
     });
-    if (confirmButton) { confirmButton.disabled = false; }
+    if (confirmButton) {
+      confirmButton.disabled = false;
+    }
     if (!result.ok) {
       showAlert("error", extractApiErrorMessage(result.data, "No se pudo guardar el horario generado."));
-      if (nameInput) { nameInput.focus(); nameInput.select(); }
+      if (nameInput) {
+        nameInput.focus();
+        nameInput.select();
+      }
       return;
     }
     closeSaveGeneratedModal();
@@ -977,8 +1056,32 @@
   function setGenerateActionButtonsDisabled(disabled) {
     ["generateBtn", "generatedWorkspaceRegenerateBtn", "confirmScheduleGenerateBtn"].forEach(function (id) {
       const button = document.getElementById(id);
-      if (button) { button.disabled = disabled; }
+      if (button) {
+        button.disabled = disabled;
+      }
     });
+  }
+
+  /**
+   * Reads the state of the generation options checkboxes and returns an options object.
+   * Input: none
+   * Output: object with boolean fields for each generation option
+   */
+  function _readGenerationOptions() {
+    function checked(id) {
+      var el = document.getElementById(id);
+      return el ? el.checked : true;
+    }
+    return {
+      enable_no_intraday_gaps: checked("gen-opt-no-intraday-gaps"),
+      enable_subject_unavailable_times: checked("gen-opt-subject-unavailable"),
+      enable_teacher_unavailable_times: checked("gen-opt-teacher-unavailable"),
+      enable_tc_distribution: checked("gen-opt-tc-distribution"),
+      enable_subject_time_preferences: checked("gen-opt-subject-preferences"),
+      enable_teacher_time_preferences: checked("gen-opt-teacher-preferences"),
+      enable_subject_day_spread: checked("gen-opt-day-spread"),
+      enable_teacher_gap_minimization: checked("gen-opt-gap-minimization"),
+    };
   }
 
   /**
@@ -990,7 +1093,7 @@
     setGenerateActionButtonsDisabled(true);
     generatedWorkspace.clearDropFeedback();
     resetGeneratedDragState();
-    const result = await apiJson("/schedules/generate/", "POST", {});
+    const result = await apiJson("/schedules/generate/", "POST", _readGenerationOptions());
     setGenerateActionButtonsDisabled(false);
     if (!result.ok) {
       state.latestGeneratedSchedules = [];
@@ -1323,9 +1426,15 @@
         if (!state.latestGeneratedSchedules || state.latestGeneratedSchedules.length === 0) {
           return;
         }
-        const scheduleIds = state.latestGeneratedSchedules.map(function (s) { return s.id; });
+        const scheduleIds = state.latestGeneratedSchedules.map(function (s) {
+          return s.id;
+        });
         window.ScheduleAnalysis.showAnalysisModal(
-          scheduleIds, "scheduleAnalysisModal", "Análisis del Horario", "schedule-analysis-content", apiJson
+          scheduleIds,
+          "scheduleAnalysisModal",
+          "Análisis del Horario",
+          "schedule-analysis-content",
+          apiJson,
         );
       });
     }
@@ -1340,9 +1449,15 @@
           showAlert("info", "No hay horarios guardados seleccionados.");
           return;
         }
-        const scheduleIds = schedules.map(function (s) { return s.id; });
+        const scheduleIds = schedules.map(function (s) {
+          return s.id;
+        });
         window.ScheduleAnalysis.showAnalysisModal(
-          scheduleIds, "savedAnalysisModal", "Análisis del Horario Guardado", "saved-analysis-content", apiJson
+          scheduleIds,
+          "savedAnalysisModal",
+          "Análisis del Horario Guardado",
+          "saved-analysis-content",
+          apiJson,
         );
       });
     }
