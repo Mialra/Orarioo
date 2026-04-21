@@ -1,6 +1,13 @@
+/**
+ * Public facade that re-exports OrariooAdmin admin-core utilities as window.AdminBase.
+ */
 (function () {
     const core = window.OrariooAdmin || {};
 
+    /**
+     * Delegates to core.initCrudModule, throwing if the admin-core library is not loaded.
+     * Input: config - initCrudModule configuration object
+     */
     function createEntityManager(config) {
         if (!core.initCrudModule) {
             throw new Error("Admin CRUD core is not available.");
@@ -16,6 +23,9 @@
         listRenderer: core.listRenderer,
         pagination: core.pagination,
         dom: core.dom,
+        constants: core.constants,
+        createPreferencesManager: core.createPreferencesManager,
+        parsePreferences: core.parsePreferences,
         createEntityManager: createEntityManager,
         paginate: function (items, page, pageSize) {
             const list = items || [];

@@ -1,46 +1,23 @@
+/**
+ * Admin page entrypoint for subject CRUD management with relation data loading.
+ */
 (function () {
   const admin = window.AdminBase || {};
   const dom = admin.dom;
+  const fv = admin.formUtils && admin.formUtils.validators;
 
   const formElement = document.getElementById("admin-subject-form");
   if (!formElement || !admin.createEntityManager || !admin.api || !dom) {
     return;
   }
 
-  const DAYS = ["MON", "TUE", "WED", "THU", "FRI"];
-  const HOURS = [
-    "08:00",
-    "08:30",
-    "09:00",
-    "09:30",
-    "10:00",
-    "10:30",
-    "11:00",
-    "11:30",
-    "12:00",
-    "12:30",
-    "13:00",
-    "13:30",
-    "14:00",
-    "14:30",
-  ];
-  const PREFERENCE_STATES = ["AVAILABLE", "PREFER_YES", "PREFER_NO", "UNAVAILABLE"];
-  const DAY_LABELS = {
-    MON: "Lunes",
-    TUE: "Martes",
-    WED: "Miércoles",
-    THU: "Jueves",
-    FRI: "Viernes",
-  };
-
   const relationState = {
     teachers: [],
     groups: [],
     classrooms: [],
     loaded: false,
+    loadPromise: null,
   };
-
-  const preferenceStateBySlot = {};
 
   const elements = {
     addButton: document.getElementById("admin-add-subject-btn"),
@@ -81,17 +58,27 @@
     timePreferencesError: document.getElementById("admin-subject-time-preferences-error"),
   };
 
-  function parseList(data) {
-    if (Array.isArray(data)) {
-      return data;
-    }
-    return data && Array.isArray(data.results) ? data.results : [];
-  }
+  const prefManager = admin.createPreferencesManager({
+    gridContainer: elements.preferencesGridContainer,
+    brushInput: elements.preferenceBrushInput,
+    timePreferencesInput: elements.timePreferencesInput,
+    defaultBrushState: "PREFER_YES",
+  });
 
+  /**
+   * Returns the display name for a subject.
+   * Input: subject - subject object from the API
+   * Output: string display name, defaults to "Asignatura" if missing
+   */
   function resolveSubjectName(subject) {
     return subject.name || "Asignatura";
   }
 
+  /**
+   * Normalizes a stage value to a known uppercase key.
+   * Input: stage - raw stage string from the API or form
+   * Output: string one of "PRESCHOOL", "PRIMARY", or "SECONDARY"; defaults to "PRIMARY"
+   */
   function normalizeStage(stage) {
     const value = (stage || "").toString().trim().toUpperCase();
     if (value === "PRESCHOOL" || value === "PRIMARY" || value === "SECONDARY") {
@@ -100,6 +87,11 @@
     return "PRIMARY";
   }
 
+  /**
+   * Normalizes a subject type value to a known uppercase key.
+   * Input: subjectType - raw type string from the API or form
+   * Output: string one of "NORMAL" or "TC"; defaults to "NORMAL"
+   */
   function normalizeType(subjectType) {
     const value = (subjectType || "").toString().trim().toUpperCase();
     if (value === "NORMAL" || value === "TC") {
@@ -108,16 +100,28 @@
     return "NORMAL";
   }
 
+  /**
+   * Refreshes a custom select UI widget after its value changes programmatically.
+   * Input: selectElement - native select DOM element to refresh
+   */
   function refreshCustomSelect(selectElement) {
     if (window.OrariooSelects && typeof window.OrariooSelects.refresh === "function" && selectElement) {
       window.OrariooSelects.refresh(selectElement);
     }
   }
 
+  /**
+   * Refreshes all custom select inputs in the subject form.
+   */
   function refreshSubjectSelects() {
     [elements.stageInput, elements.typeInput, elements.teacherInput, elements.groupInput].forEach(refreshCustomSelect);
   }
 
+  /**
+   * Returns the display label and pill variant for a stage value.
+   * Input: stage - stage string (PRESCHOOL, PRIMARY, or SECONDARY)
+   * Output: object with label (string) and variant (CSS class suffix)
+   */
   function getStageMeta(stage) {
     const value = normalizeStage(stage);
     if (value === "PRESCHOOL") {
@@ -129,6 +133,11 @@
     return { label: "Primaria", variant: "variant-blue" };
   }
 
+  /**
+   * Returns the display label and pill variant for a subject type value.
+   * Input: subjectType - type string (NORMAL or TC)
+   * Output: object with label (string) and variant (CSS class suffix)
+   */
   function getTypeMeta(subjectType) {
     const value = normalizeType(subjectType);
     if (value === "TC") {
@@ -137,138 +146,11 @@
     return { label: "Normal", variant: "variant-gray" };
   }
 
-  function slotKey(day, hour) {
-    return day + "_" + hour;
-  }
-
-  function parsePreferences(rawValue) {
-    if (rawValue && typeof rawValue === "object") {
-      return rawValue;
-    }
-    if (!rawValue || !String(rawValue).trim()) {
-      return {};
-    }
-    try {
-      return JSON.parse(String(rawValue));
-    } catch (error) {
-      return {};
-    }
-  }
-
-  function getBrushState() {
-    const value = elements.preferenceBrushInput ? elements.preferenceBrushInput.value : "PREFER_YES";
-    return PREFERENCE_STATES.indexOf(value) >= 0 ? value : "PREFER_YES";
-  }
-
-  function applyStateToCell(cell, state) {
-    if (!cell) {
-      return;
-    }
-    PREFERENCE_STATES.forEach(function (candidate) {
-      cell.classList.remove("state-" + candidate);
-      cell.classList.remove("pref-state-" + candidate);
-    });
-    cell.classList.add("state-" + state);
-    cell.classList.add("pref-state-" + state);
-    cell.dataset.state = state;
-  }
-
-  function syncTimePreferencesInput() {
-    const payload = {};
-    Object.keys(preferenceStateBySlot).forEach(function (slot) {
-      const state = preferenceStateBySlot[slot];
-      if (state !== "AVAILABLE") {
-        payload[slot] = state;
-      }
-    });
-    elements.timePreferencesInput.value = JSON.stringify(payload);
-  }
-
-  function setSlotState(slot, state) {
-    preferenceStateBySlot[slot] = state;
-    const cell = elements.preferencesGridContainer
-      ? elements.preferencesGridContainer.querySelector('[data-slot="' + slot + '"]')
-      : null;
-    applyStateToCell(cell, state);
-    syncTimePreferencesInput();
-  }
-
-  function resetPreferencesGrid(preferences) {
-    DAYS.forEach(function (day) {
-      HOURS.forEach(function (hour) {
-        const key = slotKey(day, hour);
-        const nextState =
-          preferences && PREFERENCE_STATES.indexOf(preferences[key]) >= 0 ? preferences[key] : "AVAILABLE";
-        preferenceStateBySlot[key] = nextState;
-        const cell = elements.preferencesGridContainer
-          ? elements.preferencesGridContainer.querySelector('[data-slot="' + key + '"]')
-          : null;
-        applyStateToCell(cell, nextState);
-      });
-    });
-    syncTimePreferencesInput();
-  }
-
-  function paintSlot(slot) {
-    setSlotState(slot, getBrushState());
-  }
-
-  function renderPreferencesGrid() {
-    if (!elements.preferencesGridContainer) {
-      return;
-    }
-
-    const headCells = DAYS.map(function (day) {
-      return '<div class="pref-grid-header">' + DAY_LABELS[day] + "</div>";
-    }).join("");
-
-    const bodyCells = HOURS.map(function (hour) {
-      const rowCells = DAYS.map(function (day) {
-        const key = slotKey(day, hour);
-        return (
-          '<button type="button" class="subject-pref-cell pref-cell state-AVAILABLE pref-state-AVAILABLE" data-slot="' +
-          key +
-          '" title="' +
-          DAY_LABELS[day] +
-          " " +
-          hour +
-          '"></button>'
-        );
-      }).join("");
-
-      return '<div class="pref-hour">' + hour + "</div>" + rowCells;
-    }).join("");
-
-    elements.preferencesGridContainer.innerHTML =
-      '<div class="pref-grid">' +
-      '<div class="pref-grid-header pref-hour">Hora</div>' +
-      headCells +
-      bodyCells +
-      "</div>";
-
-    elements.preferencesGridContainer.addEventListener("click", function (event) {
-      const cell = event.target.closest("[data-slot]");
-      if (!cell) {
-        return;
-      }
-      paintSlot(cell.dataset.slot);
-    });
-
-    resetPreferencesGrid({});
-  }
-
-  function createActionButton(className, title, icon) {
-    return dom.createElement("button", {
-      className: className,
-      attrs: {
-        type: "button",
-        title: title,
-        "aria-label": title,
-      },
-      children: [dom.createLucideIcon(icon)],
-    });
-  }
-
+  /**
+   * Renders a single subject card for the admin list.
+   * Input: subject - subject object from the API
+   * Output: DOM div element representing the subject card
+   */
   function renderSubjectItem(subject) {
     const stageMeta = getStageMeta(subject.stage);
     const typeMeta = getTypeMeta(subject.type);
@@ -325,12 +207,12 @@
                     dom.createElement("div", {
                       className: "admin-actions",
                       children: [
-                        createActionButton(
+                        dom.createActionButton(
                           "btn btn-link text-primary p-0 admin-action-btn admin-action-btn--edit admin-subject-edit-btn",
                           "Editar asignatura",
                           "pencil",
                         ),
-                        createActionButton(
+                        dom.createActionButton(
                           "btn btn-link text-danger p-0 admin-action-btn admin-action-btn--delete admin-subject-delete-btn",
                           "Eliminar asignatura",
                           "trash-2",
@@ -347,6 +229,12 @@
     });
   }
 
+  /**
+   * Populates a select element with items from a list, preserving the current selection.
+   * Input: selectElement - native select DOM element to populate
+   *        items - array of objects with id and name properties
+   *        placeholder - optional string for the empty first option
+   */
   function fillSelect(selectElement, items, placeholder) {
     if (!selectElement) {
       return;
@@ -369,6 +257,11 @@
     refreshCustomSelect(selectElement);
   }
 
+  /**
+   * Populates the allowed-classrooms checkbox list, preserving current checked state.
+   * Input: selectElement - container DOM element for the checkbox list
+   *        items - array of classroom objects with id and name properties
+   */
   function fillAllowedClassrooms(selectElement, items) {
     if (!selectElement) {
       return;
@@ -404,6 +297,11 @@
       .join("");
   }
 
+  /**
+   * Sets the checked state of checkboxes in a container to match the given values.
+   * Input: selectElement - container DOM element with checkbox inputs
+   *        values - array of values to mark as checked
+   */
   function setMultiSelectValues(selectElement, values) {
     if (!selectElement) {
       return;
@@ -419,6 +317,11 @@
     });
   }
 
+  /**
+   * Returns the IDs of all checked classrooms in the allowed-classrooms container.
+   * Input: selectElement - container DOM element with checkbox inputs
+   * Output: array of positive integers representing selected classroom IDs
+   */
   function getSelectedAllowedClassrooms(selectElement) {
     if (!selectElement) {
       return [];
@@ -433,45 +336,63 @@
       });
   }
 
+  /**
+   * Loads teachers, groups, and classrooms from the API and populates the form selects.
+   * Output: populates relationState and form select/checkbox inputs; resolves when all requests complete
+   */
   async function loadRelationData() {
+    if (relationState.loaded) {
+      return relationState;
+    }
+    if (relationState.loadPromise) {
+      return relationState.loadPromise;
+    }
+
     const endpoints = [
-      "/api/teachers/?page=1&page_size=200",
-      "/api/groups/?page=1&page_size=200",
-      "/api/classrooms/?page=1&page_size=200",
+      "/api/teachers/?summary=options",
+      "/api/groups/?summary=options",
+      "/api/classrooms/?summary=options",
     ];
 
-    const responses = await Promise.all(
+    relationState.loadPromise = Promise.all(
       endpoints.map(function (endpoint) {
         return admin.api.get(endpoint);
       }),
-    );
+    )
+      .then(function (responses) {
+        const teachersResponse = responses[0];
+        const groupsResponse = responses[1];
+        const classroomsResponse = responses[2];
 
-    const teachersResponse = responses[0];
-    const groupsResponse = responses[1];
-    const classroomsResponse = responses[2];
+        if (teachersResponse.ok) {
+          relationState.teachers = admin.api.parseList(teachersResponse.data);
+        }
+        if (groupsResponse.ok) {
+          relationState.groups = admin.api.parseList(groupsResponse.data);
+        }
+        if (classroomsResponse.ok) {
+          relationState.classrooms = admin.api.parseList(classroomsResponse.data);
+        }
 
-    if (teachersResponse.ok) {
-      relationState.teachers = parseList(teachersResponse.data);
-    }
-    if (groupsResponse.ok) {
-      relationState.groups = parseList(groupsResponse.data);
-    }
-    if (classroomsResponse.ok) {
-      relationState.classrooms = parseList(classroomsResponse.data);
-    }
+        fillSelect(elements.teacherInput, relationState.teachers, "Selecciona profesor");
+        fillSelect(elements.groupInput, relationState.groups, "Selecciona curso");
+        fillAllowedClassrooms(elements.allowedClassroomsInput, relationState.classrooms);
 
-    fillSelect(elements.teacherInput, relationState.teachers, "Selecciona profesor");
-    fillSelect(elements.groupInput, relationState.groups, "Selecciona curso");
-    fillAllowedClassrooms(elements.allowedClassroomsInput, relationState.classrooms);
+        relationState.loaded = teachersResponse.ok && groupsResponse.ok && classroomsResponse.ok;
+        return relationState;
+      })
+      .finally(function () {
+        relationState.loadPromise = null;
+      });
 
-    relationState.loaded = teachersResponse.ok || groupsResponse.ok || classroomsResponse.ok;
+    return relationState.loadPromise;
   }
 
-  renderPreferencesGrid();
+  prefManager.render();
 
   if (elements.preferenceClearButton) {
     elements.preferenceClearButton.addEventListener("click", function () {
-      resetPreferencesGrid({});
+      prefManager.reset({});
     });
   }
 
@@ -494,7 +415,7 @@
     getItemName: function (item) {
       return resolveSubjectName(item);
     },
-    parseList: parseList,
+    parseList: admin.api.parseList,
     renderItem: renderSubjectItem,
     addButton: elements.addButton,
     alertElement: elements.alertBox,
@@ -548,103 +469,41 @@
           input: elements.nameInput,
           feedback: elements.nameError,
           rules: [
-            {
-              validator: function () {
-                if (!elements.nameInput.value.trim()) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                }
-                if (elements.nameInput.value.length > window.ValidationConstants.MAX_LENGTH_EXTENDED) {
-                  return "Este campo no puede tener más de " + window.ValidationConstants.MAX_LENGTH_EXTENDED + " caracteres.";
-                }
-                return "";
-              },
-            },
+            fv.requiredString(
+              function () { return elements.nameInput; },
+              function () { return window.ValidationConstants.MAX_LENGTH_EXTENDED; },
+            ),
           ],
         },
         {
           name: "weekly_hours",
           input: elements.weeklyHoursInput,
           feedback: elements.weeklyHoursError,
-          rules: [
-            {
-              validator: function () {
-                const raw = elements.weeklyHoursInput.value.trim();
-                if (!raw) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                }
-                if (!window.OrariooValidators.rules.positiveInteger(raw)) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "INVALID_INTEGER" });
-                }
-                const hours = Number(raw);
-                if (hours >= 168) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "WEEKLY_HOURS_EXCEEDS_LIMIT" });
-                }
-                return "";
-              },
-            },
-          ],
+          rules: [fv.weeklyHours(function () { return elements.weeklyHoursInput; })],
         },
         {
           name: "stage",
           input: elements.stageInput,
           feedback: elements.stageError,
-          rules: [
-            {
-              validator: function () {
-                if (!elements.stageInput.value.trim()) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                }
-                return "";
-              },
-            },
-          ],
+          rules: [fv.requiredSelect(function () { return elements.stageInput; })],
         },
         {
           name: "type",
           input: elements.typeInput,
           feedback: elements.typeError,
-          rules: [
-            {
-              validator: function () {
-                if (!elements.typeInput.value.trim()) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                }
-                return "";
-              },
-            },
-          ],
+          rules: [fv.requiredSelect(function () { return elements.typeInput; })],
         },
         {
           name: "teacher",
           input: elements.teacherInput,
           feedback: elements.teacherError,
-          rules: [
-            {
-              validator: function () {
-                const value = elements.teacherInput.value.trim();
-                if (!value || !window.OrariooValidators.rules.positiveInteger(value)) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                }
-                return "";
-              },
-            },
-          ],
+          rules: [fv.requiredPositiveInt(function () { return elements.teacherInput; })],
         },
         {
           name: "group",
           input: elements.groupInput,
           feedback: elements.groupError,
-          rules: [
-            {
-              validator: function () {
-                const value = elements.groupInput.value.trim();
-                if (!value || !window.OrariooValidators.rules.positiveInteger(value)) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                }
-                return "";
-              },
-            },
-          ],
+          rules: [fv.requiredPositiveInt(function () { return elements.groupInput; })],
         },
         {
           name: "time_preferences",
@@ -673,7 +532,7 @@
         elements.teacherInput.value = "";
         elements.groupInput.value = "";
         setMultiSelectValues(elements.allowedClassroomsInput, []);
-        resetPreferencesGrid({});
+        prefManager.reset({});
         refreshSubjectSelects();
       },
       setEditingId: function (id) {
@@ -690,7 +549,7 @@
         elements.teacherInput.value = item.teacher ? String(item.teacher) : "";
         elements.groupInput.value = item.group ? String(item.group) : "";
         setMultiSelectValues(elements.allowedClassroomsInput, item.allowed_classrooms || []);
-        resetPreferencesGrid(item.time_preferences || {});
+        prefManager.reset(item.time_preferences || {});
         refreshSubjectSelects();
       },
       buildPayload: function () {
@@ -698,7 +557,7 @@
           name: elements.nameInput.value.trim(),
           weekly_hours: Number(elements.weeklyHoursInput.value),
           preferred_time_slot: "",
-          time_preferences: parsePreferences(elements.timePreferencesInput.value),
+          time_preferences: admin.parsePreferences(elements.timePreferencesInput.value),
           stage: normalizeStage(elements.stageInput.value),
           type: normalizeType(elements.typeInput.value),
           teacher: Number(elements.teacherInput.value),

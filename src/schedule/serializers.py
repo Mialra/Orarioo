@@ -1,9 +1,11 @@
+"""Serializer for the Schedule model with domain-level validations."""
+
 from rest_framework import serializers
 
 from classroom.models import Classroom
 from common.serializer_utils import AUDIT_FIELD_NAMES
-from common.tenancy import get_active_team
-from common.validators.validators import normalize_optional_text, raise_validation_error
+from common.serializers import TeamScopedModelSerializerMixin
+from common.validators import normalize_optional_text, raise_validation_error
 from group.models import Group
 from namedEntity.serializers import NamedEntityNameValidationMixin
 from schedule.models import Schedule
@@ -12,30 +14,29 @@ from teacher.models import Teacher
 from user.models import User
 
 
-class ScheduleSerializer(NamedEntityNameValidationMixin, serializers.ModelSerializer):
-    team = serializers.PrimaryKeyRelatedField(read_only=True)
+class ScheduleSerializer(
+    TeamScopedModelSerializerMixin,
+    NamedEntityNameValidationMixin,
+    serializers.ModelSerializer,
+):
+    team_scoped_field_models = {
+        "teacher": Teacher,
+        "classroom": Classroom,
+        "group": Group,
+        "subject": Subject,
+    }
+    team_scoped_field_querysets = {
+        "users": lambda active_team: User.objects.filter(
+            collaboration_teams=active_team,
+            is_enabled=True,
+        ).distinct()
+    }
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     classroom_name = serializers.CharField(source="classroom.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
     group_stage = serializers.CharField(source="group.stage", read_only=True)
     subject_name = serializers.CharField(source="subject.name", read_only=True)
     subject_type = serializers.CharField(source="subject.type", read_only=True)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        request = self.context.get("request")
-        if not request or not getattr(request, "user", None):
-            return
-
-        active_team = get_active_team(request)
-        self.fields["teacher"].queryset = Teacher.objects.filter(team=active_team)
-        self.fields["classroom"].queryset = Classroom.objects.filter(team=active_team)
-        self.fields["group"].queryset = Group.objects.filter(team=active_team)
-        self.fields["subject"].queryset = Subject.objects.filter(team=active_team)
-        self.fields["users"].queryset = User.objects.filter(
-            collaboration_teams=active_team,
-            is_enabled=True,
-        ).distinct()
 
     class Meta:
         model = Schedule
@@ -71,6 +72,12 @@ class ScheduleSerializer(NamedEntityNameValidationMixin, serializers.ModelSerial
         ]
 
     def validate(self, attrs):
+        """Validate Schedule business rules at the object level.
+        Input: attrs - dict of individually validated fields
+        Output: attrs with normalised observations; raises ValidationError if:
+                end_time <= start_time, users empty on create, subject null on create,
+                or subject explicitly set to null on update
+        """
         start_time = attrs.get(
             "start_time",
             self.instance.start_time if self.instance else None,

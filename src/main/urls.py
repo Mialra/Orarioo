@@ -1,3 +1,7 @@
+"""
+Top-level URL configuration: auth, dashboard, administration tabs, and legal pages.
+"""
+
 from django.urls import path
 
 from classroom.views import admin_classrooms
@@ -11,7 +15,8 @@ from main.views import (
 )
 from subject.views import admin_subjects
 from teacher.views import admin_teachers
-from user.views import ProfileExportDataView, admin_users, profile, sign_in, sign_up
+from user.views import admin_users, sign_in, sign_up
+from user.views_export import ProfileExportDataView, profile
 
 urlpatterns = [
     path("", root_redirect, name="root-redirect"),

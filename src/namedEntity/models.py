@@ -1,3 +1,7 @@
+"""
+Abstract base model providing a name field shared by all named entities.
+"""
+
 from django.db import models
 
 

@@ -1,3 +1,7 @@
+"""
+Domain models for users, collaboration teams, team invitations, and data-export audit logs.
+"""
+
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -6,10 +10,13 @@ from namedEntity.models import NamedEntity
 
 
 class CustomUserManager(BaseUserManager):
-    """Custom manager for User model"""
+    """Custom manager for the User model that uses email as the primary identifier."""
 
     def create_user(self, email, password=None, **extra_fields):
-        """Creates and saves a user with the given email and password"""
+        """Create and persist a regular user with the given email and password.
+        Input: email - str user email; password - str plain-text password or None; **extra_fields - additional model fields
+        Output: User instance saved to the database; raises ValueError if email or name is missing
+        """
         if not email:
             raise ValueError(_("Email is required"))
 
@@ -30,7 +37,10 @@ class CustomUserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):
-        """Creates and saves a superuser"""
+        """Create and persist a superuser with is_staff and is_superuser set to True.
+        Input: email - str user email; password - str plain-text password or None; **extra_fields - additional model fields
+        Output: User instance with superuser privileges; raises ValueError if staff/superuser flags are unset
+        """
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
 
@@ -43,7 +53,7 @@ class CustomUserManager(BaseUserManager):
 
 
 class User(NamedEntity, AbstractUser):
-    """Custom User model."""
+    """Custom User model that uses email as the login identifier instead of username."""
 
     username = None
     password = models.CharField(
@@ -100,18 +110,33 @@ class User(NamedEntity, AbstractUser):
         ]
 
     def __str__(self):
+        """Return a human-readable representation including the user's full name and email.
+        Input: self - User instance
+        Output: str in the format 'name family_name (email)'
+        """
         return f"{self.name} {self.family_name} ({self.email})"
 
     @property
     def given_name(self):
+        """Alias for the name field kept for backward compatibility.
+        Input: self - User instance
+        Output: str value of the name field
+        """
         return self.name
 
     @given_name.setter
     def given_name(self, value):
+        """Set the name field via the given_name alias.
+        Input: self - User instance; value - str new name
+        Output: None; side-effect: updates self.name
+        """
         self.name = value
 
     def get_full_name(self):
-        """Returns the user's full name"""
+        """Return the user's full name by combining name and family_name.
+        Input: self - User instance
+        Output: str full name with leading/trailing whitespace stripped
+        """
         return f"{self.name} {self.family_name}".strip()
 
 
@@ -129,16 +154,24 @@ class CollaborationTeam(NamedEntity):
         ordering = ["name", "id"]
 
     def __str__(self):
+        """Return the collaboration team's name as its string representation.
+        Input: self - CollaborationTeam instance
+        Output: str team name
+        """
         return self.name
 
 
 class CollaborationTeamInvitationStatus(models.TextChoices):
+    """Possible states for a collaboration team invitation."""
+
     PENDING = "pending", _("Pending")
     ACCEPTED = "accepted", _("Accepted")
     REJECTED = "rejected", _("Rejected")
 
 
 class CollaborationTeamInvitation(models.Model):
+    """Invitation record linking a user to a collaboration team with a pending/accepted/rejected status."""
+
     team = models.ForeignKey(
         CollaborationTeam,
         on_delete=models.CASCADE,
@@ -171,11 +204,19 @@ class CollaborationTeamInvitation(models.Model):
         ]
 
     def __str__(self):
+        """Return a human-readable summary of the invitation.
+        Input: self - CollaborationTeamInvitation instance
+        Output: str in the format 'invited_email -> team_name (status)'
+        """
         return f"{self.invited_user.email} -> {self.team.name} ({self.status})"
 
 
 class UserDataExportLog(models.Model):
+    """Audit log for GDPR personal-data export requests."""
+
     class Outcome(models.TextChoices):
+        """Possible results of a data-export attempt."""
+
         SUCCESS = "success", _("Success")
         RATE_LIMITED = "rate_limited", _("Rate limited")
         ERROR = "error", _("Error")
@@ -186,7 +227,6 @@ class UserDataExportLog(models.Model):
         related_name="data_export_logs",
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.CharField(max_length=512, blank=True)
     outcome = models.CharField(
         max_length=20,
@@ -204,4 +244,8 @@ class UserDataExportLog(models.Model):
         ]
 
     def __str__(self):
+        """Return a human-readable summary of the export log entry.
+        Input: self - UserDataExportLog instance
+        Output: str in the format 'email - outcome - timestamp'
+        """
         return f"{self.user.email} - {self.outcome} - {self.created_at.isoformat()}"

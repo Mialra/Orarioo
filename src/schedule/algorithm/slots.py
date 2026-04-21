@@ -1,9 +1,14 @@
+"""Weekly timetable slot utilities for the schedule generation algorithm.
+
+Defines the allowed time windows per educational stage and the functions
+to build, index and compare slots within the CP-SAT model.
+"""
+
 from datetime import datetime, time, timedelta
 
 from django.utils import timezone
 
-from group.models import EducationalStage as GroupEducationalStage
-from subject.models import EducationalStage as SubjectEducationalStage
+from common.stages import EducationalStage, canonical_educational_stage
 
 DAY_CODE_BY_WEEKDAY = {
     0: "MON",
@@ -13,9 +18,9 @@ DAY_CODE_BY_WEEKDAY = {
     4: "FRI",
 }
 
-STAGE_PRESCHOOL = "PRESCHOOL"
-STAGE_PRIMARY = "PRIMARY"
-STAGE_SECONDARY = "SECONDARY"
+STAGE_PRESCHOOL = EducationalStage.PRESCHOOL
+STAGE_PRIMARY = EducationalStage.PRIMARY
+STAGE_SECONDARY = EducationalStage.SECONDARY
 
 STAGE_SLOT_WINDOWS = {
     # Infantil: 9:00-14:00 with breaks 10:30-11:00 and 13:30-14:00.
@@ -48,40 +53,52 @@ STAGE_SLOT_WINDOWS = {
 
 
 def _slot_start(slot):
+    """Extract the start instant from a slot, whether dict or datetime.
+    Input: slot - dict with key 'start', or a datetime directly
+    Output: start datetime of the slot
+    """
     return slot["start"] if isinstance(slot, dict) else slot
 
 
 def _slot_end(slot):
+    """Extract the end instant from a slot, whether dict or datetime.
+    Input: slot - dict with key 'end', or a datetime (in which case 1 hour is added)
+    Output: end datetime of the slot
+    """
     if isinstance(slot, dict):
         return slot["end"]
     return slot + timedelta(hours=1)
 
 
 def _slot_stage(slot):
+    """Extract the educational stage code from a slot dict, or None if not applicable.
+    Input: slot - dict with optional key 'stage', or any other value
+    Output: stage code string, or None
+    """
     if isinstance(slot, dict):
         return slot.get("stage")
     return None
 
 
 def _normalize_stage_code(*, group_stage=None, subject_stage=None):
-    if group_stage == GroupEducationalStage.PRESCHOOL:
-        return STAGE_PRESCHOOL
-    if group_stage == GroupEducationalStage.PRIMARY:
-        return STAGE_PRIMARY
-    if group_stage == GroupEducationalStage.SECONDARY:
-        return STAGE_SECONDARY
-
-    if subject_stage == SubjectEducationalStage.PRESCHOOL:
-        return STAGE_PRESCHOOL
-    if subject_stage == SubjectEducationalStage.PRIMARY:
-        return STAGE_PRIMARY
-    if subject_stage == SubjectEducationalStage.SECONDARY:
-        return STAGE_SECONDARY
-
-    return STAGE_PRIMARY
+    """Map a group or subject stage to the algorithm's internal stage code.
+    Input: group_stage - EducationalStage value from the group, or None;
+           subject_stage - EducationalStage value from the subject, or None
+    Output: one of STAGE_PRESCHOOL, STAGE_PRIMARY, STAGE_SECONDARY;
+            STAGE_PRIMARY as fallback when neither matches
+    """
+    return canonical_educational_stage(
+        group_stage=group_stage,
+        subject_stage=subject_stage,
+        default=STAGE_PRIMARY,
+    )
 
 
 def session_stage_code(*, session):
+    """Determine the educational stage code for a session from its group or subject.
+    Input: session - dict with optional keys 'group' and 'subject'
+    Output: stage code (STAGE_PRESCHOOL, STAGE_PRIMARY or STAGE_SECONDARY)
+    """
     group = session.get("group")
     subject = session.get("subject")
     return _normalize_stage_code(
@@ -91,7 +108,11 @@ def session_stage_code(*, session):
 
 
 def build_weekly_slots():
-    """Build one Monday-Friday timetable with stage-specific windows and breaks."""
+    """Build timetable slots for the next working week (Monday to Friday).
+    Input: none; uses the current server date
+    Output: list of dicts with keys 'start', 'end', 'stage' and 'day_code' for
+            every combination of day and time window per educational stage
+    """
     now = timezone.localtime()
     days_until_next_monday = (7 - now.weekday()) % 7
     if days_until_next_monday == 0:
@@ -127,7 +148,10 @@ def build_weekly_slots():
 
 
 def build_slot_day_index(*, slots):
-    """Map each slot index to its day index in the generated week."""
+    """Build an index mapping each slot index to its day index within the generated week.
+    Input: slots - list of slots produced by build_weekly_slots
+    Output: dict {slot_idx: day_idx} where day_idx is the zero-based position of the day sorted by date
+    """
     day_index_by_slot = {}
     ordered_days = sorted({_slot_start(slot).date() for slot in slots})
 
@@ -140,7 +164,10 @@ def build_slot_day_index(*, slots):
 
 
 def slot_preference_key_from_datetime(*, slot):
-    """Build a stable preference key for one datetime slot."""
+    """Build a stable time-preference key for a slot datetime.
+    Input: slot - slot dict or datetime; must fall on a Monday-Friday
+    Output: string in format 'DDD_HH:MM' (e.g. 'MON_09:00'), or None for weekend days
+    """
     slot_dt = _slot_start(slot)
     day_code = DAY_CODE_BY_WEEKDAY.get(slot_dt.weekday())
     if day_code is None:
@@ -149,6 +176,10 @@ def slot_preference_key_from_datetime(*, slot):
 
 
 def slot_instance_key(*, slot):
+    """Generate a unique, stable key identifying a slot by stage, day and times.
+    Input: slot - dict with keys 'start', 'end' and optionally 'stage'
+    Output: string in format 'STAGE_DAY_HH:MM_HH:MM' (e.g. 'PRIMARY_MON_09:00_10:00')
+    """
     slot_start = _slot_start(slot)
     slot_end = _slot_end(slot)
     stage = _slot_stage(slot) or "GENERIC"
@@ -157,12 +188,20 @@ def slot_instance_key(*, slot):
 
 
 def build_slot_instance_index(*, slots):
+    """Build an index of slot_idx → slot_instance_key for all slots.
+    Input: slots - list of slots
+    Output: dict {slot_idx: slot_instance_key}
+    """
     return {
         slot_idx: slot_instance_key(slot=slot) for slot_idx, slot in enumerate(slots)
     }
 
 
 def build_stage_allowed_slot_index(*, slots):
+    """Build an index of stage → set of allowed slot indices for that stage.
+    Input: slots - list of slots with a 'stage' key
+    Output: dict {STAGE_CODE: set(slot_idx)} with entries for all three stages
+    """
     allowed = {
         STAGE_PRESCHOOL: set(),
         STAGE_PRIMARY: set(),
@@ -176,7 +215,13 @@ def build_stage_allowed_slot_index(*, slots):
 
 
 def build_real_time_intervals(*, slots, slot_indices=None):
-    """Split each day into atomic real-time intervals and map overlapping slots."""
+    """Split each day into atomic real-time intervals and map overlapping slots.
+
+    Enables detection of overlaps between slots of different duration on the same day.
+    Input: slots - full list of slots;
+           slot_indices - subset of indices to consider, or None for all
+    Output: list of dicts with keys 'day_idx', 'start', 'end', 'slot_indices'
+    """
     day_index_by_slot = build_slot_day_index(slots=slots)
     relevant_slot_indices = (
         list(range(len(slots))) if slot_indices is None else list(slot_indices)
@@ -223,6 +268,10 @@ def build_real_time_intervals(*, slots, slot_indices=None):
 
 
 def slot_overlaps(*, left_slot, right_slot):
+    """Check whether two slots overlap in time (strict overlap).
+    Input: left_slot - left slot (dict or datetime); right_slot - right slot
+    Output: True if the intervals overlap, False otherwise
+    """
     left_start = _slot_start(left_slot)
     left_end = _slot_end(left_slot)
     right_start = _slot_start(right_slot)
@@ -231,11 +280,18 @@ def slot_overlaps(*, left_slot, right_slot):
 
 
 def slot_time_bounds(*, slot):
+    """Return the (start, end) tuple for a slot.
+    Input: slot - slot dict or datetime
+    Output: tuple (datetime_start, datetime_end)
+    """
     return _slot_start(slot), _slot_end(slot)
 
 
 def build_slot_preference_index(*, slots):
-    """Map each slot index to its preference key (e.g. MON_08:30)."""
+    """Build an index of slot_idx → time-preference key (e.g. 'MON_09:00').
+    Input: slots - list of slots
+    Output: dict {slot_idx: preference_key} excluding weekend slots
+    """
     preference_index = {}
     for slot_idx, slot in enumerate(slots):
         key = slot_preference_key_from_datetime(slot=slot)

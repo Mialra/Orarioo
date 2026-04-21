@@ -1,3 +1,7 @@
+"""
+Serializers for user registration, authentication, profile updates, and collaboration team operations.
+"""
+
 import re
 
 from django.contrib.auth.password_validation import validate_password
@@ -5,7 +9,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from app.constants import STRING_MAX_LENGTH
-from common.validators.validators import (
+from common.validators import (
     normalize_optional_text,
     raise_non_field_error,
     raise_validation_error,
@@ -22,6 +26,8 @@ from user.models import (
 
 
 class CollaborationTeamSerializer(serializers.ModelSerializer):
+    """Read-only serializer for embedding collaboration team id and name in other responses."""
+
     class Meta:
         model = CollaborationTeam
         fields = ["id", "name"]
@@ -29,9 +35,15 @@ class CollaborationTeamSerializer(serializers.ModelSerializer):
 
 
 class CollaborationTeamCreateSerializer(serializers.Serializer):
+    """Validate the name field when creating a new collaboration team."""
+
     name = serializers.CharField(max_length=STRING_MAX_LENGTH)
 
     def validate_name(self, value):
+        """Normalize and validate the team name.
+        Input: value - str submitted team name
+        Output: str normalized name; raises ValidationError if blank or too long
+        """
         return validate_and_normalize_required_text(
             value,
             field_name="name",
@@ -41,10 +53,16 @@ class CollaborationTeamCreateSerializer(serializers.Serializer):
 
 
 class CollaborationTeamInviteSerializer(serializers.Serializer):
+    """Validate the email and optional team_id when inviting a user to a team."""
+
     email = serializers.EmailField()
     team_id = serializers.IntegerField(required=False)
 
     def validate_email(self, value):
+        """Normalize and validate the invitee email address.
+        Input: value - str submitted email
+        Output: str normalized email; raises ValidationError on invalid format
+        """
         return validate_and_normalize_email(
             value,
             field_name="email",
@@ -53,6 +71,8 @@ class CollaborationTeamInviteSerializer(serializers.Serializer):
 
 
 class CollaborationTeamInvitationSerializer(serializers.ModelSerializer):
+    """Read-only serializer for displaying a collaboration team invitation with sender details."""
+
     team = CollaborationTeamSerializer(read_only=True)
     invited_by_email = serializers.EmailField(source="invited_by.email", read_only=True)
     invited_by_name = serializers.CharField(source="invited_by.name", read_only=True)
@@ -72,9 +92,15 @@ class CollaborationTeamInvitationSerializer(serializers.ModelSerializer):
 
 
 class CollaborationTeamInvitationRespondSerializer(serializers.Serializer):
+    """Validate the accept/reject action when a user responds to a team invitation."""
+
     action = serializers.ChoiceField(choices=["accept", "reject"])
 
     def to_status(self):
+        """Map the validated action string to the corresponding invitation status value.
+        Input: self - serializer with validated_data populated
+        Output: CollaborationTeamInvitationStatus.ACCEPTED or REJECTED
+        """
         action = self.validated_data["action"]
         if action == "accept":
             return CollaborationTeamInvitationStatus.ACCEPTED
@@ -82,8 +108,14 @@ class CollaborationTeamInvitationRespondSerializer(serializers.Serializer):
 
 
 class UserNameEmailValidationMixin:
+    """Shared validation logic for user name and email fields across create/update serializers."""
+
     @staticmethod
     def validate_given_name(value):
+        """Normalize and validate the given name field.
+        Input: value - str submitted given name
+        Output: str normalized name; raises ValidationError if blank or too long
+        """
         return validate_and_normalize_required_text(
             value,
             field_name="given_name",
@@ -93,6 +125,10 @@ class UserNameEmailValidationMixin:
 
     @staticmethod
     def validate_family_name(value):
+        """Normalize the optional family name field.
+        Input: value - str submitted family name (may be blank)
+        Output: str normalized family name, or empty string
+        """
         return normalize_optional_text(
             value,
             field_name="family_name",
@@ -101,6 +137,10 @@ class UserNameEmailValidationMixin:
         )
 
     def validate_email(self, value):
+        """Normalize and enforce case-insensitive uniqueness for the email field.
+        Input: value - str submitted email address
+        Output: str normalized email; raises ValidationError if format is invalid or email is already taken
+        """
         normalized = validate_and_normalize_email(
             value,
             field_name="email",
@@ -116,7 +156,7 @@ class UserNameEmailValidationMixin:
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Serializer for displaying user information"""
+    """Read/write serializer for displaying and updating user profile information."""
 
     given_name = serializers.CharField(source="name")
     active_team = CollaborationTeamSerializer(read_only=True)
@@ -141,7 +181,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerializer):
-    """Serializer for creating new users"""
+    """Validate and create a new user account, enforcing password strength and policy acceptance."""
 
     given_name = serializers.CharField(source="name")
     email = serializers.EmailField(validators=[])
@@ -178,7 +218,10 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
         ]
 
     def validate(self, data):
-        """Validates that passwords match"""
+        """Enforce password strength rules, confirm match, and require policy acceptance.
+        Input: data - dict of deserialized field values
+        Output: dict validated data; raises ValidationError on any password or policy violation
+        """
         password = data.get("password") or ""
 
         if len(password) < 8:
@@ -233,7 +276,10 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
 
     @transaction.atomic
     def create(self, validated_data):
-        """Creates a new user"""
+        """Create a new User instance, stripping write-only confirmation fields before saving.
+        Input: validated_data - dict of cleaned field values
+        Output: User instance persisted to the database
+        """
         password = validated_data.pop("password")
         validated_data.pop("password_confirm")
         validated_data.pop("privacy_policy_accepted", None)
@@ -244,7 +290,7 @@ class UserCreateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
 
 
 class UserUpdateSerializer(UserNameEmailValidationMixin, serializers.ModelSerializer):
-    """Serializer for updating user information"""
+    """Validate and apply partial updates to a user's profile fields."""
 
     given_name = serializers.CharField(source="name")
 
@@ -259,12 +305,15 @@ class UserUpdateSerializer(UserNameEmailValidationMixin, serializers.ModelSerial
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        """Updates user data atomically."""
+        """Apply profile field updates atomically.
+        Input: instance - existing User instance; validated_data - dict of fields to update
+        Output: User instance with updated fields saved to the database
+        """
         return super().update(instance, validated_data)
 
 
 class UserChangePasswordSerializer(serializers.Serializer):
-    """Serializer for changing password"""
+    """Validate a password change request, checking the current password and confirming the new one."""
 
     current_password = serializers.CharField(
         write_only=True, required=True, help_text="User's current password"
@@ -280,7 +329,10 @@ class UserChangePasswordSerializer(serializers.Serializer):
     )
 
     def validate(self, data):
-        """Validates that the new passwords match"""
+        """Ensure new_password and password_confirm match.
+        Input: data - dict of deserialized field values
+        Output: dict validated data; raises ValidationError if passwords do not match
+        """
         if data["new_password"] != data["password_confirm"]:
             raise_validation_error(
                 "password_confirm",
@@ -291,7 +343,10 @@ class UserChangePasswordSerializer(serializers.Serializer):
         return data
 
     def validate_current_password(self, value):
-        """Validates that the current password is correct"""
+        """Verify that the submitted current password matches the user's stored password.
+        Input: value - str submitted current password
+        Output: str validated value; raises ValidationError if password is incorrect
+        """
         user = self.context["request"].user
         if not user.check_password(value):
             raise_validation_error(
@@ -303,7 +358,10 @@ class UserChangePasswordSerializer(serializers.Serializer):
         return value
 
     def save(self):
-        """Saves the new password"""
+        """Persist the new password to the database.
+        Input: self - serializer with validated_data populated
+        Output: User instance with the updated password saved
+        """
         user = self.context["request"].user
         user.set_password(self.validated_data["new_password"])
         user.save()
@@ -311,7 +369,7 @@ class UserChangePasswordSerializer(serializers.Serializer):
 
 
 class UserAccountDeletionSerializer(serializers.Serializer):
-    """Validates the self-service account deletion payload."""
+    """Validate the self-service account deletion payload by requiring email confirmation."""
 
     confirmation_text = serializers.CharField(
         write_only=True,
@@ -320,6 +378,10 @@ class UserAccountDeletionSerializer(serializers.Serializer):
     )
 
     def validate(self, data):
+        """Ensure confirmation_text matches the requesting user's current email address.
+        Input: data - dict with confirmation_text
+        Output: dict validated data; raises ValidationError if confirmation does not match
+        """
         user = self.context["request"].user
         expected_confirmation = (user.email or "").strip().lower()
         provided_confirmation = (data.get("confirmation_text") or "").strip().lower()
@@ -335,13 +397,16 @@ class UserAccountDeletionSerializer(serializers.Serializer):
 
 
 class LoginSerializer(serializers.Serializer):
-    """Serializer for authenticating users"""
+    """Validate login credentials and attach the authenticated User instance to validated_data."""
 
     email = serializers.EmailField(help_text="User's email address")
     password = serializers.CharField(write_only=True, help_text="User's password")
 
     def validate(self, data):
-        """Validates login credentials"""
+        """Verify email and password, check account status, and attach the user to validated_data.
+        Input: data - dict with email and password
+        Output: dict with added 'user' key on success; raises ValidationError on bad credentials or disabled account
+        """
         email = validate_and_normalize_email(
             data.get("email"),
             field_name="email",

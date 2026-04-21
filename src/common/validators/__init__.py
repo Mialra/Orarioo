@@ -7,6 +7,7 @@ from common.validators.validators import (
     validate_and_normalize_email,
     validate_and_normalize_required_text,
     validate_case_insensitive_unique,
+    validate_time_preferences,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "validate_and_normalize_email",
     "validate_and_normalize_required_text",
     "validate_case_insensitive_unique",
+    "validate_time_preferences",
 ]

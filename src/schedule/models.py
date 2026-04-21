@@ -1,3 +1,5 @@
+"""Schedule model for the Orarioo timetable management system."""
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Q
@@ -44,6 +46,10 @@ class Schedule(TeamScopedModel, AuditableEntity):
         ]
 
     def clean(self):
+        """Validate and normalise schedule fields before persisting.
+        Input: self - Schedule instance with values to validate
+        Output: None; raises ValidationError if name is blank or end_time <= start_time
+        """
         if not self.name or not self.name.strip():
             raise ValidationError({"name": "name cannot be empty or whitespace only."})
         self.name = self.name.strip()
@@ -57,8 +63,16 @@ class Schedule(TeamScopedModel, AuditableEntity):
             )
 
     def save(self, *args, **kwargs):
+        """Run full_clean before saving to enforce model-level validations.
+        Input: args, kwargs - standard Model.save arguments
+        Output: None; persists the record or raises ValidationError if validation fails
+        """
         self.full_clean()
         return super().save(*args, **kwargs)
 
     def __str__(self):
+        """Human-readable representation of the schedule.
+        Input: self - Schedule instance
+        Output: string in the format 'name: start_time - end_time'
+        """
         return f"{self.name}: {self.start_time} - {self.end_time}"

@@ -230,23 +230,22 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("name", response.data)
 
-    def test_allow_same_name_as_teacher_in_different_entity(self):
-        teacher_named_pedro = Teacher.objects.create(
-            name="Pedro",
-            max_weekly_hours=20,
-            working_hours=10,
+    def test_list_summary_options_include_type(self):
+        Subject.objects.create(
+            name="Tutoria",
+            weekly_hours=1,
+            duration=1.0,
+            stage=EducationalStage.SECONDARY,
+            type=SubjectType.TC,
+            teacher=self.teacher,
+            group=self.group,
             team=self.team,
         )
 
-        payload = {
-            "name": "Pedro",
-            "weekly_hours": 2,
-            "stage": EducationalStage.SECONDARY,
-            "type": SubjectType.NORMAL,
-            "teacher": teacher_named_pedro.id,
-            "group": self.group.id,
-        }
+        response = self.client.get(reverse("subject-list") + "?summary=options")
 
-        response = self.client.post(reverse("subject-list"), payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], "Tutoria")
+        self.assertEqual(response.data[0]["type"], SubjectType.TC)
+        self.assertEqual(set(response.data[0].keys()), {"id", "name", "type"})

@@ -1,6 +1,10 @@
+/**
+ * Admin page entrypoint for group CRUD management.
+ */
 (function () {
   const admin = window.AdminBase || {};
   const dom = admin.dom;
+  const fv = admin.formUtils && admin.formUtils.validators;
 
   const formElement = document.getElementById("admin-group-form");
   if (!formElement || !admin.createEntityManager || !dom) {
@@ -32,10 +36,20 @@
     stageError: document.getElementById("admin-group-stage-error"),
   };
 
+  /**
+   * Returns the display name for a group.
+   * Input: group - group object from the API
+   * Output: string display name, defaults to "Curso" if missing
+   */
   function resolveGroupName(group) {
     return group.name || "Curso";
   }
 
+  /**
+   * Normalizes a stage value to a known lowercase key.
+   * Input: stage - raw stage string from the API or form
+   * Output: string one of "preschool", "primary", or "secondary"; defaults to "primary"
+   */
   function normalizeStage(stage) {
     const value = (stage || "").toString().trim().toLowerCase();
     if (value === "preschool" || value === "primary" || value === "secondary") {
@@ -44,12 +58,21 @@
     return "primary";
   }
 
+  /**
+   * Refreshes a custom select UI widget after its value changes programmatically.
+   * Input: selectElement - native select DOM element to refresh
+   */
   function refreshCustomSelect(selectElement) {
     if (window.OrariooSelects && typeof window.OrariooSelects.refresh === "function" && selectElement) {
       window.OrariooSelects.refresh(selectElement);
     }
   }
 
+  /**
+   * Returns the display label and pill variant for a stage value.
+   * Input: stage - stage string (preschool, primary, or secondary)
+   * Output: object with label (string) and variant (CSS class suffix)
+   */
   function getStageMeta(stage) {
     const normalized = normalizeStage(stage);
     if (normalized === "preschool") {
@@ -61,18 +84,11 @@
     return { label: "Primaria", variant: "variant-blue" };
   }
 
-  function createActionButton(className, title, icon) {
-    return dom.createElement("button", {
-      className: className,
-      attrs: {
-        type: "button",
-        title: title,
-        "aria-label": title,
-      },
-      children: [dom.createLucideIcon(icon)],
-    });
-  }
-
+  /**
+   * Builds a pill badge for the given stage.
+   * Input: stage - stage string from the API
+   * Output: DOM span element with the appropriate admin-pill variant
+   */
   function stagePill(stage) {
     const meta = getStageMeta(stage);
     return dom.createElement("span", {
@@ -81,6 +97,11 @@
     });
   }
 
+  /**
+   * Renders a single group card for the admin list.
+   * Input: group - group object from the API
+   * Output: DOM div element representing the group card
+   */
   function renderGroupItem(group) {
     return dom.createElement("div", {
       className: "col",
@@ -113,12 +134,12 @@
                     dom.createElement("div", {
                       className: "admin-actions",
                       children: [
-                        createActionButton(
+                        dom.createActionButton(
                           "btn btn-link text-primary p-0 admin-action-btn admin-action-btn--edit admin-group-edit-btn",
                           "Editar curso",
                           "pencil",
                         ),
-                        createActionButton(
+                        dom.createActionButton(
                           "btn btn-link text-danger p-0 admin-action-btn admin-action-btn--delete admin-group-delete-btn",
                           "Eliminar curso",
                           "trash-2",
@@ -146,12 +167,7 @@
     getItemName: function (item) {
       return resolveGroupName(item);
     },
-    parseList: function (data) {
-      if (Array.isArray(data)) {
-        return data;
-      }
-      return data && Array.isArray(data.results) ? data.results : [];
-    },
+    parseList: admin.api.parseList,
     renderItem: renderGroupItem,
     addButton: elements.addButton,
     alertElement: elements.alertBox,
@@ -205,34 +221,17 @@
           input: elements.nameInput,
           feedback: elements.nameError,
           rules: [
-            {
-              validator: function () {
-                if (!elements.nameInput.value.trim()) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                }
-                if (elements.nameInput.value.length > window.ValidationConstants.STRING_MAX_LENGTH) {
-                  return "Este campo no puede tener más de " + window.ValidationConstants.STRING_MAX_LENGTH + " caracteres.";
-                }
-                return "";
-              },
-            },
+            fv.requiredString(
+              function () { return elements.nameInput; },
+              function () { return window.ValidationConstants.STRING_MAX_LENGTH; },
+            ),
           ],
         },
         {
           name: "stage",
           input: elements.stageInput,
           feedback: elements.stageError,
-          rules: [
-            {
-              validator: function () {
-                const value = elements.stageInput.value || "";
-                if (!value.trim()) {
-                  return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
-                }
-                return "";
-              },
-            },
-          ],
+          rules: [fv.requiredSelect(function () { return elements.stageInput; })],
         },
       ],
       clearValidationOnInput: [

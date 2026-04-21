@@ -1,3 +1,8 @@
+"""
+Custom DRF exception handler that normalizes all API errors to a consistent response shape.
+Every error response includes 'detail', 'errors', '_error', and '_meta' keys.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -17,10 +22,15 @@ from common.errors.exceptions import (
 
 logger = logging.getLogger(__name__)
 
+# Keys that belong to the error envelope and should not be treated as field errors.
 CONTROL_KEYS = {"detail", "_error", "_meta", "errors", "suggestions"}
 
 
 def _normalize_error_details(value):
+    """Recursively convert DRF ErrorDetail objects to plain strings.
+    Input: value - any value (may contain nested ErrorDetail instances)
+    Output: same structure with all ErrorDetail replaced by str
+    """
     if isinstance(value, ErrorDetail):
         return str(value)
     if isinstance(value, dict):
@@ -31,6 +41,10 @@ def _normalize_error_details(value):
 
 
 def _extract_message(value, fallback):
+    """Recursively extract the first human-readable message string from a nested structure.
+    Input: value - str, dict, or list; fallback - string returned when no message is found
+    Output: first non-empty message string found, or fallback
+    """
     if isinstance(value, dict):
         message = value.get("message")
         if isinstance(message, str) and message.strip():
@@ -58,6 +72,10 @@ def _extract_message(value, fallback):
 
 
 def _payload_to_structured_entries(raw_value, *, default_code, field_name=None):
+    """Convert a raw error value to a list of structured error entry dicts.
+    Input: raw_value - str, dict, list, or None from a DRF error payload; default_code - fallback error code; field_name - optional field context
+    Output: list of structured error entry dicts
+    """
     if isinstance(raw_value, list):
         entries = []
         for item in raw_value:
@@ -105,6 +123,10 @@ def _payload_to_structured_entries(raw_value, *, default_code, field_name=None):
 
 
 def _extract_error_code(exc, status_code):
+    """Derive a short error code string from an exception and its HTTP status code.
+    Input: exc - the exception instance; status_code - the HTTP response status code
+    Output: uppercase error code string
+    """
     if isinstance(exc, AppError):
         return exc.code
 
@@ -126,6 +148,10 @@ def _extract_error_code(exc, status_code):
 
 
 def _build_structured_errors(payload, *, default_code):
+    """Convert a normalized DRF error payload to a structured field -> entries dict.
+    Input: payload - normalized response data dict or other value; default_code - fallback error code
+    Output: dict mapping field names (or NON_FIELD_ERRORS_KEY) to lists of error entry dicts
+    """
     if isinstance(payload, dict):
         explicit_errors = payload.get("errors")
         if isinstance(explicit_errors, dict):
@@ -173,6 +199,10 @@ def _build_structured_errors(payload, *, default_code):
 
 
 def _extract_detail_message(payload, *, structured_errors, fallback):
+    """Extract the primary human-readable detail message for the response envelope.
+    Input: payload - normalized response data; structured_errors - already-built error dict; fallback - string used when no message can be found
+    Output: non-empty detail message string
+    """
     if isinstance(payload, dict):
         detail = payload.get("detail")
         if isinstance(detail, str) and detail.strip():
@@ -189,6 +219,10 @@ def _extract_detail_message(payload, *, structured_errors, fallback):
 
 
 def _build_internal_error_response():
+    """Build a generic HTTP 500 response that does not leak internal details.
+    Input: None
+    Output: DRF Response with status 500 and a safe, opaque error payload
+    """
     message = "An internal server error occurred."
     payload = {
         "detail": message,
@@ -216,6 +250,10 @@ def _build_internal_error_response():
 
 
 def api_exception_handler(exc, context):
+    """Normalize any exception to the standard API error response shape.
+    Input: exc - the raised exception; context - DRF handler context dict
+    Output: DRF Response with a consistent error payload, or a 500 response for unhandled exceptions
+    """
     if isinstance(exc, AppError):
         return Response(exc.to_response_data(), status=exc.status_code)
 

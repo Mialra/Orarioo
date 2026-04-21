@@ -1,3 +1,6 @@
+/**
+ * Generic admin CRUD module that wires list fetching, form submission, and delete confirmation.
+ */
 (function () {
     const root = window.OrariooAdmin = window.OrariooAdmin || {};
     const api = root.api;
@@ -7,6 +10,12 @@
     const listRenderer = root.listRenderer;
     const pagination = root.pagination;
 
+    /**
+     * Builds an id-keyed lookup map from an array of items.
+     * Input: items - array of objects
+     *        getId - function(item) returning the item's identifier
+     * Output: object mapping string IDs to items
+     */
     function toItemMap(items, getId) {
         return (items || []).reduce(function (acc, item) {
             acc[String(getId(item))] = item;
@@ -14,6 +23,11 @@
         }, {});
     }
 
+    /**
+     * Extracts a flat item array from a plain list or paginated response.
+     * Input: data - API response body (array or object with results array)
+     * Output: array of items
+     */
     function defaultParseList(data) {
         if (Array.isArray(data)) {
             return data;
@@ -24,6 +38,10 @@
         return [];
     }
 
+    /**
+     * Initialises a full CRUD module by wiring all event listeners and fetching the initial list page.
+     * Input: config - configuration object describing endpoints, DOM elements, labels, and callbacks
+     */
     function initCrudModule(config) {
         const state = {
             itemsById: {},

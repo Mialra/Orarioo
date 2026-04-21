@@ -1,3 +1,7 @@
+/**
+ * Client-side field validator: rule primitives, per-field validation, and live-binding helpers.
+ * Exposed as window.OrariooValidators.
+ */
 (function () {
   const root = (window.OrariooValidators = window.OrariooValidators || {});
 
@@ -56,6 +60,12 @@
     },
   };
 
+  /**
+   * Applies or clears the is-invalid class and feedback text on a form input.
+   * Input: input - form input DOM element
+   *        message - error string; empty string clears the error
+   *        feedback - feedback DOM element for error text
+   */
   function setFieldValidity(input, message, feedback) {
     if (!input) {
       return;
@@ -73,6 +83,13 @@
     setFieldValidity(input, "", feedback);
   }
 
+  /**
+   * Evaluates a single rule against a value and returns an error string, array, or empty string.
+   * Input: rule - function, rule object with type/message, or rule object with validator function
+   *        value - current field value
+   *        fieldName - field name string (passed to custom validators)
+   * Output: error string, array of error strings, or empty string on success
+   */
   function resolveRule(rule, value, fieldName) {
     if (typeof rule === "function") {
       return rule(value, fieldName);
@@ -125,6 +142,14 @@
     return "Revisa este campo.";
   }
 
+  /**
+   * Runs an ordered list of rules against one value and returns a validity result.
+   * Input: fieldName - field name string
+   *        value - current field value
+   *        fieldRules - array of rule descriptors
+   *        options - object with optional collectAllErrors boolean
+   * Output: object with valid boolean and error string
+   */
   function validateField(fieldName, value, fieldRules, options) {
     const normalizedRules = Array.isArray(fieldRules) ? fieldRules : [];
     const collectAllErrors = Boolean(options && options.collectAllErrors);
@@ -170,6 +195,12 @@
     };
   }
 
+  /**
+   * Validates all fields in the array against the payload and applies error states to their inputs.
+   * Input: fields - array of field descriptor objects with name, input, feedback, and rules
+   *        payload - object mapping field names to current values
+   * Output: boolean true if all fields passed validation
+   */
   function validateFields(fields, payload) {
     let isValid = true;
 
@@ -208,6 +239,11 @@
     return isValid;
   }
 
+  /**
+   * Attaches a live validation listener to a field's input element.
+   * Input: field - field descriptor object
+   *        valueGetter - optional function() returning the current value; defaults to input.value
+   */
   function bindLiveValidation(field, valueGetter) {
     if (!field || !field.input) {
       return;

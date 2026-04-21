@@ -1,3 +1,8 @@
+"""
+Text normalization and validation helpers used across serializers and views.
+Raises DRF ValidationError with structured error entries on any constraint violation.
+"""
+
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -9,12 +14,20 @@ from common.errors.exceptions import NON_FIELD_ERRORS_KEY, build_error_entry
 
 
 def raise_validation_error(field_name, code, message, *, context=None):
+    """Raise a DRF ValidationError targeting a specific serializer field.
+    Input: field_name - field key in the error dict; code - error code string; message - human-readable description
+    Output: never returns; always raises serializers.ValidationError
+    """
     raise serializers.ValidationError(
         {field_name: [build_error_entry(code, message, context=context)]}
     )
 
 
 def raise_non_field_error(code, message, *, context=None):
+    """Raise a DRF ValidationError not tied to any specific field.
+    Input: code - error code string; message - human-readable description
+    Output: never returns; always raises serializers.ValidationError
+    """
     raise serializers.ValidationError(
         {
             NON_FIELD_ERRORS_KEY: [
@@ -22,6 +35,24 @@ def raise_non_field_error(code, message, *, context=None):
             ]
         }
     )
+
+
+def _check_max_length(normalized, *, field_name, max_length, label):
+    """Raise a validation error if the normalized string exceeds max_length.
+    Input: normalized - already stripped string; field_name, max_length, label - error context
+    Output: None; raises ValidationError when the length constraint is violated
+    """
+    if max_length is not None and len(normalized) > max_length:
+        raise_validation_error(
+            field_name,
+            "MAX_LENGTH_EXCEEDED",
+            f"{label} cannot be longer than {max_length} characters.",
+            context={
+                "field": field_name,
+                "max_length": max_length,
+                "actual_length": len(normalized),
+            },
+        )
 
 
 def validate_and_normalize_required_text(
@@ -32,6 +63,10 @@ def validate_and_normalize_required_text(
     label=None,
     lowercase=False,
 ):
+    """Validate that value is a non-empty string and return it stripped and optionally lowercased.
+    Input: value - raw input; field_name - used in error keys; max_length - optional cap; lowercase - whether to lowercase the result
+    Output: normalized string; raises ValidationError on None, non-string, blank, or length violation
+    """
     label = label or field_name
 
     if value is None:
@@ -58,17 +93,9 @@ def validate_and_normalize_required_text(
             context={"field": field_name},
         )
 
-    if max_length is not None and len(normalized) > max_length:
-        raise_validation_error(
-            field_name,
-            "MAX_LENGTH_EXCEEDED",
-            f"{label} cannot be longer than {max_length} characters.",
-            context={
-                "field": field_name,
-                "max_length": max_length,
-                "actual_length": len(normalized),
-            },
-        )
+    _check_max_length(
+        normalized, field_name=field_name, max_length=max_length, label=label
+    )
 
     return normalized.lower() if lowercase else normalized
 
@@ -81,6 +108,10 @@ def normalize_optional_text(
     label=None,
     lowercase=False,
 ):
+    """Normalize an optional text field, returning an empty string for None or blank inputs.
+    Input: value - raw input (may be None or empty string); field_name - used in error keys; max_length - optional cap; lowercase - whether to lowercase the result
+    Output: stripped (and optionally lowercased) string, or '' if the value is absent or blank
+    """
     label = label or field_name
 
     if value in (None, ""):
@@ -97,22 +128,18 @@ def normalize_optional_text(
     if not normalized:
         return ""
 
-    if max_length is not None and len(normalized) > max_length:
-        raise_validation_error(
-            field_name,
-            "MAX_LENGTH_EXCEEDED",
-            f"{label} cannot be longer than {max_length} characters.",
-            context={
-                "field": field_name,
-                "max_length": max_length,
-                "actual_length": len(normalized),
-            },
-        )
+    _check_max_length(
+        normalized, field_name=field_name, max_length=max_length, label=label
+    )
 
     return normalized.lower() if lowercase else normalized
 
 
 def validate_and_normalize_email(value, *, field_name="email", label="email"):
+    """Validate and normalize an email address: strip, lowercase, and check format.
+    Input: value - raw email string; field_name, label - used in error messages
+    Output: normalized lowercase email string; raises ValidationError on any violation
+    """
     normalized = validate_and_normalize_required_text(
         value,
         field_name=field_name,
@@ -142,6 +169,10 @@ def validate_case_insensitive_unique(
     instance=None,
     label=None,
 ):
+    """Ensure the value does not already exist in the queryset (case-insensitive).
+    Input: value - the normalized value to check; field_name - field key; queryset - base queryset to search; instance - current instance to exclude from the check (for updates)
+    Output: value unchanged; raises ValidationError if a duplicate is found
+    """
     label = label or field_name
 
     conflict_queryset = queryset.filter(**{f"{field_name}__iexact": value})
@@ -160,6 +191,10 @@ def validate_case_insensitive_unique(
 
 
 def normalize_time_preferences(value):
+    """Validate and return a time preferences dict, treating None and '' as empty.
+    Input: value - raw input (expected dict, None, or empty string)
+    Output: dict; raises ValidationError if value is present but not a dict
+    """
     if value in (None, ""):
         return {}
     if not isinstance(value, dict):
@@ -173,6 +208,10 @@ def normalize_time_preferences(value):
 
 
 def collect_invalid_time_preference_entries(preferences, valid_states):
+    """Scan a time preferences dict and collect any invalid keys or state values.
+    Input: preferences - dict of slot keys to state strings; valid_states - set of accepted state values
+    Output: tuple of (invalid_keys list, invalid_states_entries list of dicts)
+    """
     invalid_keys = []
     invalid_states_entries = []
 
@@ -184,3 +223,43 @@ def collect_invalid_time_preference_entries(preferences, valid_states):
             invalid_states_entries.append({"slot": key, "state": state})
 
     return invalid_keys, invalid_states_entries
+
+
+def validate_time_preferences(
+    value,
+    *,
+    valid_states,
+    field_name="time_preferences",
+    require_string_keys=True,
+):
+    """Normalize and validate a time-preferences payload against the allowed states."""
+    normalized = normalize_time_preferences(value)
+    invalid_keys, invalid_values = collect_invalid_time_preference_entries(
+        normalized,
+        valid_states,
+    )
+
+    if require_string_keys and invalid_keys:
+        raise_validation_error(
+            field_name,
+            "INVALID_TIME_PREFERENCE_KEY",
+            "All time preference keys must be strings.",
+            context={
+                "field": field_name,
+                "invalid_keys": invalid_keys,
+            },
+        )
+
+    if invalid_values:
+        raise_validation_error(
+            field_name,
+            "INVALID_TIME_PREFERENCE_STATE",
+            "One or more time preference states are invalid.",
+            context={
+                "field": field_name,
+                "invalid_states": invalid_values,
+                "allowed": sorted(valid_states),
+            },
+        )
+
+    return normalized

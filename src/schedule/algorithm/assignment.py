@@ -1,3 +1,9 @@
+"""CP-SAT session-to-slot assignment solver.
+
+Exposes solve_session_assignment as the single entry point.  All internal
+functions build decision variables, add constraints and extract the solution.
+"""
+
 try:
     from ortools.sat.python import cp_model
 except ModuleNotFoundError:  # pragma: no cover - depends on local Python version
@@ -26,6 +32,22 @@ def solve_session_assignment(
     previous_assignment_by_session=None,
     generation_options=None,
 ):
+    """Assign each session to a slot and classroom using a two-phase CP-SAT solve.
+
+    Phase 1 finds any feasible assignment under hard constraints.
+    Phase 2 optimises soft constraints starting from the feasible hint.
+
+    Input: sessions - list of session dicts; slots - list of slot dicts;
+           classrooms - list of Classroom instances;
+           random_seed - optional integer for reproducibility;
+           fixed_assignments - dict {session_idx: slot_idx} for locked assignments;
+           previous_assignment_by_session - dict {session_idx: {slot_index, classroom_id}}
+               used to build stability objective terms;
+           generation_options - dict with generation parameters
+    Output: tuple (slot_by_session, classroom_by_session) —
+            slot_by_session[i] is the assigned slot index for session i,
+            classroom_by_session[i] is the assigned Classroom instance
+    """
     if cp_model is None:  # pragma: no cover
         raise ScheduleGenerationError(
             "OR-Tools (cp_model) is required for schedule generation and is not available. "
@@ -62,6 +84,13 @@ def _cp_sat_session_assignment(
     previous_assignment_by_session,
     generation_options,
 ):
+    """Run the full two-phase CP-SAT solve and return the assignment.
+    Input: sessions, slots - standard algorithm inputs;
+           compatible_classrooms_by_session - index from _build_compatible_classroom_index;
+           random_seed, fixed_assignments, previous_assignment_by_session, generation_options
+               - forwarded from solve_session_assignment
+    Output: tuple (slot_by_session, classroom_by_session)
+    """
     model = cp_model.CpModel()
     session_count = len(sessions)
     slot_count = len(slots)
@@ -84,7 +113,7 @@ def _cp_sat_session_assignment(
         slot_count=slot_count,
     )
 
-    # Apply fixed assignments (manual change constraints)
+    # Apply fixed assignments (manual change constraints).
     if fixed_assignments:
         for session_idx, slot_idx in fixed_assignments.items():
             if session_idx < 0 or session_idx >= session_count:
@@ -188,7 +217,7 @@ def _cp_sat_session_assignment(
             ],
         )
 
-    # Phase 2: optimize soft constraints, starting from feasible solution.
+    # Phase 2: optimise soft constraints, starting from the feasible solution.
     stability_terms = _build_schedule_stability_terms(
         x=x,
         y=y,
@@ -227,7 +256,7 @@ def _cp_sat_session_assignment(
             slot_count=slot_count,
         )
 
-    # Fallback: keep feasible phase solution if optimization phase times out/fails.
+    # Fallback: keep the feasible phase solution if optimisation times out/fails.
     return _extract_slot_and_classroom_assignment(
         solver=feasible_solver,
         x=x,
@@ -246,6 +275,12 @@ def _build_solver(
     slot_count,
     stop_after_first_solution,
 ):
+    """Create and configure a CP-SAT CpSolver instance.
+    Input: timeout_seconds - maximum wall-clock time; random_seed - optional int;
+           session_count, slot_count - problem dimensions used to set parallelism;
+           stop_after_first_solution - True for the feasibility phase
+    Output: configured CpSolver instance
+    """
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = timeout_seconds
     solver.parameters.log_search_progress = False
@@ -263,6 +298,10 @@ def _build_solver(
 
 
 def _add_solution_hints(*, model, solver, x, y):
+    """Seed the model with the values from a previous solver run as warm-start hints.
+    Input: model - CP-SAT CpModel; solver - solved CpSolver instance; x, y - decision variables
+    Output: None; side-effect: calls model.AddHint for all variables
+    """
     for variable in x.values():
         model.AddHint(variable, solver.Value(variable))
     for variable in y.values():
@@ -270,7 +309,10 @@ def _add_solution_hints(*, model, solver, x, y):
 
 
 def _phase_feasible_timeout(*, total_timeout):
-    # Keep most of the budget for feasibility, but reserve some for soft optimization.
+    """Compute the time budget for the feasibility phase given the total timeout.
+    Input: total_timeout - total allowed seconds as a float
+    Output: float seconds allocated to the feasibility phase
+    """
     if total_timeout >= 120.0:
         return total_timeout - 30.0
     if total_timeout >= 60.0:
@@ -279,7 +321,10 @@ def _phase_feasible_timeout(*, total_timeout):
 
 
 def _cp_sat_timeout_seconds(*, session_count, slot_count):
-    """Calculate timeout based on subproblem size."""
+    """Calculate the total solver timeout based on problem size.
+    Input: session_count - number of sessions; slot_count - number of slots
+    Output: float total timeout in seconds
+    """
     if session_count >= 300 or slot_count >= 45:
         return 600.0
     if session_count >= 150 or slot_count >= 40:
@@ -294,7 +339,10 @@ def _cp_sat_timeout_seconds(*, session_count, slot_count):
 
 
 def _solver_status_name(status):
-    """Return human-readable solver status name."""
+    """Return a human-readable name for a CP-SAT solver status code.
+    Input: status - integer status code from cp_model
+    Output: string status name (e.g. 'FEASIBLE', 'INFEASIBLE')
+    """
     status_map = {
         cp_model.UNKNOWN: "UNKNOWN",
         cp_model.MODEL_INVALID: "MODEL_INVALID",
@@ -308,6 +356,11 @@ def _solver_status_name(status):
 def _build_classroom_slot_decision_variables(
     *, model, compatible_classrooms_by_session, slot_count
 ):
+    """Create binary y[s, p, c] variables: 1 iff session s is in slot p with classroom c.
+    Input: model - CP-SAT CpModel; compatible_classrooms_by_session - compatibility index;
+           slot_count - total number of slots
+    Output: dict {(session_idx, slot_idx, classroom_id): BoolVar}
+    """
     y = {}
     for s_idx, classrooms in compatible_classrooms_by_session.items():
         for p_idx in range(slot_count):
@@ -321,6 +374,11 @@ def _build_classroom_slot_decision_variables(
 def _build_slot_projection_variables(
     *, model, y, compatible_classrooms_by_session, slot_count
 ):
+    """Create binary x[s, p] variables as the projection of y over classrooms.
+    Input: model - CP-SAT CpModel; y - classroom-slot decision variables;
+           compatible_classrooms_by_session - compatibility index; slot_count - total slots
+    Output: dict {(session_idx, slot_idx): BoolVar}
+    """
     x = {}
     for s_idx, classrooms in compatible_classrooms_by_session.items():
         classroom_ids = [classroom.id for classroom in classrooms]
@@ -336,6 +394,11 @@ def _build_slot_projection_variables(
 def _add_exactly_one_slot_and_classroom_constraints(
     *, model, y, compatible_classrooms_by_session, slot_count
 ):
+    """Constrain each session to exactly one (slot, classroom) pair.
+    Input: model - CP-SAT CpModel; y - classroom-slot decision variables;
+           compatible_classrooms_by_session - compatibility index; slot_count - total slots
+    Output: None; side-effect: adds sum == 1 constraints to model
+    """
     for s_idx, classrooms in compatible_classrooms_by_session.items():
         classroom_ids = [classroom.id for classroom in classrooms]
         model.Add(
@@ -349,6 +412,11 @@ def _add_exactly_one_slot_and_classroom_constraints(
 
 
 def _add_classroom_non_overlap_constraints(*, model, y, slots, classrooms):
+    """Prevent the same classroom from being used in two overlapping slots.
+    Input: model - CP-SAT CpModel; y - classroom-slot decision variables;
+           slots - list of slot dicts; classrooms - compatible_classrooms_by_session index
+    Output: None; side-effect: adds at-most-1 constraints per classroom per time interval
+    """
     real_time_intervals = build_real_time_intervals(slots=slots)
     vars_by_classroom_and_slot = {}
 
@@ -370,6 +438,12 @@ def _add_classroom_non_overlap_constraints(*, model, y, slots, classrooms):
 def _add_resource_interval_non_overlap_constraints(
     *, model, x, sessions, slots, resource_key
 ):
+    """Prevent the same teacher or group from occupying two overlapping slots.
+    Input: model - CP-SAT CpModel; x - slot decision variables;
+           sessions - list of session dicts; slots - list of slot dicts;
+           resource_key - 'teacher_id' or 'group_id'
+    Output: None; side-effect: adds at-most-1 constraints per resource per time interval
+    """
     resource_to_sessions = _index_sessions_by_resource(
         sessions=sessions,
         resource_key=resource_key,
@@ -386,6 +460,10 @@ def _add_resource_interval_non_overlap_constraints(
 
 
 def _index_sessions_by_resource(*, sessions, resource_key):
+    """Build an index of resource_id → list of session indices.
+    Input: sessions - list of session dicts; resource_key - 'teacher_id' or 'group_id'
+    Output: dict {resource_id: [session_idx, ...]}
+    """
     resource_to_sessions = {}
     for idx, session in enumerate(sessions):
         resource_id = _session_resource_id(session=session, resource_key=resource_key)
@@ -396,6 +474,10 @@ def _index_sessions_by_resource(*, sessions, resource_key):
 
 
 def _session_resource_id(*, session, resource_key):
+    """Extract the resource id from a session dict for the given resource key.
+    Input: session - session dict; resource_key - 'group_id' or 'teacher_id'
+    Output: resource id, or None if absent
+    """
     if resource_key == "group_id":
         group = session.get("group")
         return getattr(group, "id", None)
@@ -405,6 +487,12 @@ def _session_resource_id(*, session, resource_key):
 def _add_resource_interval_capacity_constraints(
     *, model, x, resource_sessions, real_time_intervals
 ):
+    """Add at-most-1 constraints for a resource across each real-time interval.
+    Input: model - CP-SAT CpModel; x - slot decision variables;
+           resource_sessions - list of session indices for this resource;
+           real_time_intervals - list of interval dicts from build_real_time_intervals
+    Output: None; side-effect: adds constraints to model
+    """
     for interval in real_time_intervals:
         interval_terms = [
             x[(session_idx, slot_idx)]
@@ -424,6 +512,13 @@ def _extract_slot_and_classroom_assignment(
     session_count,
     slot_count,
 ):
+    """Read the solver's variable values and build the result lists.
+    Input: solver - solved CpSolver instance; x, y - decision variables;
+           compatible_classrooms_by_session - compatibility index;
+           session_count, slot_count - problem dimensions
+    Output: tuple (slot_by_session, classroom_by_session);
+            raises ScheduleGenerationError if any session has no assignment
+    """
     slot_by_session = []
     classroom_by_session = []
 
@@ -447,6 +542,11 @@ def _extract_slot_and_classroom_assignment(
 
 
 def _build_compatible_classroom_index(*, sessions, classrooms):
+    """Build the index of compatible classrooms for each session.
+    Input: sessions - list of session dicts; classrooms - list of Classroom instances
+    Output: dict {session_idx: [Classroom, ...]} with at least one entry per session;
+            raises ScheduleGenerationError if a session has no compatible classroom
+    """
     compatible_classrooms_by_session = {}
     for session_index, session in enumerate(sessions):
         allowed_classroom_ids = session.get("allowed_classroom_ids")
@@ -459,7 +559,7 @@ def _build_compatible_classroom_index(*, sessions, classrooms):
             )
         ]
         # If user configured allowed classrooms and any of them are shared,
-        # keep only shared options to prefer specialized shared rooms.
+        # keep only shared options to prefer specialised shared rooms.
         if allowed_classroom_ids:
             shared_allowed = [
                 classroom
@@ -495,11 +595,13 @@ def _build_compatible_classroom_index(*, sessions, classrooms):
 
 
 def _build_schedule_stability_terms(*, x, y, previous_assignment_by_session):
-    """
-    Build soft terms that reward keeping sessions in their original slot/classroom.
+    """Build soft terms that reward keeping sessions in their original slot and classroom.
 
-    Higher reward on slot stability minimises timetable perturbation after a manual
+    Higher slot-stability weight minimises timetable perturbation after a manual
     change; classroom stability acts as a secondary tie-breaker.
+    Input: x, y - decision variables; previous_assignment_by_session - dict
+           {session_idx: {slot_index, classroom_id}} or None
+    Output: list of weighted CP-SAT expressions; empty list if no previous assignment given
     """
     if not previous_assignment_by_session:
         return []
@@ -528,6 +630,10 @@ def _build_schedule_stability_terms(*, x, y, previous_assignment_by_session):
 
 
 def _is_classroom_compatible(*, session, classroom):
+    """Return True if a classroom is in the session's allowed_classroom_ids (or no restriction set).
+    Input: session - session dict; classroom - Classroom instance
+    Output: bool
+    """
     allowed_ids = session.get("allowed_classroom_ids")
     if not allowed_ids:
         return True
@@ -535,6 +641,11 @@ def _is_classroom_compatible(*, session, classroom):
 
 
 def _find_group_default_classroom(*, session, classrooms):
+    """Return the classroom named 'Aula <group_name>' if it exists, else None.
+    Input: session - session dict with optional 'group' key;
+           classrooms - list of Classroom instances
+    Output: matching Classroom instance, or None
+    """
     group = session.get("group")
     group_name = getattr(group, "name", "").strip()
     if not group_name:
@@ -549,6 +660,10 @@ def _find_group_default_classroom(*, session, classrooms):
 
 
 def _classroom_compatibility_error(*, session):
+    """Build the error message for when no classroom is compatible with a session.
+    Input: session - session dict
+    Output: error message string
+    """
     subject = session.get("subject")
     subject_name = getattr(subject, "name", "Unknown subject")
     return (

@@ -1,3 +1,9 @@
+"""Soft constraints (objective terms) for the CP-SAT schedule optimisation model.
+
+All functions in this module build weighted objective terms that are maximised
+after a feasible solution has been found.  They never make the model infeasible.
+"""
+
 from schedule.algorithm.constraints.hard import (
     session_preference_state,
     teacher_preference_state,
@@ -26,7 +32,12 @@ TEACHER_GAP_PENALTY_WEIGHT = 4
 
 
 def apply_soft_constraints(*, model, x, sessions, slots, extra_objective_terms=None):
-    """Apply optional optimization goals without breaking hard constraints."""
+    """Collect all soft objective terms and set the model's maximisation objective.
+    Input: model - CP-SAT CpModel; x - slot decision variables;
+           sessions - list of session dicts; slots - list of slot dicts;
+           extra_objective_terms - optional list of additional weighted CP-SAT expressions
+    Output: None; side-effect: calls model.Maximize with the combined objective
+    """
     objective_terms = []
     objective_terms.extend(
         _tc_distribution_terms(model=model, x=x, sessions=sessions, slots=slots)
@@ -53,7 +64,11 @@ def apply_soft_constraints(*, model, x, sessions, slots, extra_objective_terms=N
 
 
 def _tc_distribution_terms(*, model, x, sessions, slots):
-    """Optimize TC coverage and avoid concentration patterns."""
+    """Build objective terms that optimise TC session coverage and spread.
+    Input: model - CP-SAT CpModel; x - slot decision variables;
+           sessions - list of session dicts; slots - list of slot dicts
+    Output: list of weighted CP-SAT expressions; empty list if no TC sessions exist
+    """
     tc_session_indices = _tc_session_indices(sessions=sessions)
     if not tc_session_indices:
         return []
@@ -99,7 +114,12 @@ def _tc_distribution_terms(*, model, x, sessions, slots):
 def _tc_real_interval_coverage_terms(
     *, model, x, sessions, slots, tc_session_indices, tc_candidate_slots
 ):
-    """Reward covering distinct real-time intervals before stacking TC sessions."""
+    """Reward covering distinct real-time intervals before stacking TC sessions.
+    Input: model - CP-SAT CpModel; x - slot decision variables;
+           sessions, slots - standard inputs; tc_session_indices - list of TC session indices;
+           tc_candidate_slots - list of candidate slot indices for TC
+    Output: list of weighted CP-SAT expressions
+    """
     candidate_intervals = _tc_candidate_real_intervals(
         slots=slots,
         candidate_slot_indices=tc_candidate_slots,
@@ -138,6 +158,11 @@ def _tc_real_interval_coverage_terms(
 
 
 def _tc_teacher_day_spread_terms(*, model, x, sessions, slots, tc_session_indices):
+    """Reward distributing each teacher's TC sessions across different weekdays.
+    Input: model - CP-SAT CpModel; x - slot decision variables;
+           sessions, slots - standard inputs; tc_session_indices - list of TC session indices
+    Output: list of weighted CP-SAT BoolVar expressions
+    """
     slots_by_day = _build_slots_by_day(slots=slots)
     tc_by_teacher = _tc_sessions_by_teacher(
         sessions=sessions,
@@ -165,6 +190,11 @@ def _tc_teacher_day_spread_terms(*, model, x, sessions, slots, tc_session_indice
 def _tc_teacher_consecutive_penalty_terms(
     *, model, x, sessions, slots, tc_session_indices
 ):
+    """Penalise consecutive TC sessions for the same teacher on the same day.
+    Input: model - CP-SAT CpModel; x - slot decision variables;
+           sessions, slots - standard inputs; tc_session_indices - list of TC session indices
+    Output: list of negative weighted CP-SAT BoolVar expressions (penalties)
+    """
     slots_by_day = _build_slots_by_day(slots=slots)
     tc_by_teacher = _tc_sessions_by_teacher(
         sessions=sessions,
@@ -211,6 +241,11 @@ def _tc_teacher_consecutive_penalty_terms(
 
 
 def _tc_candidate_slot_indices(*, sessions, slots, tc_session_indices):
+    """Return the sorted list of slot indices that TC sessions are allowed to use.
+    Input: sessions - list of session dicts; slots - list of slot dicts;
+           tc_session_indices - list of TC session indices
+    Output: sorted list of slot indices available to TC sessions (after stage and preference filtering)
+    """
     allowed_slots_by_stage = build_stage_allowed_slot_index(slots=slots)
     slot_preference_by_idx = build_slot_preference_index(slots=slots)
 
@@ -245,6 +280,10 @@ def _tc_candidate_slot_indices(*, sessions, slots, tc_session_indices):
 
 
 def _subject_time_preference_terms(*, x, sessions, slots):
+    """Build objective terms for subject time preferences (PREFER_YES / PREFER_NO).
+    Input: x - slot decision variables; sessions - list of session dicts; slots - list of slot dicts
+    Output: list of weighted CP-SAT expressions
+    """
     return _preference_terms(
         x=x,
         sessions=sessions,
@@ -258,6 +297,10 @@ def _subject_time_preference_terms(*, x, sessions, slots):
 
 
 def _teacher_time_preference_terms(*, x, sessions, slots):
+    """Build objective terms for teacher time preferences (PREFER_YES / PREFER_NO).
+    Input: x - slot decision variables; sessions - list of session dicts; slots - list of slot dicts
+    Output: list of weighted CP-SAT expressions
+    """
     return _preference_terms(
         x=x,
         sessions=sessions,
@@ -281,6 +324,13 @@ def _preference_terms(
     prefer_yes_weight,
     prefer_no_weight,
 ):
+    """Build weighted objective terms from time-preference states for all sessions and slots.
+    Input: x - slot decision variables; sessions - list of session dicts; slots - list of slot dicts;
+           state_resolver - callable(session, slot_preference_key) → state;
+           prefer_yes_state, prefer_no_state - state values to reward/penalise;
+           prefer_yes_weight, prefer_no_weight - corresponding integer weights
+    Output: list of weighted CP-SAT expressions
+    """
     slot_preference_by_idx = build_slot_preference_index(slots=slots)
     weighted_terms = []
 
@@ -299,12 +349,13 @@ def _preference_terms(
 
 
 def _subject_day_spread_terms(*, model, x, sessions, slots):
-    """
-    Reward distributing sessions of the same subject across different weekdays.
+    """Reward distributing sessions of the same subject across different weekdays.
 
     For each subject with more than one session, a bonus is added for each
-    distinct weekday that has at least one session assigned to it. This
-    encourages the solver to avoid concentrating all sessions in a few days.
+    distinct weekday that has at least one session assigned to it.
+    Input: model - CP-SAT CpModel; x - slot decision variables;
+           sessions - list of session dicts; slots - list of slot dicts
+    Output: list of weighted CP-SAT BoolVar expressions
     """
     slots_by_day = _build_slots_by_day(slots=slots)
 
@@ -334,13 +385,14 @@ def _subject_day_spread_terms(*, model, x, sessions, slots):
 
 
 def _teacher_gap_minimization_terms(*, model, x, sessions, slots):
-    """
-    Penalize intra-day gaps in a teacher's schedule (F-29).
+    """Penalise intra-day gaps in a teacher's schedule (F-29).
 
-    A gap occurs when a teacher has sessions assigned both before and after a
-    particular time slot on the same day, but nothing in that slot itself.
-    Only inner slots (not the first or last slot of the day) are penalised,
-    so free time at the edges of a teacher's workday is not counted.
+    A gap occurs when a teacher has sessions both before and after a slot on the
+    same day but nothing in that slot itself.  Only inner slots are penalised;
+    free time at the edges of a teacher's workday is not counted.
+    Input: model - CP-SAT CpModel; x - slot decision variables;
+           sessions - list of session dicts; slots - list of slot dicts
+    Output: list of negative weighted CP-SAT BoolVar expressions (penalties)
     """
     slots_by_day = _build_slots_by_day(slots=slots)
 
@@ -359,7 +411,6 @@ def _teacher_gap_minimization_terms(*, model, x, sessions, slots):
             if len(day_slot_list) < 3:
                 continue
 
-            # Check each inner slot (neither first nor last of the day).
             for inner_pos, p_i in enumerate(day_slot_list[1:-1], start=1):
                 before_slots = day_slot_list[:inner_pos]
                 after_slots = day_slot_list[inner_pos + 1 :]
@@ -398,6 +449,10 @@ def _teacher_gap_minimization_terms(*, model, x, sessions, slots):
 
 
 def _tc_session_indices(*, sessions):
+    """Return the indices of sessions whose subject type is TC.
+    Input: sessions - list of session dicts
+    Output: list of integer session indices
+    """
     tc_indices = []
     for s_idx, session in enumerate(sessions):
         subject = session.get("subject")
@@ -407,6 +462,10 @@ def _tc_session_indices(*, sessions):
 
 
 def _tc_sessions_by_teacher(*, sessions, tc_session_indices):
+    """Group TC session indices by teacher id.
+    Input: sessions - list of session dicts; tc_session_indices - list of TC session indices
+    Output: dict {teacher_id: [session_idx, ...]}
+    """
     sessions_by_teacher = {}
     for s_idx in tc_session_indices:
         teacher_id = sessions[s_idx].get("teacher_id")
@@ -417,6 +476,10 @@ def _tc_sessions_by_teacher(*, sessions, tc_session_indices):
 
 
 def _tc_candidate_real_intervals(*, slots, candidate_slot_indices):
+    """Return the real-time intervals covering the given TC candidate slot indices.
+    Input: slots - full list of slot dicts; candidate_slot_indices - list of slot indices
+    Output: list of interval dicts from build_real_time_intervals
+    """
     return build_real_time_intervals(
         slots=slots,
         slot_indices=candidate_slot_indices,
@@ -424,6 +487,10 @@ def _tc_candidate_real_intervals(*, slots, candidate_slot_indices):
 
 
 def _build_slots_by_day(*, slots):
+    """Group slot indices by day index, sorted by start time within each day.
+    Input: slots - list of slot dicts
+    Output: dict {day_idx: [slot_idx, ...]} sorted by slot start time
+    """
     slot_day_index = build_slot_day_index(slots=slots)
     slots_by_day = {}
     for slot_idx, day_idx in slot_day_index.items():
@@ -434,5 +501,9 @@ def _build_slots_by_day(*, slots):
 
 
 def _bind_has_any(*, model, expr, bool_var):
+    """Link a BoolVar to whether a linear expression is >= 1.
+    Input: model - CP-SAT CpModel; expr - linear CP-SAT expression; bool_var - BoolVar to bind
+    Output: None; side-effect: adds two enforcement constraints to model
+    """
     model.Add(expr >= 1).OnlyEnforceIf(bool_var)
     model.Add(expr == 0).OnlyEnforceIf(bool_var.Not())

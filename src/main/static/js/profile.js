@@ -1,3 +1,6 @@
+/**
+ * Profile page: personal data editing, password change, data export, and account deletion.
+ */
 (function () {
   const personalForm = document.getElementById("profile-personal-form");
   const passwordForm = document.getElementById("profile-password-form");
@@ -206,20 +209,13 @@
       return null;
     }
 
-    const response = await window.orariooAuth.apiFetch("/api/users/me/", {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
+    try {
+      return await window.orariooAuth.fetchCurrentUser();
+    } catch (_error) {
       window.orariooAuth.clearAuthSession();
       window.location.assign("/sign-in/");
       return null;
     }
-
-    return response.json();
   }
 
   function renderProfile(userData) {
@@ -369,7 +365,6 @@
       { name: "password_confirm", input: confirmPasswordEl, feedback: confirmPasswordErrorEl },
     ];
 
-    // Validar campos requeridos
     if (!currentPassword) {
       window.OrariooErrorHandler.applyFormErrors([fields[0]], {
         current_password: [window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" })],
@@ -377,7 +372,6 @@
       return;
     }
 
-    // Validar nueva contraseña
     if (!newPassword) {
       window.OrariooErrorHandler.applyFormErrors([fields[1]], {
         new_password: [window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" })],
@@ -402,7 +396,6 @@
       return;
     }
 
-    // Validar confirmación de contraseña
     if (!passwordConfirm) {
       window.OrariooErrorHandler.applyFormErrors([fields[2]], {
         password_confirm: [window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" })],

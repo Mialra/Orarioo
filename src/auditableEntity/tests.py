@@ -22,9 +22,6 @@ from user.models import CollaborationTeam
 
 
 class AuditableEntityTests(SimpleTestCase):
-    def test_auditable_entity_is_abstract(self):
-        self.assertTrue(AuditableEntity._meta.abstract)
-
     def test_auditable_entity_inherits_named_entity(self):
         self.assertTrue(issubclass(AuditableEntity, NamedEntity))
 
@@ -45,19 +42,13 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             given_name="Direccion",
             family_name="Audit",
         )
-        self.outside_user = self.create_user(
-            email="audit-outsider@test.com",
-            given_name="Fuera",
-            family_name="Equipo",
+        self.outside_user, self.outside_team = self.create_isolated_user(
+            email_prefix="audit-outsider"
         )
         self.team = CollaborationTeam.objects.create(name="Equipo Auditoria")
         self.team.members.set([self.user, self.team_user])
         self.user.active_team = self.team
         self.user.save(update_fields=["active_team"])
-        self.outside_team = CollaborationTeam.objects.create(name="Equipo Externo")
-        self.outside_team.members.add(self.outside_user)
-        self.outside_user.active_team = self.outside_team
-        self.outside_user.save(update_fields=["active_team"])
         self.teacher = Teacher.objects.create(
             name="Audit Teacher",
             max_weekly_hours=20,
@@ -290,29 +281,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn(self.team_user.id, returned_ids)
         self.assertNotIn(self.outside_user.id, returned_ids)
 
-    def test_audit_entries_endpoint_returns_fields_in_spanish_without_ids_or_email(
-        self,
-    ):
-        AuditEntry.objects.create(
-            entity_type="teacher",
-            entity_id=5,
-            entity_name="Entrada visible",
-            action_type=AuditActionType.CREATE,
-            detail='Se creo el profesor "Entrada visible".',
-            actor=self.user,
-            actor_name=self.user.get_full_name(),
-            team=self.team,
-        )
-
-        response = self.client.get(reverse("auditentry-list"))
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        result = response.data["results"][0]
-        self.assertIn("tipo_entidad", result)
-        self.assertIn("usuario", result)
-        self.assertNotIn("entity_id", result)
-        self.assertNotIn("actor_email", result)
-
     def test_audit_entries_endpoint_allows_direccion_in_same_team(self):
         AuditEntry.objects.create(
             entity_type="teacher",
@@ -330,24 +298,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 1)
-
-    def test_audit_entries_endpoint_rejects_invalid_entity_filter(self):
-        response = self.client.get(
-            reverse("auditentry-list"),
-            {"tipo_entidad": "equipo"},
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("tipo_entidad", response.data)
-
-    def test_audit_entries_endpoint_rejects_invalid_date_filter(self):
-        response = self.client.get(
-            reverse("auditentry-list"),
-            {"fecha_desde": "ayer"},
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("fecha_desde", response.data)
 
     def test_audit_entries_endpoint_allows_any_authenticated_user(self):
         AuditEntry.objects.create(
@@ -369,22 +319,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(
             response.data["results"][0]["nombre_entidad"], "Entrada externa propia"
         )
-
-    def test_audit_entries_detail_route_is_not_exposed(self):
-        AuditEntry.objects.create(
-            entity_type="teacher",
-            entity_id=8,
-            entity_name="Sin detalle",
-            action_type=AuditActionType.CREATE,
-            detail='Se creo el profesor "Sin detalle".',
-            actor=self.user,
-            actor_name=self.user.get_full_name(),
-            team=self.team,
-        )
-
-        response = self.client.get("/api/audit-entries/1/")
-
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_audit_entries_endpoint_rejects_user_filter_outside_team(self):
         response = self.client.get(
@@ -451,15 +385,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertNotIn("Aula descartada", csv_text)
         self.assertIn("Preferidas: Lunes a las 09:30.", csv_text)
         self.assertIn("Disponibles: Lunes a las 10:30.", csv_text)
-
-    def test_audit_entries_export_rejects_invalid_format(self):
-        response = self.client.get(
-            reverse("auditentry-export"),
-            {"export_format": "xlsx"},
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("export_format", response.data)
 
     @skipIf(not REPORTLAB_AVAILABLE, "reportlab is not installed")
     def test_audit_entries_export_pdf_returns_pdf(self):

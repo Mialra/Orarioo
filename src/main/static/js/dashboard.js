@@ -1,3 +1,6 @@
+/**
+ * Dashboard page: authentication guard, team management, and invitation handling.
+ */
 (function () {
     const logoutButton = document.getElementById("logout-button");
     const avatar = document.getElementById("dashboard-user-initials");
@@ -27,6 +30,7 @@
 
     let profileUserData = null;
     let invitationsCache = [];
+    let invitationsLoaded = false;
 
     const createTeamModal =
         createTeamModalElement && window.bootstrap
@@ -45,6 +49,11 @@
         window.lucide.createIcons();
     }
 
+    /**
+     * Returns up to two uppercase initials from a user's given/family name, or email initial.
+     * Input: userData - user profile object with given_name, family_name, and email fields
+     * Output: one or two character initials string
+     */
     function getInitials(userData) {
         const givenName = (userData && userData.given_name) || "";
         const familyName = (userData && userData.family_name) || "";
@@ -60,6 +69,10 @@
         return fallback.trim().charAt(0).toUpperCase() || "US";
     }
 
+    /**
+     * Renders the team-switcher dropdown and sets the active team name in the navbar.
+     * Input: userData - user profile object with collaboration_teams and active_team fields
+     */
     function renderTeamMenu(userData) {
         if (!teamSwitchList || !currentTeamName) {
             return;
@@ -113,6 +126,12 @@
         }
     }
 
+    /**
+     * Extracts a localised message string from an API error payload.
+     * Input: payload - API error response body
+     *        fallbackMessage - string to use when no specific message is available
+     * Output: localised error message string
+     */
     function normalizeApiMessage(payload, fallbackMessage) {
         if (errorHandler && typeof errorHandler.parseApiError === "function") {
             return errorHandler.parseApiError(payload, {
@@ -123,6 +142,12 @@
         return fallbackMessage;
     }
 
+    /**
+     * Builds an Error with a localised message and attaches the original payload for debugging.
+     * Input: payload - API error response body
+     *        fallbackMessage - default message if payload has no specific error
+     * Output: Error instance with message and payload properties
+     */
     function buildHandledError(payload, fallbackMessage) {
         const message = normalizeApiMessage(payload, fallbackMessage);
         const error = new Error(message);
@@ -130,6 +155,28 @@
         return error;
     }
 
+    /**
+     * Builds the invitations endpoint URL with optional lightweight query parameters.
+     * Input: options - object with optional status and summary strings
+     * Output: string API path with query string
+     */
+    function buildInvitationsUrl(options) {
+        const url = new URL("/api/collaboration-teams/invitations/", window.location.origin);
+        const config = options || {};
+        if (config.status) {
+            url.searchParams.set("status", config.status);
+        }
+        if (config.summary) {
+            url.searchParams.set("summary", config.summary);
+        }
+        return url.pathname + url.search;
+    }
+
+    /**
+     * Calls the team creation endpoint and stores refreshed auth tokens on success.
+     * Input: teamName - string name for the new collaboration team
+     * Output: API response payload; throws a handled Error on failure
+     */
     async function createCollaborationTeam(teamName) {
         const response = await window.orariooAuth.apiFetch("/api/collaboration-teams/create/", {
             method: "POST",
@@ -151,6 +198,12 @@
         return payload;
     }
 
+    /**
+     * Sends a team invitation to the given email address.
+     * Input: email - invitee email string
+     *        teamId - optional numeric team ID to invite into
+     * Output: API response payload; throws a handled Error on failure
+     */
     async function inviteMemberByEmail(email, teamId) {
         const requestData = { email: email };
         if (teamId) {
@@ -176,8 +229,42 @@
         return payload;
     }
 
+    /**
+     * Loads pending invitations and updates invitationsCache and the badge count.
+     * Output: array of invitation objects; throws a handled Error on failure
+     */
+    async function fetchInvitationCount() {
+        const response = await window.orariooAuth.apiFetch(buildInvitationsUrl({
+            status: "pending",
+            summary: "count",
+        }), {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        });
+        const payload = await response.json().catch(function () {
+            return null;
+        });
+        if (!response.ok) {
+            throw buildHandledError(payload, "No se pudieron cargar las invitaciones.");
+        }
+
+        const count = payload && typeof payload.count === "number"
+            ? payload.count
+            : payload && typeof payload.pending_count === "number"
+                ? payload.pending_count
+                : 0;
+        renderInvitationCount(count);
+        return count;
+    }
+
+    /**
+     * Loads pending invitations and updates invitationsCache and the badge count.
+     * Output: array of pending invitation objects; throws a handled Error on failure
+     */
     async function fetchInvitations() {
-        const response = await window.orariooAuth.apiFetch("/api/collaboration-teams/invitations/", {
+        const response = await window.orariooAuth.apiFetch(buildInvitationsUrl({ status: "pending" }), {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
@@ -190,10 +277,19 @@
             throw buildHandledError(payload, "No se pudieron cargar las invitaciones.");
         }
         invitationsCache = payload && payload.results ? payload.results : [];
-        renderInvitationCount(payload && typeof payload.pending_count === "number" ? payload.pending_count : 0);
+        invitationsLoaded = true;
+        renderInvitationCount(payload && typeof payload.pending_count === "number"
+            ? payload.pending_count
+            : invitationsCache.length);
         return invitationsCache;
     }
 
+    /**
+     * Accepts or rejects a specific team invitation.
+     * Input: invitationId - numeric invitation identifier
+     *        action - "accept" or "reject" string
+     * Output: API response payload; throws a handled Error on failure
+     */
     async function respondInvitation(invitationId, action) {
         const response = await window.orariooAuth.apiFetch(
             "/api/collaboration-teams/invitations/" + String(invitationId) + "/respond/",
@@ -214,6 +310,10 @@
         return payload;
     }
 
+    /**
+     * Leaves the current active team, refreshes auth tokens, and reloads the page.
+     * Output: throws a handled Error on failure
+     */
     async function leaveCurrentTeam() {
         const activeTeamId = profileUserData && profileUserData.active_team ? profileUserData.active_team.id : null;
         if (!activeTeamId) {
@@ -237,6 +337,10 @@
         window.location.reload();
     }
 
+    /**
+     * Updates the pending invitations badge element with the given count.
+     * Input: pendingCount - number of pending invitations
+     */
     function renderInvitationCount(pendingCount) {
         if (!pendingInvitationsBadge) {
             return;
@@ -246,15 +350,17 @@
         pendingInvitationsBadge.classList.toggle("text-bg-primary", pendingCount > 0);
     }
 
+    /**
+     * Renders a list of pending invitations with accept/reject buttons into the invitations modal.
+     * Input: items - array of invitation objects with status, team, and invited_by fields
+     */
     function renderInvitationsList(items) {
         if (!invitationsList || !invitationsEmpty) {
             return;
         }
 
         invitationsList.innerHTML = "";
-        const pendingItems = items.filter(function (item) {
-            return item.status === "pending";
-        });
+        const pendingItems = Array.isArray(items) ? items : [];
 
         invitationsEmpty.classList.toggle("d-none", pendingItems.length > 0);
 
@@ -323,6 +429,11 @@
         });
     }
 
+    /**
+     * Switches the active collaboration team, refreshes auth tokens, and reloads the page.
+     * Input: teamId - numeric ID of the team to activate
+     * Output: throws a handled Error on failure
+     */
     async function setActiveTeam(teamId) {
         if (!teamId) {
             return;
@@ -348,20 +459,12 @@
         window.location.reload();
     }
 
+    /**
+     * Fetches the current user profile, updates the auth session, and refreshes the team menu.
+     * Output: user profile object; throws an Error on failure
+     */
     async function refreshProfileData() {
-        const response = await window.orariooAuth.apiFetch("/api/users/me/", {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error("No se pudo cargar el perfil.");
-        }
-
-        profileUserData = await response.json();
-        window.orariooAuth.setAuthSession({ user: profileUserData });
+        profileUserData = await window.orariooAuth.fetchCurrentUser();
         if (avatar) {
             avatar.textContent = getInitials(profileUserData);
         }
@@ -369,6 +472,10 @@
         return profileUserData;
     }
 
+    /**
+     * Verifies session validity, auto-creates a team if none exist, and loads invitations.
+     * Redirects to sign-in on authentication failure.
+     */
     async function ensureAuthenticated() {
         const tokens = window.orariooAuth.getTokens();
         if (!tokens.access && !tokens.refresh) {
@@ -400,7 +507,7 @@
         }
 
         try {
-            await fetchInvitations();
+            await fetchInvitationCount();
         } catch (error) {
             // Invitation loading is secondary and must not trigger forced logout.
             renderInvitationCount(0);
@@ -408,6 +515,9 @@
         }
     }
 
+    /**
+     * Calls the logout endpoint, clears the local auth session, and redirects to sign-in.
+     */
     async function logout() {
         const tokens = window.orariooAuth.getTokens();
 
@@ -527,7 +637,11 @@
 
     if (viewPendingInvitationsButton) {
         viewPendingInvitationsButton.addEventListener("click", function () {
-            fetchInvitations()
+            const loadPromise = invitationsLoaded
+                ? Promise.resolve(invitationsCache)
+                : fetchInvitations();
+
+            loadPromise
                 .then(function (items) {
                     renderInvitationsList(items);
                     if (invitationsModal) {
