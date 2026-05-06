@@ -7,12 +7,18 @@ Dataset target:
 - 1º a 6º de Primaria
 - 1º a 4º de ESO
 - One group per year (no A/B split)
+
+Soft-constraint coverage designed into this dataset:
+- Teacher preferences: mañaneros fuertes, tardes fuertes, sin prefs, mix PREFER_YES/PREFER_NO
+- Subject preferences: cognitivas de mañana, EF/Música de mediodía, tarde para arte
+- Gap minimization: Rubén (EF) enseña 13 grupos con unavailabilities → candidatos a huecos
+- Subject day spread: Lengua y Matemáticas con 5-6 sesiones/semana
+- TC distribution: 13 grupos con tutoría repartida entre tutores y orientación
 """
 
 import os
 import sys
 
-# Add the src directory to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
@@ -25,10 +31,8 @@ django.setup()
 # NOTE: These imports must come after django.setup() - ignore E402
 from django.contrib.auth import get_user_model  # noqa: E402
 
-from auditableEntity.audit import ( # noqa: E402
-    AUDITABLE_ENTITY_TYPES,  # noqa: E402
-    suppress_audit_events, # noqa: E402
-)
+from auditableEntity.audit import AUDITABLE_ENTITY_TYPES  # noqa: E402
+from auditableEntity.audit import suppress_audit_events  # noqa: E402
 from auditableEntity.models import AuditActionType, AuditEntry  # noqa: E402
 from classroom.models import Classroom  # noqa: E402
 from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
@@ -47,7 +51,15 @@ from user.models import CollaborationTeam  # noqa: E402
 User = get_user_model()
 
 DAY_CODES = ["MON", "TUE", "WED", "THU", "FRI"]
-SLOT_TIMES = ["08:30", "09:30", "10:30", "12:00", "13:00", "14:00"]
+
+# Slot start times matching STAGE_SLOT_WINDOWS in slots.py (non-recess slots only).
+# Preference keys are built as "DAY_HH:MM", e.g. "MON_09:00".
+#   PRESCHOOL  → 09:00-14:00, breaks 10:30-11:00 and 13:30-14:00
+#   PRIMARY    → 09:00-14:00, break 11:30-12:00
+#   SECONDARY  → 08:00-14:30, break 11:00-11:30
+PRESCHOOL_SLOT_TIMES = ["09:00", "10:00", "11:00", "12:00", "13:00"]
+PRIMARY_SLOT_TIMES = ["09:00", "10:00", "11:00", "12:00", "13:00"]
+SECONDARY_SLOT_TIMES = ["08:00", "09:00", "10:00", "11:30", "12:30", "13:30"]
 
 
 def build_time_preferences(*, unavailable=None, prefer_yes=None, prefer_no=None):
@@ -56,12 +68,13 @@ def build_time_preferences(*, unavailable=None, prefer_yes=None, prefer_no=None)
     prefer_no = prefer_no or []
 
     preferences = {}
-    for key in unavailable:
-        preferences[key] = TeacherTimePreferenceState.UNAVAILABLE
-    for key in prefer_yes:
-        preferences[key] = TeacherTimePreferenceState.PREFER_YES
     for key in prefer_no:
         preferences[key] = TeacherTimePreferenceState.PREFER_NO
+    for key in prefer_yes:
+        preferences[key] = TeacherTimePreferenceState.PREFER_YES
+    # Unavailable written last so it always wins over any preference on the same key.
+    for key in unavailable:
+        preferences[key] = TeacherTimePreferenceState.UNAVAILABLE
     return preferences
 
 
@@ -73,12 +86,12 @@ def build_subject_time_preferences(
     prefer_no = prefer_no or []
 
     preferences = {}
-    for key in unavailable:
-        preferences[key] = SubjectTimePreferenceState.UNAVAILABLE
-    for key in prefer_yes:
-        preferences[key] = SubjectTimePreferenceState.PREFER_YES
     for key in prefer_no:
         preferences[key] = SubjectTimePreferenceState.PREFER_NO
+    for key in prefer_yes:
+        preferences[key] = SubjectTimePreferenceState.PREFER_YES
+    for key in unavailable:
+        preferences[key] = SubjectTimePreferenceState.UNAVAILABLE
     return preferences
 
 
@@ -107,12 +120,11 @@ def clear_existing_data():
 
 
 def create_users():
-    """Create test users"""
+    """Create test users and configure stage time windows."""
     print("\n📝 Creating users...")
 
     users = []
 
-    # Create superuser for timetable generation ownership.
     admin = User.objects.create_superuser(
         email="admin@test.com",
         password="admin123",
@@ -122,7 +134,6 @@ def create_users():
     users.append(admin)
     print(f"  ✓ Created superuser: {admin.email}")
 
-    # Additional users for audit/review flow.
     collaboration_data = [
         ("direccion.academica@test.com", "María", "García López"),
         ("jefatura.estudios@test.com", "Juan", "Martínez Ruiz"),
@@ -144,160 +155,269 @@ def create_users():
         user.active_team = admin_team
         user.save(update_fields=["active_team"])
 
+    # Set default stage time windows matching the onboarding defaults (STAGE_SLOT_WINDOWS).
+    admin_team.schedule_config = {
+        "PRESCHOOL": {
+            "start_time": "09:00",
+            "end_time": "14:00",
+            "breaks": [
+                {"start": "10:30", "end": "11:00"},
+                {"start": "13:30", "end": "14:00"},
+            ],
+            "session_duration": 60,
+        },
+        "PRIMARY": {
+            "start_time": "09:00",
+            "end_time": "14:00",
+            "breaks": [{"start": "11:30", "end": "12:00"}],
+            "session_duration": 60,
+        },
+        "SECONDARY": {
+            "start_time": "08:00",
+            "end_time": "14:30",
+            "breaks": [{"start": "11:00", "end": "11:30"}],
+            "session_duration": 60,
+        },
+    }
+    admin_team.save(update_fields=["schedule_config"])
+
     print(f"  ✓ Created collaboration team for {admin.email}: {admin_team.name}")
 
     return users, admin_team
 
 
 def create_teachers(team):
-    """Create realistic teacher catalog with availability constraints."""
+    """Create realistic teacher catalog with varied preference patterns.
+
+    Preference profiles for soft-constraint coverage:
+      - Mañaneros fuertes (Infantil, Pri 1-2): PREFER_YES 09:00+10:00, PREFER_NO tarde
+      - Tardes fuertes (Pri 3-4): PREFER_YES 12:00+13:00, PREFER_NO 09:00 → conflicto
+        con asignaturas cognitivas de mañana (trade-off para el optimizador)
+      - Sin preferencias (Pri 5-6, Lengua ESO, Sociales ESO, FQ ESO): baseline neutro,
+        puro gap minimization
+      - Mix PREFER_YES primeras + PREFER_NO última (Inglés, Mates ESO): señal fuerte
+      - Unavailabilities estratégicas (EF, Inglés 1-2): hard + soft combinadas
+    """
     print("\n👨‍🏫 Creating teachers...")
 
-    early_slots = slot_keys(["MON", "TUE", "WED", "THU", "FRI"], ["08:30", "09:30"])
-    last_slot = slot_keys(DAY_CODES, ["14:00"])
-
     teachers_data = [
+        # ── Infantil tutors: mañaneros fuertes ──────────────────────────────
         (
             "infantil_1",
             "Ana Morales",
             30,
-            build_time_preferences(prefer_yes=early_slots[:5]),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["09:00", "10:00"]),
+                prefer_no=slot_keys(DAY_CODES, ["12:00", "13:00"]),
+            ),
         ),
         (
             "infantil_2",
             "Marta Gil",
             30,
-            build_time_preferences(prefer_yes=early_slots[:5]),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["09:00", "10:00"]),
+                prefer_no=slot_keys(DAY_CODES, ["12:00", "13:00"]),
+            ),
         ),
         (
             "infantil_3",
-            "Lucia Rojas",
+            "Lucía Rojas",
             30,
-            build_time_preferences(prefer_yes=early_slots[:5]),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["09:00", "10:00"]),
+                prefer_no=slot_keys(DAY_CODES, ["12:00", "13:00"]),
+            ),
         ),
+        # ── Primaria 1º-2º: mañaneros fuertes ───────────────────────────────
         (
             "pri_1",
-            "Carlos Leon",
+            "Carlos León",
             32,
-            build_time_preferences(prefer_yes=early_slots[:6]),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["09:00", "10:00"]),
+                prefer_no=slot_keys(DAY_CODES, ["13:00"]),
+            ),
         ),
         (
             "pri_2",
             "Sonia Ferrer",
             32,
-            build_time_preferences(prefer_yes=early_slots[:6]),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["09:00", "10:00"]),
+                prefer_no=slot_keys(DAY_CODES, ["12:00", "13:00"]),
+            ),
         ),
+        # ── Primaria 3º-4º: tardes fuertes → conflicto con asignaturas cognitivas ──
         (
             "pri_3",
             "Diego Arias",
             32,
-            build_time_preferences(prefer_yes=early_slots[:6]),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"]),
+                prefer_no=slot_keys(DAY_CODES, ["09:00"]),
+            ),
         ),
         (
             "pri_4",
-            "Raquel Nunez",
+            "Raquel Núñez",
             32,
-            build_time_preferences(prefer_yes=early_slots[:6]),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"]),
+                prefer_no=slot_keys(DAY_CODES, ["09:00", "10:00"]),
+            ),
         ),
+        # ── Primaria 5º-6º: sin preferencias → baseline neutro ──────────────
         (
             "pri_5",
             "Javier Ortiz",
             32,
-            build_time_preferences(prefer_yes=early_slots[:6]),
+            build_time_preferences(),
         ),
         (
             "pri_6",
             "Elena Varela",
             32,
-            build_time_preferences(prefer_yes=early_slots[:6]),
+            build_time_preferences(),
         ),
+        # ── Inglés Primaria: prefer mañana + unavailable lun/mié 09:00 ───────
         (
             "ingles_1",
-            "Paula Martin",
+            "Paula Martín",
             35,
-            build_time_preferences(unavailable=slot_keys(["MON", "WED"], ["08:30"])),
-        ),
-        (
-            "ingles_2",
-            "Adrian Pardo",
-            30,
-            build_time_preferences(unavailable=slot_keys(["TUE", "THU"], ["08:30"])),
-        ),
-        (
-            "ef_1",
-            "Ruben Campos",
-            30,
             build_time_preferences(
-                # Keep realistic constraints but ensure feasibility for 26 weekly sessions.
-                unavailable=slot_keys(["MON", "WED"], ["08:30"]),
-                prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"]),
+                prefer_yes=slot_keys(["TUE", "THU", "FRI"], ["09:00"])
+                + slot_keys(DAY_CODES, ["10:00", "11:00"]),
+                prefer_no=slot_keys(DAY_CODES, ["13:00"]),
+                unavailable=slot_keys(["MON", "WED"], ["09:00"]),
             ),
         ),
+        # ── Inglés ESO: prefer 09:00-10:00 + unavailable mar/jue 08:00 ───────
+        (
+            "ingles_2",
+            "Adrián Pardo",
+            30,
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["09:00", "10:00"]),
+                prefer_no=slot_keys(DAY_CODES, ["13:30"]),
+                unavailable=slot_keys(["TUE", "THU"], ["08:00"]),
+            ),
+        ),
+        # ── EF: unavailable lun/mié primera hora + prefer mediodía (todas etapas) ─
+        # Enseña 13 grupos (26h/semana) con unavailabilities → candidatos a huecos
+        (
+            "ef_1",
+            "Rubén Campos",
+            30,
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["11:00", "12:00"])
+                + slot_keys(DAY_CODES, ["11:30", "12:30"]),
+                prefer_no=slot_keys(DAY_CODES, ["13:00"])
+                + slot_keys(DAY_CODES, ["13:30"]),
+                unavailable=slot_keys(["MON", "WED"], ["09:00"])
+                + slot_keys(["MON", "WED"], ["08:00"]),
+            ),
+        ),
+        # ── Música: prefer mediodía primaria, no primera hora ────────────────
         (
             "musica",
             "Irene Salas",
             24,
-            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["11:00", "12:00"]),
+                prefer_no=slot_keys(DAY_CODES, ["09:00"]),
+            ),
         ),
+        # ── Plástica: prefer tarde Primaria y ESO ────────────────────────────
         (
             "plastica",
             "Noelia Prieto",
             24,
-            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])
+                + slot_keys(DAY_CODES, ["12:30", "13:30"]),
+            ),
         ),
+        # ── Religión: no última hora + unavailable viernes última ────────────
         (
             "religion",
             "Alberto Crespo",
             22,
-            build_time_preferences(unavailable=slot_keys(["FRI"], ["14:00"])),
+            build_time_preferences(
+                prefer_no=slot_keys(DAY_CODES, ["13:00"])
+                + slot_keys(DAY_CODES, ["13:30"]),
+                unavailable=slot_keys(["FRI"], ["13:00", "13:30"]),
+            ),
         ),
+        # ── Francés: unavailable lunes 09:00 + prefer mediodía ───────────────
         (
             "frances",
-            "Clara Mendez",
+            "Clara Méndez",
             20,
-            build_time_preferences(unavailable=slot_keys(["MON"], ["08:30"])),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["11:00", "12:00"]),
+                unavailable=slot_keys(["MON"], ["09:00"]),
+            ),
         ),
+        # ── Mates ESO: prefer primeras horas, no última ──────────────────────
         (
             "eso_mates",
             "Sergio Vidal",
             30,
-            build_time_preferences(prefer_yes=early_slots[:8]),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["08:00", "09:00"]),
+                prefer_no=slot_keys(DAY_CODES, ["13:30"]),
+            ),
         ),
+        # ── Lengua ESO: sin preferencias → puro gap minimization (4 grupos) ──
         (
             "eso_lengua",
             "Beatriz Lozano",
             30,
-            build_time_preferences(prefer_yes=early_slots[:8]),
+            build_time_preferences(),
         ),
+        # ── Sociales ESO: sin preferencias ───────────────────────────────────
         (
             "eso_social",
-            "Victor Sanz",
+            "Víctor Sanz",
             28,
-            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["09:30", "10:30"])),
+            build_time_preferences(),
         ),
+        # ── Biología ESO: prefer media mañana ────────────────────────────────
         (
             "eso_bio",
-            "Natalia Roman",
+            "Natalia Román",
             24,
-            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["10:00", "11:30"]),
+                prefer_no=slot_keys(DAY_CODES, ["13:30"]),
+            ),
         ),
+        # ── FQ ESO: sin preferencias ─────────────────────────────────────────
         (
             "eso_fq",
             "Guillermo Rey",
             24,
-            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])),
+            build_time_preferences(),
         ),
+        # ── Tecnología ESO: prefer mediodía ESO, no primera hora ─────────────
         (
             "eso_tec",
-            "Hector Plaza",
+            "Héctor Plaza",
             20,
-            build_time_preferences(prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])),
+            build_time_preferences(
+                prefer_yes=slot_keys(DAY_CODES, ["11:30", "12:30"]),
+                prefer_no=slot_keys(DAY_CODES, ["08:00"]),
+            ),
         ),
+        # ── Orientación ESO: prefer_no última hora → TC distribution ─────────
         (
             "orientacion",
             "Laura Medina",
             20,
-            build_time_preferences(prefer_no=last_slot),
+            build_time_preferences(
+                prefer_no=slot_keys(DAY_CODES, ["13:30"]),
+            ),
         ),
     ]
 
@@ -393,16 +513,31 @@ def create_classrooms(team):
 
 
 def create_subjects(teachers, groups, team):  # noqa: C901
-    """Create realistic curriculum-focused subjects, emphasizing Primary complexity."""
+    """Create realistic curriculum-focused subjects with stage-correct preference keys."""
     print("\n📚 Creating subjects...")
 
-    morning_keys = slot_keys(DAY_CODES, ["08:30", "09:30", "10:30"])
-    midday_keys = slot_keys(DAY_CODES, ["12:00", "13:00"])
-    late_keys = slot_keys(DAY_CODES, ["14:00"])
+    # ── Preschool slot key helpers (09:00-13:00) ─────────────────────────────
+    pre_morning = slot_keys(DAY_CODES, ["09:00", "10:00"])
+    pre_midday = slot_keys(DAY_CODES, ["11:00", "12:00"])
+    pre_late = slot_keys(DAY_CODES, ["13:00"])
+
+    # ── Primary slot key helpers (09:00-13:00) ───────────────────────────────
+    pri_morning = slot_keys(DAY_CODES, ["09:00", "10:00"])
+    pri_midday = slot_keys(DAY_CODES, ["11:00", "12:00"])
+    pri_afternoon = slot_keys(DAY_CODES, ["12:00", "13:00"])
+    pri_last = slot_keys(DAY_CODES, ["13:00"])
+
+    # ── Secondary slot key helpers (08:00-13:30) ─────────────────────────────
+    sec_early = slot_keys(DAY_CODES, ["08:00", "09:00"])
+    sec_second = slot_keys(DAY_CODES, ["09:00", "10:00"])
+    sec_midday = slot_keys(DAY_CODES, ["10:00", "11:30"])
+    sec_post = slot_keys(DAY_CODES, ["11:30", "12:30"])
+    sec_late = slot_keys(DAY_CODES, ["12:30", "13:30"])
+    sec_last = slot_keys(DAY_CODES, ["13:30"])
 
     subjects_data = []
 
-    # Infantil (25h/semana por grupo)
+    # ── Infantil (25h/semana por grupo) ──────────────────────────────────────
     for grade in ["1º Infantil", "2º Infantil", "3º Infantil"]:
         tutor_key = f"infantil_{grade[0]}"
         subjects_data.extend(
@@ -414,8 +549,10 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRESCHOOL,
                     "teacher_key": tutor_key,
                     "group_name": grade,
+                    # Cognitivo: prefer mañana, no última hora
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=morning_keys[:10]
+                        prefer_yes=pre_morning,
+                        prefer_no=pre_late,
                     ),
                 },
                 {
@@ -425,9 +562,7 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRESCHOOL,
                     "teacher_key": tutor_key,
                     "group_name": grade,
-                    "time_preferences": build_subject_time_preferences(
-                        prefer_yes=midday_keys
-                    ),
+                    # Neutral: sin preferencias
                 },
                 {
                     "name": f"Crecimiento en Armonía {grade}",
@@ -436,6 +571,7 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRESCHOOL,
                     "teacher_key": tutor_key,
                     "group_name": grade,
+                    # Neutral: sin preferencias
                 },
                 {
                     "name": f"Psicomotricidad {grade}",
@@ -444,14 +580,16 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRESCHOOL,
                     "teacher_key": "ef_1",
                     "group_name": grade,
+                    # No primera hora, sí mediodía
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=midday_keys, prefer_no=late_keys
+                        prefer_yes=pre_midday,
+                        prefer_no=slot_keys(DAY_CODES, ["09:00"]),
                     ),
                 },
             ]
         )
 
-    # Primaria 1º-4º (25h/semana) - emphasizes mixed durations.
+    # ── Primaria 1º-4º (25h/semana) ─────────────────────────────────────────
     for idx, grade in enumerate(
         ["1º Primaria", "2º Primaria", "3º Primaria", "4º Primaria"], start=1
     ):
@@ -465,8 +603,10 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": tutor_key,
                     "group_name": grade,
+                    # Cognitivo: prefer mañana (conflicto con tutores de tarde en 3º-4º)
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=morning_keys
+                        prefer_yes=pri_morning,
+                        prefer_no=pri_last,
                     ),
                 },
                 {
@@ -476,9 +616,10 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": tutor_key,
                     "group_name": grade,
+                    # Cognitivo: prefer mañana (conflicto con tutores de tarde en 3º-4º)
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=slot_keys(DAY_CODES, ["08:30", "09:30"]),
-                        prefer_no=late_keys,
+                        prefer_yes=pri_morning,
+                        prefer_no=pri_last,
                     ),
                 },
                 {
@@ -488,6 +629,7 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": tutor_key,
                     "group_name": grade,
+                    # Neutral: sin preferencias
                 },
                 {
                     "name": f"Inglés {grade}",
@@ -496,8 +638,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "ingles_1",
                     "group_name": grade,
+                    # Mediodía: conflicto interesante con tutores mañaneros
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=midday_keys
+                        prefer_yes=pri_midday,
                     ),
                 },
                 {
@@ -507,9 +650,10 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "ef_1",
                     "group_name": grade,
+                    # No primera hora
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=midday_keys,
-                        prefer_no=slot_keys(DAY_CODES, ["08:30"]),
+                        prefer_yes=pri_midday,
+                        prefer_no=slot_keys(DAY_CODES, ["09:00"]),
                     ),
                 },
                 {
@@ -519,8 +663,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "musica",
                     "group_name": grade,
+                    # Concuerda con preferencia de Irene
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=slot_keys(DAY_CODES, ["12:00"])
+                        prefer_yes=slot_keys(DAY_CODES, ["11:00"]),
                     ),
                 },
                 {
@@ -530,8 +675,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "plastica",
                     "group_name": grade,
+                    # Tarde: conflicto si el tutor del grupo prefiere mañana
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"])
+                        prefer_yes=pri_afternoon,
                     ),
                 },
                 {
@@ -542,7 +688,7 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "teacher_key": "religion",
                     "group_name": grade,
                     "time_preferences": build_subject_time_preferences(
-                        prefer_no=slot_keys(DAY_CODES, ["14:00"])
+                        prefer_no=pri_last,
                     ),
                 },
                 {
@@ -553,11 +699,12 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "teacher_key": tutor_key,
                     "group_name": grade,
                     "type": SubjectType.TC,
+                    # Sin preferencias: TC distribuida por el optimizador
                 },
             ]
         )
 
-    # Primaria 5º-6º with French and more split sessions.
+    # ── Primaria 5º-6º con Francés ───────────────────────────────────────────
     for idx, grade in enumerate(["5º Primaria", "6º Primaria"], start=5):
         tutor_key = f"pri_{idx}"
         subjects_data.extend(
@@ -570,7 +717,8 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "teacher_key": tutor_key,
                     "group_name": grade,
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=morning_keys
+                        prefer_yes=pri_morning,
+                        prefer_no=pri_last,
                     ),
                 },
                 {
@@ -581,7 +729,8 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "teacher_key": tutor_key,
                     "group_name": grade,
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=slot_keys(DAY_CODES, ["08:30", "09:30"])
+                        prefer_yes=pri_morning,
+                        prefer_no=pri_last,
                     ),
                 },
                 {
@@ -591,6 +740,7 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": tutor_key,
                     "group_name": grade,
+                    # Neutral: sin preferencias
                 },
                 {
                     "name": f"Inglés {grade}",
@@ -599,6 +749,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "ingles_1",
                     "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=pri_midday,
+                    ),
                 },
                 {
                     "name": f"Francés {grade}",
@@ -608,7 +761,7 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "teacher_key": "frances",
                     "group_name": grade,
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=midday_keys
+                        prefer_yes=pri_midday,
                     ),
                 },
                 {
@@ -618,6 +771,10 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "ef_1",
                     "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=pri_midday,
+                        prefer_no=slot_keys(DAY_CODES, ["09:00"]),
+                    ),
                 },
                 {
                     "name": f"Música {grade}",
@@ -626,6 +783,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "musica",
                     "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=slot_keys(DAY_CODES, ["11:00"]),
+                    ),
                 },
                 {
                     "name": f"Religión/Valores {grade}",
@@ -634,6 +794,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "religion",
                     "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_no=pri_last,
+                    ),
                 },
                 {
                     "name": f"Educación Artística {grade}",
@@ -642,6 +805,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.PRIMARY,
                     "teacher_key": "plastica",
                     "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=pri_afternoon,
+                    ),
                 },
                 {
                     "name": f"Tutoría {grade}",
@@ -651,11 +817,12 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "teacher_key": tutor_key,
                     "group_name": grade,
                     "type": SubjectType.TC,
+                    # Sin preferencias: TC distribuida por el optimizador
                 },
             ]
         )
 
-    # ESO 1º-4º (30h/semana)
+    # ── ESO 1º-4º (30h/semana) ───────────────────────────────────────────────
     eso_block = [
         ("1º ESO", "Biología y Geología", "eso_bio"),
         ("2º ESO", "Física y Química", "eso_fq"),
@@ -672,6 +839,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.SECONDARY,
                     "teacher_key": "eso_lengua",
                     "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=sec_early,
+                    ),
                 },
                 {
                     "name": f"Matemáticas {grade}",
@@ -680,6 +850,10 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.SECONDARY,
                     "teacher_key": "eso_mates",
                     "group_name": grade,
+                    # Concuerda con preferencia del profesor (08:00-09:00)
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=sec_early,
+                    ),
                 },
                 {
                     "name": f"Inglés {grade}",
@@ -688,6 +862,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.SECONDARY,
                     "teacher_key": "ingles_2",
                     "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=sec_second,
+                    ),
                 },
                 {
                     "name": f"Geografía e Historia {grade}",
@@ -696,6 +873,7 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.SECONDARY,
                     "teacher_key": "eso_social",
                     "group_name": grade,
+                    # Neutral: sin preferencias (profesor también sin prefs)
                 },
                 {
                     "name": f"{science_name} {grade}",
@@ -704,8 +882,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.SECONDARY,
                     "teacher_key": science_teacher,
                     "group_name": grade,
+                    # Media mañana: tercera hora o post-recreo
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=slot_keys(DAY_CODES, ["10:30", "12:00"])
+                        prefer_yes=sec_midday,
                     ),
                 },
                 {
@@ -715,6 +894,10 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.SECONDARY,
                     "teacher_key": "eso_tec",
                     "group_name": grade,
+                    # Concuerda con preferencia del profesor (11:30-12:30)
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=sec_post,
+                    ),
                 },
                 {
                     "name": f"Educación Física {grade}",
@@ -723,6 +906,11 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.SECONDARY,
                     "teacher_key": "ef_1",
                     "group_name": grade,
+                    # No primera hora ESO
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=sec_post,
+                        prefer_no=slot_keys(DAY_CODES, ["08:00"]),
+                    ),
                 },
                 {
                     "name": f"Música/Plástica {grade}",
@@ -733,6 +921,10 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                         "musica" if grade in ["1º ESO", "2º ESO"] else "plastica"
                     ),
                     "group_name": grade,
+                    # Tarde: concuerda con preferencia de especialistas
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_yes=sec_late,
+                    ),
                 },
                 {
                     "name": f"Tutoría {grade}",
@@ -742,6 +934,10 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "teacher_key": "orientacion",
                     "group_name": grade,
                     "type": SubjectType.TC,
+                    # No primera hora ESO
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_no=slot_keys(DAY_CODES, ["08:00"]),
+                    ),
                 },
                 {
                     "name": f"Religión/Valores {grade}",
@@ -750,6 +946,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "stage": EducationalStage.SECONDARY,
                     "teacher_key": "religion",
                     "group_name": grade,
+                    "time_preferences": build_subject_time_preferences(
+                        prefer_no=sec_last,
+                    ),
                 },
                 {
                     "name": f"Proyecto Interdisciplinar {grade}",
@@ -759,9 +958,10 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "teacher_key": "orientacion",
                     "group_name": grade,
                     "type": SubjectType.TC,
+                    # Post-recreo, no primera hora
                     "time_preferences": build_subject_time_preferences(
-                        prefer_yes=midday_keys,
-                        prefer_no=slot_keys(DAY_CODES, ["08:30"]),
+                        prefer_yes=sec_post,
+                        prefer_no=slot_keys(DAY_CODES, ["08:00"]),
                     ),
                 },
             ]
@@ -833,7 +1033,6 @@ def create_admin_saved_timetable(*, users, team):
     saved_name = "Horario demo admin"
     saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {saved_name}"
 
-    # Build a deterministic small timetable to keep load_test_data fast.
     subjects = list(
         Subject.objects.filter(team=team)
         .select_related("teacher", "group")
@@ -917,7 +1116,6 @@ def main():
     try:
         clear_existing_data()
 
-        # Create all entities
         users, demo_team = create_users()
         teachers = create_teachers(demo_team)
         groups = create_groups(demo_team)
@@ -927,7 +1125,6 @@ def main():
             users=users,
             team=demo_team,
         )
-        # schedules = create_schedules(teachers, subjects, classrooms, groups, users)
 
         print("\n" + "=" * 60)
         print("✅ Test data loaded successfully!")
@@ -939,7 +1136,6 @@ def main():
         print(f"  • {len(classrooms)} classrooms created")
         print(f"  • {len(groups)} groups created")
         print(f"  • {len(saved_admin_timetable)} saved schedules for admin")
-        # print(f"  • {len(schedules)} schedules created")
         print("\n🔑 Login credentials:")
         print("  Admin: admin@test.com / admin123")
         print("  Dirección: direccion.academica@test.com / direccion123")
