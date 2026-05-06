@@ -201,7 +201,6 @@
     async function fetchList(requestedPage) {
       const targetPage = requestedPage || (paginationController ? paginationController.getCurrentPage() : 1);
       uiState.setBusy(listContainer, true);
-      uiState.renderLoadingState(listContainer, config.list.loadingMessage);
 
       const response = await api.get(buildListUrl(targetPage));
       if (!response.ok) {

@@ -511,11 +511,11 @@
    * Input: path - API path after "/api"; method - HTTP verb; body - optional request body
    * Output: Promise<{ok, status, data, response}>
    */
-  async function apiJson(path, method, body) {
-    const options = {
+  async function apiJson(path, method, body, fetchOptions) {
+    const options = Object.assign({
       method: method || "GET",
       headers: { "Content-Type": "application/json" },
-    };
+    }, fetchOptions || {});
     if (body !== undefined && body !== null) {
       options.body = JSON.stringify(body);
     }
@@ -1307,7 +1307,7 @@
     const timeoutOpt = readGenerationTimeoutOption();
     const payload = Object.assign({}, _readGenerationOptions(), timeoutOpt);
     startGenerationProgress(timeoutOpt.timeout_minutes ? parseInt(timeoutOpt.timeout_minutes, 10) : null);
-    const result = await apiJson("/schedules/generate/", "POST", payload);
+    const result = await apiJson("/schedules/generate/", "POST", payload, { _skipSpinner: true });
     stopGenerationProgress();
     setGenerateActionButtonsDisabled(false);
     if (!result.ok) {

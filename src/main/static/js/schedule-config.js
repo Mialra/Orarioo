@@ -865,17 +865,6 @@
       return;
     }
 
-    // Show a Bootstrap spinner while waiting for the server response
-    if (uiState && typeof uiState.renderLoadingState === "function") {
-      uiState.renderLoadingState(elements.stagesContainer, "Cargando tramos...");
-    } else {
-      elements.stagesContainer.innerHTML =
-        '<div class="col-12 text-center py-5">' +
-        '<div class="spinner-border text-primary" role="status">' +
-        '<span class="visually-hidden">Cargando tramos...</span>' +
-        "</div></div>";
-    }
-
     const res = await admin.api.get("/api/schedule-config/");
     if (!res.ok) {
       elements.stagesContainer.innerHTML = "";
