@@ -8,14 +8,13 @@ import time
 
 from django.utils import timezone
 
-from schedule.constants import AUTO_GENERATED_OBSERVATION
-
 from schedule.algorithm.slots import (
     build_slot_day_index,
     build_stage_allowed_slot_index,
     session_stage_code,
     slot_time_bounds,
 )
+from schedule.constants import AUTO_GENERATED_OBSERVATION
 
 
 def apply_teacher_gap_local_search(
@@ -106,7 +105,11 @@ def _run_single_pass(
             for inner_pos, gap_slot in enumerate(day_slot_list[1:-1], start=1):
                 before = set(day_slot_list[:inner_pos])
                 after = set(day_slot_list[inner_pos + 1 :])
-                if not (teacher_day & before and teacher_day & after and gap_slot not in teacher_day):
+                if not (
+                    teacher_day & before
+                    and teacher_day & after
+                    and gap_slot not in teacher_day
+                ):
                     continue
 
                 candidate = _find_gap_fill_candidate(
@@ -183,7 +186,9 @@ def _find_gap_fill_candidate(
             continue
         if group_id is not None and gap_slot in group_slot_set.get(group_id, set()):
             continue
-        if classroom_id is not None and gap_slot in classroom_slot_set.get(classroom_id, set()):
+        if classroom_id is not None and gap_slot in classroom_slot_set.get(
+            classroom_id, set()
+        ):
             continue
 
         return s_idx, old_slot
@@ -222,9 +227,13 @@ def _apply_move(
 
     teacher_day_slots = indices["teacher_day_slots"]
     if teacher_id is not None and old_day is not None:
-        teacher_day_slots.setdefault(teacher_id, {}).setdefault(old_day, set()).discard(old_slot)
+        teacher_day_slots.setdefault(teacher_id, {}).setdefault(old_day, set()).discard(
+            old_slot
+        )
     if teacher_id is not None and new_day is not None:
-        teacher_day_slots.setdefault(teacher_id, {}).setdefault(new_day, set()).add(new_slot)
+        teacher_day_slots.setdefault(teacher_id, {}).setdefault(new_day, set()).add(
+            new_slot
+        )
 
     group_slot_set = indices["group_slot_set"]
     if group_id is not None:
@@ -274,10 +283,12 @@ def _build_conflict_indices(
         classroom_id = getattr(classroom, "id", None)
 
         if teacher_id is not None and day_idx is not None:
-            teacher_day_slots.setdefault(teacher_id, {}).setdefault(day_idx, set()).add(assigned)
-            session_by_teacher_day.setdefault(teacher_id, {}).setdefault(day_idx, []).append(
-                (s_idx, assigned)
+            teacher_day_slots.setdefault(teacher_id, {}).setdefault(day_idx, set()).add(
+                assigned
             )
+            session_by_teacher_day.setdefault(teacher_id, {}).setdefault(
+                day_idx, []
+            ).append((s_idx, assigned))
 
         if group_id is not None:
             group_slot_set.setdefault(group_id, set()).add(assigned)
@@ -325,14 +336,21 @@ def _build_tc_occupation(*, sessions, slot_by_session, slots, teachers, slot_day
         teacher_session_count[teacher.id] += 1
         day_idx = slot_day_index.get(slot_idx)
         if day_idx is not None:
-            teacher_day_slots.setdefault(teacher.id, {}).setdefault(day_idx, []).append(slot_idx)
+            teacher_day_slots.setdefault(teacher.id, {}).setdefault(day_idx, []).append(
+                slot_idx
+            )
 
     for tid in teacher_day_slots:
         for day_idx in teacher_day_slots[tid]:
             teacher_day_slots[tid][day_idx].sort(key=lambda si: slots[si]["start"])
 
     teacher_max_hours = {t.id: t.max_weekly_hours for t in teachers}
-    return teacher_assigned_slots, teacher_session_count, teacher_max_hours, teacher_day_slots
+    return (
+        teacher_assigned_slots,
+        teacher_session_count,
+        teacher_max_hours,
+        teacher_day_slots,
+    )
 
 
 def _tc_slot_groups(slots):
@@ -381,7 +399,9 @@ def _pick_tc_teacher_gap_aware(
     gap_filling = []
 
     for t in teachers:
-        busy = teacher_assigned_slots.get(t.id, set()) | tc_assigned_slots.get(t.id, set())
+        busy = teacher_assigned_slots.get(t.id, set()) | tc_assigned_slots.get(
+            t.id, set()
+        )
         if busy & window_slot_set:
             continue
 
@@ -408,7 +428,9 @@ def _pick_tc_teacher_gap_aware(
     return min(pool, key=lambda t: teacher_session_count.get(t.id, 0))
 
 
-def fill_tc_sessions(*, sessions, slot_by_session, slots, teachers, tc_subject, team, actor_email):
+def fill_tc_sessions(
+    *, sessions, slot_by_session, slots, teachers, tc_subject, team, actor_email
+):
     """Greedy TC fill: one pass over all non-recess time windows in chronological order.
 
     For each window, assigns a free teacher as TC.  Gap-filling teachers (those with
@@ -424,14 +446,17 @@ def fill_tc_sessions(*, sessions, slot_by_session, slots, teachers, tc_subject, 
     from schedule.models import Schedule
 
     slot_day_index = build_slot_day_index(slots=slots)
-    teacher_assigned_slots, teacher_session_count, teacher_max_hours, teacher_day_slots = (
-        _build_tc_occupation(
-            sessions=sessions,
-            slot_by_session=slot_by_session,
-            slots=slots,
-            teachers=teachers,
-            slot_day_index=slot_day_index,
-        )
+    (
+        teacher_assigned_slots,
+        teacher_session_count,
+        teacher_max_hours,
+        teacher_day_slots,
+    ) = _build_tc_occupation(
+        sessions=sessions,
+        slot_by_session=slot_by_session,
+        slots=slots,
+        teachers=teachers,
+        slot_day_index=slot_day_index,
     )
 
     tc_assigned_slots = {}
@@ -479,7 +504,11 @@ def fill_tc_sessions(*, sessions, slot_by_session, slots, teachers, tc_subject, 
         for slot_idx in window_slot_set:
             day_idx = slot_day_index.get(slot_idx)
             if day_idx is not None:
-                teacher_day_slots.setdefault(free_teacher.id, {}).setdefault(day_idx, []).append(slot_idx)
-                teacher_day_slots[free_teacher.id][day_idx].sort(key=lambda si: slots[si]["start"])
+                teacher_day_slots.setdefault(free_teacher.id, {}).setdefault(
+                    day_idx, []
+                ).append(slot_idx)
+                teacher_day_slots[free_teacher.id][day_idx].sort(
+                    key=lambda si: slots[si]["start"]
+                )
 
     return tc_entries

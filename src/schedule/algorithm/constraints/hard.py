@@ -416,7 +416,8 @@ def add_group_no_intraday_gap_constraints(*, model, x, sessions, slots):
             filtered_day_slots = [
                 slot_idx
                 for slot_idx in day_slot_list
-                if slot_idx in stage_allowed_slots and not slots[slot_idx].get("is_recess")
+                if slot_idx in stage_allowed_slots
+                and not slots[slot_idx].get("is_recess")
             ]
             if len(filtered_day_slots) < 3:
                 continue

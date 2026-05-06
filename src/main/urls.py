@@ -5,8 +5,8 @@ Top-level URL configuration: auth, dashboard, administration tabs, and legal pag
 from django.urls import path
 
 from classroom.views import admin_classrooms
-from group.views import admin_groups
 from common.admin import build_admin_tab_view
+from group.views import admin_groups
 from main.views import (
     dashboard,
     onboarding,

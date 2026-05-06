@@ -62,9 +62,7 @@ class Subject(TeamScopedModel, AuditableEntity):
         db_table = "subject"
         ordering = ["name", "id"]
         constraints = [
-            team_scoped_case_insensitive_name_constraint(
-                "subject_team_name_ci_unique"
-            )
+            team_scoped_case_insensitive_name_constraint("subject_team_name_ci_unique")
         ]
 
     def clean(self):

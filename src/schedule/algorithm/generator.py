@@ -14,13 +14,13 @@ from auditableEntity.models import AuditActionType
 from classroom.models import Classroom
 from group.models import Group
 from schedule.algorithm.assignment import solve_session_assignment
-from schedule.algorithm.postprocessing import fill_tc_sessions
 from schedule.algorithm.diagnostics import (
     BOTTLENECK_RANK,
     collect_generation_diagnostics,
     raise_schedule_generation_diagnostics,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
+from schedule.algorithm.postprocessing import fill_tc_sessions
 from schedule.algorithm.slots import (
     build_weekly_slots,
     parse_schedule_config_to_slot_windows,
@@ -198,12 +198,14 @@ class BasicScheduleGenerator:
                 code=blocking[0]["code"],
             )
 
-        slot_by_session, classroom_by_session, is_optimal, soft_score_info = solve_session_assignment(
-            sessions=sessions,
-            slots=slots,
-            classrooms=classrooms,
-            random_seed=random_seed,
-            generation_options=generation_options,
+        slot_by_session, classroom_by_session, is_optimal, soft_score_info = (
+            solve_session_assignment(
+                sessions=sessions,
+                slots=slots,
+                classrooms=classrooms,
+                random_seed=random_seed,
+                generation_options=generation_options,
+            )
         )
 
         created = []
@@ -458,13 +460,15 @@ class ScheduleReplanner:
 
         fixed_assignments = {moved_session_idx: new_slot_index}
 
-        slot_by_session, classroom_by_session, _, _soft_score = solve_session_assignment(
-            sessions=sessions,
-            slots=slots,
-            classrooms=classrooms,
-            random_seed=None,
-            fixed_assignments=fixed_assignments,
-            previous_assignment_by_session=previous_assignment_by_session,
+        slot_by_session, classroom_by_session, _, _soft_score = (
+            solve_session_assignment(
+                sessions=sessions,
+                slots=slots,
+                classrooms=classrooms,
+                random_seed=None,
+                fixed_assignments=fixed_assignments,
+                previous_assignment_by_session=previous_assignment_by_session,
+            )
         )
 
         return cls._apply_assignment_updates(
@@ -516,7 +520,11 @@ class ScheduleReplanner:
                     "group": schedule.group,
                     "subject": schedule.subject,
                     "allowed_classroom_ids": (
-                        set(schedule.subject.allowed_classrooms.values_list("id", flat=True))
+                        set(
+                            schedule.subject.allowed_classrooms.values_list(
+                                "id", flat=True
+                            )
+                        )
                         if schedule.subject
                         else set()
                     ),

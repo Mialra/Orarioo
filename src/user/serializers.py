@@ -469,7 +469,10 @@ def _schedule_config_error_entry(stage_code, error_payload):
     message = raw_message or "La configuración de los tramos no es válida."
     code = "INVALID_SCHEDULE_CONFIG"
 
-    if message == "El recreo debe estar dentro de la hora de entrada y salida de la etapa.":
+    if (
+        message
+        == "El recreo debe estar dentro de la hora de entrada y salida de la etapa."
+    ):
         code = "BREAK_OUTSIDE_STAGE_RANGE"
     elif message == "La hora de fin del recreo debe ser posterior a la hora de inicio.":
         code = "INVALID_BREAK_RANGE"
@@ -515,7 +518,9 @@ def _first_error_message(value):
 class StageConfigSerializer(serializers.Serializer):
     """Validate the schedule config for a single educational stage."""
 
-    label = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="")
+    label = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, default=""
+    )
     color = serializers.ChoiceField(
         choices=[(color, color) for color in STAGE_COLOR_CHOICES],
         required=False,
@@ -549,7 +554,9 @@ class StageConfigSerializer(serializers.Serializer):
             )
         if int(data.get("session_duration", 60)) != 60:
             raise serializers.ValidationError(
-                {"session_duration": "La duración de la sesión debe ser exactamente de 60 minutos."}
+                {
+                    "session_duration": "La duración de la sesión debe ser exactamente de 60 minutos."
+                }
             )
 
         breaks = data.get("breaks") or []
@@ -557,17 +564,23 @@ class StageConfigSerializer(serializers.Serializer):
         for i, b in enumerate(breaks):
             if "start" not in b or "end" not in b:
                 raise serializers.ValidationError(
-                    {f"breaks[{i}]": "Cada recreo debe tener las claves 'start' y 'end'."}
+                    {
+                        f"breaks[{i}]": "Cada recreo debe tener las claves 'start' y 'end'."
+                    }
                 )
             bs_t = parse(_validate_hhmm(b["start"], f"breaks[{i}].start"))
             be_t = parse(_validate_hhmm(b["end"], f"breaks[{i}].end"))
             if be_t <= bs_t:
                 raise serializers.ValidationError(
-                    {f"breaks[{i}]": "La hora de fin del recreo debe ser posterior a la hora de inicio."}
+                    {
+                        f"breaks[{i}]": "La hora de fin del recreo debe ser posterior a la hora de inicio."
+                    }
                 )
             if bs_t < start or be_t > end:
                 raise serializers.ValidationError(
-                    {f"breaks[{i}]": "El recreo debe estar dentro de la hora de entrada y salida de la etapa."}
+                    {
+                        f"breaks[{i}]": "El recreo debe estar dentro de la hora de entrada y salida de la etapa."
+                    }
                 )
             parsed.append((bs_t, be_t))
 
@@ -585,7 +598,9 @@ class StageConfigSerializer(serializers.Serializer):
 class ScheduleConfigSerializer(serializers.Serializer):
     """Validate a full schedule_config dict (stage_code → stage config)."""
 
-    schedule_config = serializers.DictField(child=serializers.DictField(), required=True)
+    schedule_config = serializers.DictField(
+        child=serializers.DictField(), required=True
+    )
 
     def validate_schedule_config(self, value):
         """Ensure each stage config passes StageConfigSerializer.
@@ -593,7 +608,9 @@ class ScheduleConfigSerializer(serializers.Serializer):
         Output: validated dict; raises ValidationError on any violation
         """
         if not isinstance(value, dict):
-            raise serializers.ValidationError("La configuración de tramos debe ser un objeto.")
+            raise serializers.ValidationError(
+                "La configuración de tramos debe ser un objeto."
+            )
         errors = {}
         validated = {}
         for stage, cfg in value.items():
@@ -635,5 +652,7 @@ class OnboardingSerializer(serializers.Serializer):
             return value
         inner = ScheduleConfigSerializer(data={"schedule_config": value})
         if not inner.is_valid():
-            raise serializers.ValidationError(inner.errors.get("schedule_config", inner.errors))
+            raise serializers.ValidationError(
+                inner.errors.get("schedule_config", inner.errors)
+            )
         return inner.validated_data["schedule_config"]

@@ -99,7 +99,9 @@ class GroupApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
     def test_allow_same_name_in_different_team(self):
         Group.objects.create(name="2A", stage=EducationalStage.PRIMARY, team=self.team)
-        other_user, other_team = self.create_isolated_user(email_prefix="group-api-other")
+        other_user, other_team = self.create_isolated_user(
+            email_prefix="group-api-other"
+        )
         self.client.force_authenticate(other_user)
 
         response = self.client.post(

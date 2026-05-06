@@ -343,7 +343,9 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
         Output: list of lists with [selected optional cols...] + [Resumen, Detalle]
         """
         all_optional_indices = list(range(len(AUDIT_EXPORT_OPTIONAL_HEADERS)))
-        indices = optional_indices if optional_indices is not None else all_optional_indices
+        indices = (
+            optional_indices if optional_indices is not None else all_optional_indices
+        )
         rows = []
         for entry in queryset:
             occurred_at = timezone.localtime(entry.occurred_at).strftime(
@@ -376,16 +378,24 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
 
         requested_columns = request.query_params.getlist("columns")
         if requested_columns:
-            valid = {col for col in requested_columns if col in AUDIT_EXPORT_OPTIONAL_HEADERS}
-            optional_headers = [col for col in AUDIT_EXPORT_OPTIONAL_HEADERS if col in valid]
-            optional_indices = [AUDIT_EXPORT_OPTIONAL_HEADERS.index(col) for col in optional_headers]
+            valid = {
+                col for col in requested_columns if col in AUDIT_EXPORT_OPTIONAL_HEADERS
+            }
+            optional_headers = [
+                col for col in AUDIT_EXPORT_OPTIONAL_HEADERS if col in valid
+            ]
+            optional_indices = [
+                AUDIT_EXPORT_OPTIONAL_HEADERS.index(col) for col in optional_headers
+            ]
         else:
             optional_headers = []
             optional_indices = []
         headers = optional_headers + AUDIT_EXPORT_FIXED_HEADERS
 
         if export_format == "csv":
-            rows = self._build_export_rows(queryset, for_csv=True, optional_indices=optional_indices)
+            rows = self._build_export_rows(
+                queryset, for_csv=True, optional_indices=optional_indices
+            )
             return build_csv_response(headers, rows, filename)
 
         if not REPORTLAB_AVAILABLE:

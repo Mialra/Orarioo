@@ -129,7 +129,9 @@ def build_weekly_slots(*, stage_slot_windows=None):
            defaults to STAGE_SLOT_WINDOWS when None
     Output: list of dicts with keys 'start', 'end', 'stage', 'day_code', 'is_recess'
     """
-    windows = stage_slot_windows if stage_slot_windows is not None else STAGE_SLOT_WINDOWS
+    windows = (
+        stage_slot_windows if stage_slot_windows is not None else STAGE_SLOT_WINDOWS
+    )
 
     now = timezone.localtime()
     days_until_next_monday = (7 - now.weekday()) % 7

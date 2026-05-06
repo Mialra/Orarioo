@@ -4,9 +4,9 @@ Serializer for group CRUD operations with stage display and shared audit fields.
 
 from rest_framework import serializers
 
-from common.stages import DEFAULT_STAGE_COLORS, canonical_group_stage
 from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
 from common.serializers import TeamScopedModelSerializerMixin
+from common.stages import DEFAULT_STAGE_COLORS, canonical_group_stage
 from common.tenancy import get_active_team
 from group.models import Group
 from namedEntity.serializers import NamedEntityNameValidationMixin
@@ -46,7 +46,11 @@ class GroupSerializer(
     class Meta:
         model = Group
         fields = GROUP_SERIALIZER_FIELDS
-        read_only_fields = [*AUDIT_READ_ONLY_FIELD_NAMES, "stage_display", "stage_color"]
+        read_only_fields = [
+            *AUDIT_READ_ONLY_FIELD_NAMES,
+            "stage_display",
+            "stage_color",
+        ]
 
     def get_stage_display(self, obj):
         """Return the human-readable label for the group's educational stage.

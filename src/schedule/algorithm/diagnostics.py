@@ -317,26 +317,12 @@ def _collect_classroom_compatibility_diagnostics(
     return diagnostics
 
 
-def _collect_capacity_diagnostics(*, sessions, slots, generation_options):
+def _check_group_capacities(sessions_by_group, sessions, slots):
     diagnostics = []
-    sessions_by_group = defaultdict(list)
-    sessions_by_teacher = defaultdict(list)
-    tc_session_indices = []
-
-    for session_idx, session in enumerate(sessions):
-        group = session.get("group")
-        if getattr(group, "id", None) is not None:
-            sessions_by_group[group.id].append(session_idx)
-        teacher = session.get("teacher")
-        if getattr(teacher, "id", None) is not None:
-            sessions_by_teacher[teacher.id].append(session_idx)
-        if getattr(session.get("subject"), "type", None) == SubjectType.TC:
-            tc_session_indices.append(session_idx)
-
+    slot_count = len(slots)
     for session_indices in sessions_by_group.values():
         group = sessions[session_indices[0]].get("group")
         assigned = len(session_indices)
-        slot_count = len(slots)
         weekly_limit = _group_weekly_limit(group)
         daily_limit = _group_daily_limit(group)
         if assigned > slot_count:
@@ -397,7 +383,11 @@ def _collect_capacity_diagnostics(*, sessions, slots, generation_options):
                     rank=CAPACITY_RANK + 1,
                 )
             )
+    return diagnostics
 
+
+def _check_teacher_capacities(sessions_by_teacher, sessions):
+    diagnostics = []
     for session_indices in sessions_by_teacher.values():
         teacher = sessions[session_indices[0]].get("teacher")
         assigned = len(session_indices)
@@ -421,33 +411,60 @@ def _collect_capacity_diagnostics(*, sessions, slots, generation_options):
                     rank=CAPACITY_RANK,
                 )
             )
+    return diagnostics
 
-    if tc_session_indices and bool(generation_options.get("include_tc", True)):
-        try:
-            tc_capacity = int(generation_options.get("tc_capacity", 1) or 1)
-        except (TypeError, ValueError):
-            tc_capacity = 1
-        tc_capacity = max(1, tc_capacity)
-        usable_slots = sum(1 for slot in slots if not slot.get("is_recess"))
-        max_tc_sessions = usable_slots * tc_capacity
-        if len(tc_session_indices) > max_tc_sessions:
-            diagnostics.append(
-                build_diagnostic(
-                    "TC_SLOT_CAPACITY_EXCEEDED",
-                    f"TC sessions exceed simultaneous capacity: {len(tc_session_indices)} sessions for a maximum of {max_tc_sessions}.",
-                    context={
-                        "required_sessions": len(tc_session_indices),
-                        "capacity": max_tc_sessions,
-                        "tc_capacity": tc_capacity,
-                    },
-                    suggestions=[
-                        "Aumenta la capacidad simultánea de TC o reduce el número de sesiones TC.",
-                    ],
-                    scope="schedule",
-                    rank=CAPACITY_RANK,
-                )
-            )
 
+def _check_tc_capacity(tc_session_indices, slots, generation_options):
+    if not tc_session_indices or not bool(generation_options.get("include_tc", True)):
+        return []
+    try:
+        tc_capacity = int(generation_options.get("tc_capacity", 1) or 1)
+    except (TypeError, ValueError):
+        tc_capacity = 1
+    tc_capacity = max(1, tc_capacity)
+    usable_slots = sum(1 for slot in slots if not slot.get("is_recess"))
+    max_tc_sessions = usable_slots * tc_capacity
+    if len(tc_session_indices) <= max_tc_sessions:
+        return []
+    return [
+        build_diagnostic(
+            "TC_SLOT_CAPACITY_EXCEEDED",
+            f"TC sessions exceed simultaneous capacity: {len(tc_session_indices)} sessions for a maximum of {max_tc_sessions}.",
+            context={
+                "required_sessions": len(tc_session_indices),
+                "capacity": max_tc_sessions,
+                "tc_capacity": tc_capacity,
+            },
+            suggestions=[
+                "Aumenta la capacidad simultánea de TC o reduce el número de sesiones TC.",
+            ],
+            scope="schedule",
+            rank=CAPACITY_RANK,
+        )
+    ]
+
+
+def _collect_capacity_diagnostics(*, sessions, slots, generation_options):
+    sessions_by_group = defaultdict(list)
+    sessions_by_teacher = defaultdict(list)
+    tc_session_indices = []
+
+    for session_idx, session in enumerate(sessions):
+        group = session.get("group")
+        if getattr(group, "id", None) is not None:
+            sessions_by_group[group.id].append(session_idx)
+        teacher = session.get("teacher")
+        if getattr(teacher, "id", None) is not None:
+            sessions_by_teacher[teacher.id].append(session_idx)
+        if getattr(session.get("subject"), "type", None) == SubjectType.TC:
+            tc_session_indices.append(session_idx)
+
+    diagnostics = []
+    diagnostics.extend(_check_group_capacities(sessions_by_group, sessions, slots))
+    diagnostics.extend(_check_teacher_capacities(sessions_by_teacher, sessions))
+    diagnostics.extend(
+        _check_tc_capacity(tc_session_indices, slots, generation_options)
+    )
     return diagnostics
 
 
@@ -709,9 +726,7 @@ def _build_stage_window_diagnostics(*, sessions, slots):
     return diagnostics
 
 
-def _build_overlapped_demand_diagnostics(
-    *, sessions, feasible_slots_by_session, scope
-):
+def _build_overlapped_demand_diagnostics(*, sessions, feasible_slots_by_session, scope):
     diagnostics = []
     grouped = defaultdict(list)
 
@@ -764,7 +779,9 @@ def _build_classroom_bottleneck_diagnostics(
     grouped = defaultdict(list)
 
     for session_idx, compatible_classrooms in compatible_classrooms_by_session.items():
-        compatible_ids = sorted(getattr(item, "id", None) for item in compatible_classrooms)
+        compatible_ids = sorted(
+            getattr(item, "id", None) for item in compatible_classrooms
+        )
         if not compatible_ids:
             continue
         grouped[tuple(compatible_ids)].append(session_idx)
@@ -849,7 +866,9 @@ def _build_no_gap_diagnostics(*, sessions, slots, feasible_slots_by_session):
 
 
 def _build_fallback_solver_diagnostic(*, solver_status, solver_context):
-    status_name = str(solver_status or solver_context.get("solver_status") or "").upper()
+    status_name = str(
+        solver_status or solver_context.get("solver_status") or ""
+    ).upper()
     timeout_seconds = solver_context.get("timeout_seconds")
     if status_name == "UNKNOWN" and timeout_seconds:
         return build_diagnostic(
@@ -910,14 +929,24 @@ def _build_feasible_slots_by_session(
             slot_indices = {
                 slot_idx
                 for slot_idx in slot_indices
-                if _subject_state(session=session, slot_idx=slot_idx, slots=slots, slot_preference_by_idx=slot_preference_by_idx)
+                if _subject_state(
+                    session=session,
+                    slot_idx=slot_idx,
+                    slots=slots,
+                    slot_preference_by_idx=slot_preference_by_idx,
+                )
                 != SubjectTimePreferenceState.UNAVAILABLE
             }
         if include_teacher_preferences:
             slot_indices = {
                 slot_idx
                 for slot_idx in slot_indices
-                if _teacher_state(session=session, slot_idx=slot_idx, slots=slots, slot_preference_by_idx=slot_preference_by_idx)
+                if _teacher_state(
+                    session=session,
+                    slot_idx=slot_idx,
+                    slots=slots,
+                    slot_preference_by_idx=slot_preference_by_idx,
+                )
                 != TeacherTimePreferenceState.UNAVAILABLE
             }
 

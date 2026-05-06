@@ -16,8 +16,8 @@ from schedule.algorithm.diagnostics import collect_generation_diagnostics
 from schedule.algorithm.generator import BasicScheduleGenerator
 from schedule.algorithm.slots import (
     build_slot_preference_index,
-    build_windows_from_stage_config,
     build_weekly_slots,
+    build_windows_from_stage_config,
     parse_schedule_config_to_slot_windows,
     slot_preference_key_from_datetime,
 )
@@ -1359,7 +1359,9 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             generation_options={},
         )
 
-        self.assertEqual(timeout_seconds, schedule_assignment._UNLIMITED_OPTIMIZATION_CAP_SECONDS)
+        self.assertEqual(
+            timeout_seconds, schedule_assignment._UNLIMITED_OPTIMIZATION_CAP_SECONDS
+        )
 
     @skipIf(
         schedule_assignment.cp_model is None,
@@ -1737,7 +1739,9 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "MISSING_SUBJECTS",
         )
 
-    def test_collect_generation_diagnostics_skips_missing_configuration_when_not_provided(self):
+    def test_collect_generation_diagnostics_skips_missing_configuration_when_not_provided(
+        self,
+    ):
         slots = build_weekly_slots()
         sessions = BasicScheduleGenerator._build_sessions(
             subjects=[self.subject],
@@ -2208,7 +2212,9 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         self.subject.allowed_classrooms.set([self.classroom])
 
-    def test_build_windows_from_stage_config_keeps_primary_half_slot_split_by_break(self):
+    def test_build_windows_from_stage_config_keeps_primary_half_slot_split_by_break(
+        self,
+    ):
         windows = build_windows_from_stage_config(
             {
                 "start_time": "09:00",
@@ -2221,16 +2227,42 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(
             windows,
             [
-                (datetime.strptime("09:00", "%H:%M").time(), datetime.strptime("10:00", "%H:%M").time(), False),
-                (datetime.strptime("10:00", "%H:%M").time(), datetime.strptime("11:00", "%H:%M").time(), False),
-                (datetime.strptime("11:00", "%H:%M").time(), datetime.strptime("11:30", "%H:%M").time(), False),
-                (datetime.strptime("11:30", "%H:%M").time(), datetime.strptime("12:00", "%H:%M").time(), True),
-                (datetime.strptime("12:00", "%H:%M").time(), datetime.strptime("13:00", "%H:%M").time(), False),
-                (datetime.strptime("13:00", "%H:%M").time(), datetime.strptime("14:00", "%H:%M").time(), False),
+                (
+                    datetime.strptime("09:00", "%H:%M").time(),
+                    datetime.strptime("10:00", "%H:%M").time(),
+                    False,
+                ),
+                (
+                    datetime.strptime("10:00", "%H:%M").time(),
+                    datetime.strptime("11:00", "%H:%M").time(),
+                    False,
+                ),
+                (
+                    datetime.strptime("11:00", "%H:%M").time(),
+                    datetime.strptime("11:30", "%H:%M").time(),
+                    False,
+                ),
+                (
+                    datetime.strptime("11:30", "%H:%M").time(),
+                    datetime.strptime("12:00", "%H:%M").time(),
+                    True,
+                ),
+                (
+                    datetime.strptime("12:00", "%H:%M").time(),
+                    datetime.strptime("13:00", "%H:%M").time(),
+                    False,
+                ),
+                (
+                    datetime.strptime("13:00", "%H:%M").time(),
+                    datetime.strptime("14:00", "%H:%M").time(),
+                    False,
+                ),
             ],
         )
 
-    def test_build_windows_from_stage_config_keeps_preschool_half_slots_split_by_breaks(self):
+    def test_build_windows_from_stage_config_keeps_preschool_half_slots_split_by_breaks(
+        self,
+    ):
         windows = build_windows_from_stage_config(
             {
                 "start_time": "09:00",
@@ -2246,13 +2278,41 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(
             windows,
             [
-                (datetime.strptime("09:00", "%H:%M").time(), datetime.strptime("10:00", "%H:%M").time(), False),
-                (datetime.strptime("10:00", "%H:%M").time(), datetime.strptime("10:30", "%H:%M").time(), False),
-                (datetime.strptime("10:30", "%H:%M").time(), datetime.strptime("11:00", "%H:%M").time(), True),
-                (datetime.strptime("11:00", "%H:%M").time(), datetime.strptime("12:00", "%H:%M").time(), False),
-                (datetime.strptime("12:00", "%H:%M").time(), datetime.strptime("13:00", "%H:%M").time(), False),
-                (datetime.strptime("13:00", "%H:%M").time(), datetime.strptime("13:30", "%H:%M").time(), False),
-                (datetime.strptime("13:30", "%H:%M").time(), datetime.strptime("14:00", "%H:%M").time(), True),
+                (
+                    datetime.strptime("09:00", "%H:%M").time(),
+                    datetime.strptime("10:00", "%H:%M").time(),
+                    False,
+                ),
+                (
+                    datetime.strptime("10:00", "%H:%M").time(),
+                    datetime.strptime("10:30", "%H:%M").time(),
+                    False,
+                ),
+                (
+                    datetime.strptime("10:30", "%H:%M").time(),
+                    datetime.strptime("11:00", "%H:%M").time(),
+                    True,
+                ),
+                (
+                    datetime.strptime("11:00", "%H:%M").time(),
+                    datetime.strptime("12:00", "%H:%M").time(),
+                    False,
+                ),
+                (
+                    datetime.strptime("12:00", "%H:%M").time(),
+                    datetime.strptime("13:00", "%H:%M").time(),
+                    False,
+                ),
+                (
+                    datetime.strptime("13:00", "%H:%M").time(),
+                    datetime.strptime("13:30", "%H:%M").time(),
+                    False,
+                ),
+                (
+                    datetime.strptime("13:30", "%H:%M").time(),
+                    datetime.strptime("14:00", "%H:%M").time(),
+                    True,
+                ),
             ],
         )
 
@@ -2379,14 +2439,16 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
                 classrooms=[self.classroom],
             )
         )
-        slot_by_session, _classroom_by_session, _ = schedule_assignment._cp_sat_session_assignment(
-            sessions=sessions,
-            slots=slots,
-            compatible_classrooms_by_session=compatible_classrooms_by_session,
-            random_seed=None,
-            fixed_assignments=None,
-            previous_assignment_by_session=None,
-            generation_options=None,
+        slot_by_session, _classroom_by_session, _ = (
+            schedule_assignment._cp_sat_session_assignment(
+                sessions=sessions,
+                slots=slots,
+                compatible_classrooms_by_session=compatible_classrooms_by_session,
+                random_seed=None,
+                fixed_assignments=None,
+                previous_assignment_by_session=None,
+                generation_options=None,
+            )
         )
 
         assigned_ranges = [

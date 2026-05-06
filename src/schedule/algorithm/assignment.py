@@ -22,7 +22,6 @@ from schedule.algorithm.constraints import (
     apply_soft_constraints,
 )
 from schedule.algorithm.constraints.soft import evaluate_soft_score
-from schedule.algorithm.postprocessing import apply_teacher_gap_local_search
 from schedule.algorithm.diagnostics import (
     BOTTLENECK_RANK,
     analyze_schedule_infeasibility,
@@ -30,6 +29,7 @@ from schedule.algorithm.diagnostics import (
     raise_schedule_generation_diagnostics,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
+from schedule.algorithm.postprocessing import apply_teacher_gap_local_search
 from schedule.algorithm.slots import build_real_time_intervals
 
 
@@ -91,14 +91,16 @@ def solve_session_assignment(
         classrooms=classrooms,
     )
 
-    slot_by_session, classroom_by_session, is_optimal, soft_score_info = _cp_sat_session_assignment(
-        sessions=sessions,
-        slots=slots,
-        compatible_classrooms_by_session=compatible_classrooms_by_session,
-        random_seed=random_seed,
-        fixed_assignments=fixed_assignments,
-        previous_assignment_by_session=previous_assignment_by_session,
-        generation_options=generation_options,
+    slot_by_session, classroom_by_session, is_optimal, soft_score_info = (
+        _cp_sat_session_assignment(
+            sessions=sessions,
+            slots=slots,
+            compatible_classrooms_by_session=compatible_classrooms_by_session,
+            random_seed=random_seed,
+            fixed_assignments=fixed_assignments,
+            previous_assignment_by_session=previous_assignment_by_session,
+            generation_options=generation_options,
+        )
     )
     return slot_by_session, classroom_by_session, is_optimal, soft_score_info
 
@@ -223,7 +225,9 @@ def _cp_sat_session_assignment(
         )
 
     feasible_timeout = None
-    optimization_timeout = _resolve_optimization_timeout_seconds(generation_options=opts)
+    optimization_timeout = _resolve_optimization_timeout_seconds(
+        generation_options=opts
+    )
 
     # Phase 1: find any feasible assignment with hard constraints only.
     feasible_solver = _build_solver(
@@ -333,7 +337,12 @@ def _cp_sat_session_assignment(
             slots=slots,
             generation_options=generation_options,
         )
-        return phase2_slots, phase2_classrooms, optimization_status == cp_model.OPTIMAL, soft_score_info
+        return (
+            phase2_slots,
+            phase2_classrooms,
+            optimization_status == cp_model.OPTIMAL,
+            soft_score_info,
+        )
 
     # Fallback: keep the feasible phase solution if optimisation times out/fails.
     pre_ls_slots = list(phase1_slots)
@@ -743,7 +752,13 @@ def _build_schedule_stability_terms(*, x, y, previous_assignment_by_session):
 
 
 def _build_soft_score_info(
-    *, phase1_slots, pre_local_search_slots, phase2_slots, sessions, slots, generation_options
+    *,
+    phase1_slots,
+    pre_local_search_slots,
+    phase2_slots,
+    sessions,
+    slots,
+    generation_options,
 ):
     """Compute soft scores at three checkpoints and return a comparison dict.
     Input: phase1_slots - slot_by_session from the feasibility phase;

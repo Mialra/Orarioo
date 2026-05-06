@@ -682,7 +682,9 @@ def _eval_tc_distribution_score(*, slot_by_session, sessions, slots):
         return 0
 
     total = _eval_tc_interval_coverage(
-        slot_by_session=slot_by_session, slots=slots, tc_session_indices=tc_session_indices
+        slot_by_session=slot_by_session,
+        slots=slots,
+        tc_session_indices=tc_session_indices,
     )
     total += _eval_tc_teacher_spread_and_consecutive(
         slot_by_session=slot_by_session,
@@ -700,7 +702,9 @@ def _eval_tc_interval_coverage(*, slot_by_session, slots, tc_session_indices):
     for interval in real_time_intervals:
         interval_slots = set(interval["slot_indices"])
         tc_count = sum(
-            1 for s_idx in tc_session_indices if slot_by_session[s_idx] in interval_slots
+            1
+            for s_idx in tc_session_indices
+            if slot_by_session[s_idx] in interval_slots
         )
         if tc_count > 0:
             total += TC_REAL_INTERVAL_COVERAGE_WEIGHT
@@ -732,7 +736,9 @@ def _eval_tc_teacher_spread_and_consecutive(
 def _eval_tc_teacher_day(*, slot_by_session, teacher_tc_sessions, day_slot_list):
     """Compute spread bonus and consecutive penalty for one teacher on one day."""
     day_slots_set = set(day_slot_list)
-    has_tc = any(slot_by_session[s_idx] in day_slots_set for s_idx in teacher_tc_sessions)
+    has_tc = any(
+        slot_by_session[s_idx] in day_slots_set for s_idx in teacher_tc_sessions
+    )
     total = TC_TEACHER_DAY_SPREAD_WEIGHT if has_tc else 0
 
     if len(day_slot_list) < 2:

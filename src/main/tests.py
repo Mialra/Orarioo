@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.urls import reverse
 
+
 class MainSmokeTests(TestCase):
     """Smoke tests for main public and dashboard routes."""
 

@@ -429,7 +429,9 @@ def _default_schedule_config():
         start_t = lesson_windows[0][0]
         end_t = windows[-1][1]
         first_start, first_end = lesson_windows[0]
-        dur = (first_end.hour * 60 + first_end.minute) - (first_start.hour * 60 + first_start.minute)
+        dur = (first_end.hour * 60 + first_end.minute) - (
+            first_start.hour * 60 + first_start.minute
+        )
         result[stage.value] = {
             "label": _DEFAULT_STAGE_LABELS.get(stage.value, stage.value),
             "color": DEFAULT_STAGE_COLORS.get(stage.value, "blue"),
@@ -451,7 +453,9 @@ def _compute_slot_start_times(schedule_config):
     """
     windows = parse_schedule_config_to_slot_windows(schedule_config)
     if windows is None:
-        windows = {stage: list(entries) for stage, entries in STAGE_SLOT_WINDOWS.items()}
+        windows = {
+            stage: list(entries) for stage, entries in STAGE_SLOT_WINDOWS.items()
+        }
     times = set()
     for stage_windows in windows.values():
         for start_t, _end_t, is_recess in stage_windows:
@@ -483,7 +487,9 @@ class OnboardingView(APIView):
         request.user.active_team = team
         request.user.save(update_fields=["active_team"])
 
-        return Response(UserSerializer(request.user).data, status=status.HTTP_201_CREATED)
+        return Response(
+            UserSerializer(request.user).data, status=status.HTTP_201_CREATED
+        )
 
 
 class ScheduleConfigView(APIView):

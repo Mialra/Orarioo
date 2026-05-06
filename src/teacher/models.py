@@ -29,9 +29,7 @@ class Teacher(TeamScopedModel, AuditableEntity):
         db_table = "teacher"
         ordering = ["name", "id"]
         constraints = [
-            team_scoped_case_insensitive_name_constraint(
-                "teacher_team_name_ci_unique"
-            )
+            team_scoped_case_insensitive_name_constraint("teacher_team_name_ci_unique")
         ]
 
     def clean(self):
