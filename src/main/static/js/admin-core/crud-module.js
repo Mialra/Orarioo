@@ -284,7 +284,6 @@
       const payload = config.form.buildPayload();
       const isValid = formUtils.validateFields(config.form.fields, payload);
       if (!isValid) {
-        uiState.showAlert(alertBox, config.messages.validationError, "warning");
         return;
       }
 
@@ -301,7 +300,6 @@
           response.errorInfo && response.errorInfo.message
             ? response.errorInfo.message
             : response.data && response.data.detail;
-        uiState.showAlert(alertBox, detail || config.messages.saveError, "danger");
         setSubmitLoading(false);
         return;
       }
@@ -376,14 +374,12 @@
     if (config.form.cancelButton) {
       config.form.cancelButton.addEventListener("click", function () {
         clearFormUiState();
-        uiState.hideAlert(alertBox);
       });
     }
 
     if (formController.element) {
       formController.element.addEventListener("hidden.bs.modal", function () {
         clearFormUiState();
-        uiState.hideAlert(alertBox);
       });
     }
 

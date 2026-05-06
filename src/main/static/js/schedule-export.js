@@ -31,9 +31,15 @@
      * Output: array of entity objects
      */
     function getEntitiesByType(entityType) {
-      if (entityType === "group") { return state.currentGroups; }
-      if (entityType === "teacher") { return state.currentTeachers; }
-      if (entityType === "classroom") { return state.currentClassrooms; }
+      if (entityType === "group") {
+        return state.currentGroups;
+      }
+      if (entityType === "teacher") {
+        return state.currentTeachers;
+      }
+      if (entityType === "classroom") {
+        return state.currentClassrooms;
+      }
       return [];
     }
 
@@ -51,7 +57,7 @@
       var checkedValues = new Set(
         Array.from(container.querySelectorAll("input[type='checkbox']:checked")).map(function (input) {
           return input.value;
-        })
+        }),
       );
       container.innerHTML = getEntitiesByType(entityType)
         .slice()
@@ -62,9 +68,20 @@
           var checked = checkedValues.has(String(entity.id)) ? " checked" : "";
           return (
             '<div class="checkbox-item">' +
-            '<input type="checkbox" id="check-' + entityType + "-" + entity.id +
-            '" value="' + entity.id + '"' + checked + ">" +
-            '<label for="check-' + entityType + "-" + entity.id + '">' +
+            '<input type="checkbox" id="check-' +
+            entityType +
+            "-" +
+            entity.id +
+            '" value="' +
+            entity.id +
+            '"' +
+            checked +
+            ">" +
+            '<label for="check-' +
+            entityType +
+            "-" +
+            entity.id +
+            '">' +
             (entity.name || "#" + entity.id) +
             "</label></div>"
           );
@@ -95,8 +112,12 @@
         return [];
       }
       return Array.from(container.querySelectorAll("input[type='checkbox']:checked"))
-        .map(function (checkbox) { return Number.parseInt(checkbox.value, 10); })
-        .filter(function (value) { return Number.isInteger(value) && value > 0; });
+        .map(function (checkbox) {
+          return Number.parseInt(checkbox.value, 10);
+        })
+        .filter(function (value) {
+          return Number.isInteger(value) && value > 0;
+        });
     }
 
     /**
@@ -136,7 +157,9 @@
       var response = await window.orariooAuth.apiFetch("/api" + endpoint, { method: "GET" });
       if (!response.ok) {
         var errorData = {};
-        try { errorData = await response.json(); } catch (_e) {}
+        try {
+          errorData = await response.json();
+        } catch (_e) {}
         throw new Error(extractApiErrorMessage(errorData, "No se pudo exportar."));
       }
       var disposition = response.headers.get("Content-Disposition") || "";
@@ -189,7 +212,9 @@
           showAlert("warning", "No se pudieron cargar las opciones de exportacion.");
           return false;
         })
-        .finally(function () { state.exportOptionsPromise = null; });
+        .finally(function () {
+          state.exportOptionsPromise = null;
+        });
       return state.exportOptionsPromise;
     }
 
@@ -203,6 +228,11 @@
       var exportFormat = document.getElementById("exportFormat");
       if (!modal || !exportFormat) {
         return;
+      }
+      var modalAlert = document.getElementById("export-modal-alert");
+      if (modalAlert) {
+        modalAlert.textContent = "";
+        modalAlert.className = "alert d-none mb-3";
       }
       var safeConfig = exportConfig || {};
       state.currentExportSource = safeConfig.source || "generated";
@@ -252,7 +282,7 @@
      */
     async function handleExportConfirm() {
       if (!hasAnyExportSelection()) {
-        showAlert("error", "Marca al menos una entidad o selecciona objetos concretos para exportar.");
+        showAlert("error", "Marca al menos un elemento para exportar.");
         return;
       }
       var exportFormat = document.getElementById("exportFormat");
@@ -270,9 +300,15 @@
       if (state.currentExportSource === "saved" && state.currentExportSavedName) {
         params.set("saved_timetable_name", state.currentExportSavedName);
       }
-      if (selectedGroupIds.length) { params.set("group_ids", selectedGroupIds.join(",")); }
-      if (selectedTeacherIds.length) { params.set("teacher_ids", selectedTeacherIds.join(",")); }
-      if (selectedClassroomIds.length) { params.set("classroom_ids", selectedClassroomIds.join(",")); }
+      if (selectedGroupIds.length) {
+        params.set("group_ids", selectedGroupIds.join(","));
+      }
+      if (selectedTeacherIds.length) {
+        params.set("teacher_ids", selectedTeacherIds.join(","));
+      }
+      if (selectedClassroomIds.length) {
+        params.set("classroom_ids", selectedClassroomIds.join(","));
+      }
       try {
         await downloadFileFromApi("/schedules/export/?" + params.toString());
         closeExportModal();

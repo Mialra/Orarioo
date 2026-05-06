@@ -110,7 +110,13 @@
   const exportManager = window.ScheduleExport.createExportManager({
     state: state,
     apiJson: apiJson,
-    showAlert: showAlert,
+    showAlert: function (type, message) {
+      if (type === "error" || type === "warning") {
+        showExportModalAlert(type, message);
+      } else {
+        showAlert(type, message);
+      }
+    },
     extractApiErrorMessage: extractApiErrorMessage,
     showModalElement: showModalElement,
     hideModalElement: hideModalElement,
@@ -461,6 +467,39 @@
     }
   }
 
+  /**
+   * Displays a contextual alert banner in the export modal.
+   * Input: type - "success" | "error" | "info" | "warning"
+   *        message - string or error info object (rendered via errorHandler.renderAlertContent)
+   */
+  function showExportModalAlert(type, message) {
+    const alert = document.getElementById("export-modal-alert");
+    if (!alert) {
+      showAlert(type, message);
+      return;
+    }
+    const classMap = {
+      success: "alert-success",
+      error: "alert-danger",
+      info: "alert-info",
+      warning: "alert-warning",
+    };
+    alert.className = "alert " + (classMap[type] || "alert-info");
+    if (
+      message &&
+      typeof message === "object" &&
+      errorHandler &&
+      typeof errorHandler.renderAlertContent === "function"
+    ) {
+      alert.innerHTML = errorHandler.renderAlertContent(message);
+    } else if (errorHandler && typeof errorHandler.escapeHtml === "function") {
+      alert.innerHTML = window.OrariooErrorHandler.escapeHtml(message);
+    } else {
+      alert.textContent = message;
+    }
+    alert.classList.remove("d-none");
+  }
+
   // ── API helpers ────────────────────────────────────────────────────────────
 
   /**
@@ -512,10 +551,13 @@
    * Output: Promise<{ok, status, data, response}>
    */
   async function apiJson(path, method, body, fetchOptions) {
-    const options = Object.assign({
-      method: method || "GET",
-      headers: { "Content-Type": "application/json" },
-    }, fetchOptions || {});
+    const options = Object.assign(
+      {
+        method: method || "GET",
+        headers: { "Content-Type": "application/json" },
+      },
+      fetchOptions || {},
+    );
     if (body !== undefined && body !== null) {
       options.body = JSON.stringify(body);
     }
