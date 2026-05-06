@@ -35,12 +35,15 @@ AUDIT_ENTITY_FILTER_CHOICES = (
     "group",
     "subject",
     "user",
+    "collaborationteam",
     "horario",
     "profesor",
     "aula",
     "grupo",
     "asignatura",
     "usuario",
+    "configuracion",
+    "configuración",
 )
 AUDIT_ACTION_FILTER_CHOICES = (
     "CREATE",
@@ -85,6 +88,9 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
         "horario": "schedule",
         "user": "user",
         "usuario": "user",
+        "collaborationteam": "collaborationteam",
+        "configuracion": "collaborationteam",
+        "configuración": "collaborationteam",
     }
     ACTION_FILTER_ALIASES = {
         "create": "CREATE",

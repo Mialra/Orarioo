@@ -625,6 +625,16 @@ class ScheduleConfigSerializer(serializers.Serializer):
             validated[stage] = stage_cfg
         if errors:
             raise serializers.ValidationError(list(errors.values()))
+        seen_labels = {}
+        for stage_code, stage_cfg in validated.items():
+            label = (stage_cfg.get("label") or "").strip().lower()
+            if not label:
+                continue
+            if label in seen_labels:
+                raise serializers.ValidationError(
+                    f"El nombre de tramo '{stage_cfg['label']}' ya está en uso."
+                )
+            seen_labels[label] = stage_code
         return validated
 
 

@@ -77,6 +77,11 @@ class Subject(TeamScopedModel, AuditableEntity):
                 {"weekly_hours": "Weekly hours must be greater than zero."}
             )
 
+    def get_stage_display(self):
+        config = getattr(getattr(self, "team", None), "schedule_config", None) or {}
+        label = (config.get(self.stage) or {}).get("label")
+        return label or self.stage
+
     def __str__(self):
         """Return a human-readable representation including the subject's stage.
         Input: self - Subject instance

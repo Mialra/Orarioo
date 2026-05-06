@@ -21,6 +21,11 @@ class Group(TeamScopedModel, AuditableEntity):
             team_scoped_case_insensitive_name_constraint("group_team_name_ci_unique")
         ]
 
+    def get_stage_display(self):
+        config = getattr(getattr(self, "team", None), "schedule_config", None) or {}
+        label = (config.get(self.stage) or {}).get("label")
+        return label or self.stage
+
     def __str__(self):
         """Return name and stage label for admin lists and audit logs.
         Input: self - Group instance

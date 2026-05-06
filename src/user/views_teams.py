@@ -8,7 +8,11 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from auditableEntity.audit import AUDITABLE_ENTITY_TYPES, suppress_audit_events
+from auditableEntity.audit import (
+    AUDITABLE_ENTITY_TYPES,
+    create_stage_audit_entries,
+    suppress_audit_events,
+)
 from auditableEntity.models import AuditActionType
 from common.errors.exceptions import ResourceConflictError, ValidationAppError
 from common.stages import (
@@ -479,13 +483,19 @@ class OnboardingView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
+        initial_config = data.get("schedule_config") or {}
         team = CollaborationTeam.objects.create(
             name=data["team_name"],
-            schedule_config=data.get("schedule_config") or {},
+            schedule_config=initial_config,
         )
         team.members.add(request.user)
         request.user.active_team = team
         request.user.save(update_fields=["active_team"])
+
+        if initial_config:
+            create_stage_audit_entries(
+                CollaborationTeam, {}, initial_config, team, actor=request.user
+            )
 
         return Response(
             UserSerializer(request.user).data, status=status.HTTP_201_CREATED
@@ -561,6 +571,13 @@ class ScheduleConfigView(APIView):
 
         team.schedule_config = next_config
         team.save(update_fields=["schedule_config"])
+        create_stage_audit_entries(
+            CollaborationTeam,
+            current_display_config,
+            next_config,
+            team,
+            actor=request.user,
+        )
         return Response(
             {
                 "schedule_config": team.schedule_config,

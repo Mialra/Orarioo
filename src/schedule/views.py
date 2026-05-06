@@ -556,7 +556,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             entity_name=timetable_name,
             action_type=AuditActionType.DELETE,
             detail=(
-                f'Se elimino el horario guardado "{timetable_name}" '
+                f'Se eliminó el horario guardado "{timetable_name}" '
                 f"con {deleted_count} sesiones."
             ),
             changed_fields=[

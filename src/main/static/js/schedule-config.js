@@ -808,8 +808,15 @@
     setModalLoading(false);
 
     if (!res.ok) {
-      const message = res.errorInfo && res.errorInfo.message ? res.errorInfo.message : "No se pudo guardar la etapa.";
-      showAlert(message, "error");
+      const errorInfo = res.errorInfo || {};
+      const code = (errorInfo.code || "").toUpperCase();
+      const message = errorInfo.message || "No se pudo guardar la etapa.";
+      const breakErrorCodes = ["BREAK_OUTSIDE_STAGE_RANGE", "INVALID_BREAK_RANGE", "OVERLAPPING_BREAKS"];
+      if (breakErrorCodes.indexOf(code) >= 0 && elements.breaksError) {
+        elements.breaksError.textContent = message;
+      } else {
+        showAlert(message, "error");
+      }
       return;
     }
 

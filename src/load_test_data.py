@@ -25,6 +25,11 @@ django.setup()
 # NOTE: These imports must come after django.setup() - ignore E402
 from django.contrib.auth import get_user_model  # noqa: E402
 
+from auditableEntity.audit import ( # noqa: E402
+    AUDITABLE_ENTITY_TYPES,  # noqa: E402
+    suppress_audit_events, # noqa: E402
+)
+from auditableEntity.models import AuditActionType, AuditEntry  # noqa: E402
 from classroom.models import Classroom  # noqa: E402
 from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
 from group.models import Group  # noqa: E402
@@ -84,13 +89,20 @@ def slot_keys(day_codes, times):
 def clear_existing_data():
     """Clear all existing test data (optional - be careful in production!)"""
     print("⚠️  Clearing existing data...")
-    Schedule.objects.all().delete()
-    Subject.objects.all().delete()
-    Teacher.objects.all().delete()
-    Group.objects.all().delete()
-    Classroom.objects.all().delete()
-    User.objects.filter(email__contains="test").delete()
-    CollaborationTeam.objects.filter(members__isnull=True).delete()
+    suppress_rules = [
+        (entity_type, action_type)
+        for entity_type in AUDITABLE_ENTITY_TYPES
+        for action_type in AuditActionType.values
+    ]
+    with suppress_audit_events(*suppress_rules):
+        Schedule.objects.all().delete()
+        Subject.objects.all().delete()
+        Teacher.objects.all().delete()
+        Group.objects.all().delete()
+        Classroom.objects.all().delete()
+        User.objects.filter(email__contains="test").delete()
+        AuditEntry.objects.all().delete()
+        CollaborationTeam.objects.filter(members__isnull=True).delete()
     print("✅ Existing test data cleared")
 
 
