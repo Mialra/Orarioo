@@ -98,8 +98,15 @@
       if (submitSpinner) {
         submitSpinner.classList.toggle("d-none", !isLoading);
       }
-      if (submitText && isLoading) {
-        submitText.textContent = config.form.messages.saving;
+      if (submitText) {
+        if (isLoading) {
+          submitText.textContent = config.form.messages.saving;
+        } else {
+          const labels = config.form.labels || {};
+          submitText.textContent = formController.getMode() === "edit"
+            ? (labels.editSubmit || "Guardar")
+            : (labels.createSubmit || "Guardar");
+        }
       }
     }
 

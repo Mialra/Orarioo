@@ -12,7 +12,6 @@
          aria-busy="false"
          aria-live="polite"></div>
   </div>
-
   <div class="modal fade"
        id="schedule-config-modal"
        tabindex="-1"
@@ -34,10 +33,9 @@
           <form id="schedule-config-form" class="row g-3" novalidate>
             <input type="hidden" id="schedule-config-mode" value="create">
             <input type="hidden" id="schedule-config-editing-code" value="">
-
             <div class="col-12">
               <div class="d-flex align-items-center gap-1 mb-1">
-                <label class="form-label fw-semibold mb-0" for="schedule-config-name">Nombre de la etapa</label>
+                <label class="form-label fw-semibold mb-0" for="schedule-config-name">Nombre</label>
                 <span class="text-danger" aria-hidden="true">*</span>
               </div>
               <input class="form-control"
@@ -48,16 +46,15 @@
                      required>
               <div class="invalid-feedback" id="schedule-config-name-error"></div>
             </div>
-
             <div class="col-12">
               <div class="d-flex align-items-center gap-1 mb-2">
                 <span class="form-label fw-semibold d-block mb-0">Color</span>
                 <span class="text-danger" aria-hidden="true">*</span>
               </div>
-              <div id="schedule-config-color-options" class="schedule-config-color-options"></div>
+              <div id="schedule-config-color-options"
+                   class="schedule-config-color-options"></div>
               <div class="invalid-feedback d-block" id="schedule-config-color-error"></div>
             </div>
-
             <div class="col-6">
               <div class="d-flex align-items-center gap-1 mb-1">
                 <label class="form-label fw-semibold mb-0" for="schedule-config-start-time">Hora de entrada</label>
@@ -69,7 +66,6 @@
                      required>
               <div class="invalid-feedback" id="schedule-config-start-time-error"></div>
             </div>
-
             <div class="col-6">
               <div class="d-flex align-items-center gap-1 mb-1">
                 <label class="form-label fw-semibold mb-0" for="schedule-config-end-time">Hora de salida</label>
@@ -81,7 +77,6 @@
                      required>
               <div class="invalid-feedback" id="schedule-config-end-time-error"></div>
             </div>
-
             <div class="col-12">
               <div class="d-flex justify-content-between align-items-center mb-2">
                 <span class="form-label fw-semibold mb-0">Recreos</span>
@@ -90,11 +85,9 @@
                         id="schedule-config-add-break-btn">+ Añadir recreo</button>
               </div>
               <div id="schedule-config-breaks-list"></div>
-              <p id="schedule-config-no-breaks"
-                 class="text-body-secondary small mb-0">No hay recreos configurados.</p>
+              <p id="schedule-config-no-breaks" class="text-body-secondary small mb-0">No hay recreos configurados.</p>
               <div class="invalid-feedback d-block" id="schedule-config-breaks-error"></div>
             </div>
-
             <div class="col-12 admin-form-actions">
               <button type="button"
                       class="btn btn-outline-secondary px-4 admin-modal-action-btn"
@@ -114,7 +107,6 @@
       </div>
     </div>
   </div>
-
   <div class="modal fade"
        id="schedule-config-delete-modal"
        tabindex="-1"

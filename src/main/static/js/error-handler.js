@@ -29,11 +29,7 @@
     if (!payload || typeof payload !== "object") {
       return [];
     }
-    if (
-      payload.errors &&
-      Array.isArray(payload.errors.non_field_errors) &&
-      payload.errors.non_field_errors.length
-    ) {
+    if (payload.errors && Array.isArray(payload.errors.non_field_errors) && payload.errors.non_field_errors.length) {
       return payload.errors.non_field_errors;
     }
     const context = payload._error && payload._error.context ? payload._error.context : {};
@@ -52,14 +48,10 @@
     },
     DUPLICATE_VALUE: function (entry) {
       const context = entry && entry.context ? entry.context : {};
-      const value = context.value || "";
       if (context.field === "email") {
         return "Ya existe un usuario con este correo electrónico.";
       }
-      if (value) {
-        return 'Ya existe un registro con el valor "' + value + '".';
-      }
-      return "Ya existe un registro con este valor.";
+      return "Este nombre ya existe.";
     },
     REQUIRED_COLLECTION: function () {
       return "Debes seleccionar al menos un elemento.";
@@ -306,11 +298,19 @@
     },
     TEACHER_OVERLAPPED_DEMAND: function (entry) {
       const context = entry && entry.context ? entry.context : {};
-      return 'El profesor "' + (context.teacher_name || "sin nombre") + '" tiene varias asignaturas compitiendo por muy pocos huecos.';
+      return (
+        'El profesor "' +
+        (context.teacher_name || "sin nombre") +
+        '" tiene varias asignaturas compitiendo por muy pocos huecos.'
+      );
     },
     GROUP_OVERLAPPED_DEMAND: function (entry) {
       const context = entry && entry.context ? entry.context : {};
-      return 'El curso "' + (context.group_name || "sin nombre") + '" tiene varias asignaturas compitiendo por muy pocos huecos.';
+      return (
+        'El curso "' +
+        (context.group_name || "sin nombre") +
+        '" tiene varias asignaturas compitiendo por muy pocos huecos.'
+      );
     },
     CLASSROOM_BOTTLENECK: function (entry) {
       const context = entry && entry.context ? entry.context : {};
@@ -341,7 +341,11 @@
     },
     NO_GAP_CONSTRAINT_TOO_STRICT: function (entry) {
       const context = entry && entry.context ? entry.context : {};
-      return 'La restricción de no dejar huecos intermedios está bloqueando al curso "' + (context.group_name || "sin nombre") + '".';
+      return (
+        'La restricción de no dejar huecos intermedios está bloqueando al curso "' +
+        (context.group_name || "sin nombre") +
+        '".'
+      );
     },
     STAGE_SLOT_WINDOW_TOO_NARROW: function (entry) {
       const context = entry && entry.context ? entry.context : {};
@@ -526,6 +530,10 @@
       return "Este campo no puede tener más de " + maxLength + " caracteres.";
     }
 
+    if (/already exists/i.test(rawMessage)) {
+      return "Este nombre ya existe.";
+    }
+
     if (safeEntry.message) {
       return rawMessage;
     }
@@ -610,7 +618,9 @@
     if (visibleDiagnostics.length) {
       parts.push('<ul class="mb-0 mt-2">');
       visibleDiagnostics.forEach(function (item) {
-        parts.push("<li>" + escapeHtml(item.message || item.backendMessage || "Se ha detectado un problema.") + "</li>");
+        parts.push(
+          "<li>" + escapeHtml(item.message || item.backendMessage || "Se ha detectado un problema.") + "</li>",
+        );
       });
       parts.push("</ul>");
     }
@@ -618,7 +628,9 @@
     if (extraDiagnostics.length) {
       parts.push('<details class="mt-2"><summary>Ver más problemas detectados</summary><ul class="mb-0 mt-2">');
       extraDiagnostics.forEach(function (item) {
-        parts.push("<li>" + escapeHtml(item.message || item.backendMessage || "Se ha detectado un problema.") + "</li>");
+        parts.push(
+          "<li>" + escapeHtml(item.message || item.backendMessage || "Se ha detectado un problema.") + "</li>",
+        );
       });
       parts.push("</ul></details>");
     }

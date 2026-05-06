@@ -742,7 +742,7 @@
     }
     if (currentConfig[stageCode]) {
       if (addStageNameError) {
-        addStageNameError.textContent = "Ya existe una etapa con ese nombre.";
+        addStageNameError.textContent = "Este nombre ya existe.";
       }
       return;
     }

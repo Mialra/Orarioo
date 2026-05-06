@@ -792,7 +792,7 @@
         return;
       }
       if (nextConfig[code]) {
-        setFieldError(elements.nameError, "Ya existe una etapa con ese nombre.");
+        setFieldError(elements.nameError, "Este nombre ya existe.");
         return;
       }
       nextConfig[code] = buildStageCfg(name, color, startTime, endTime, breaks);
