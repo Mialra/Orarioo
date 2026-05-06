@@ -11,8 +11,6 @@
         document.querySelectorAll("[data-audit-range-preset]")
     );
     const resetFiltersButton = document.getElementById("audit-reset-filters");
-    const exportCsvButton = document.getElementById("audit-export-csv");
-    const exportPdfButton = document.getElementById("audit-export-pdf");
     const tableBody = document.getElementById("audit-table-body");
     const errorNode = document.getElementById("audit-error");
     const paginationNode = document.getElementById("audit-pagination");
@@ -711,6 +709,9 @@
                             state.datePickerInstance.set("minDate", state.dateAbsoluteMin);
                         }
                         setDateRangeSelection("", "");
+                        fetchAuditEntries(1).catch(function (error) {
+                            setError(error.message || "No se pudo cargar el registro de cambios.");
+                        });
                         return;
                     }
 
@@ -725,11 +726,17 @@
 
                     if (selectedDates.length === 2 && state.datePickerInstance) {
                         state.datePickerInstance.set("minDate", state.dateAbsoluteMin);
+                        fetchAuditEntries(1).catch(function (error) {
+                            setError(error.message || "No se pudo cargar el registro de cambios.");
+                        });
                     }
                 },
                 onClose: function (selectedDates) {
                     if (Array.isArray(selectedDates) && selectedDates.length === 1) {
                         setDateRangeSelection(toIsoDate(selectedDates[0]), "");
+                        fetchAuditEntries(1).catch(function (error) {
+                            setError(error.message || "No se pudo cargar el registro de cambios.");
+                        });
                     }
                 },
             });
@@ -810,10 +817,15 @@
         updatePagination();
     }
 
-    async function exportAudit(format) {
+    async function exportAudit(format, selectedColumns) {
         const params = buildQueryParams({ page: 1 });
         params.set("export_format", format);
         params.delete("page");
+        if (Array.isArray(selectedColumns) && selectedColumns.length > 0) {
+            selectedColumns.forEach(function (col) {
+                params.append("columns", col);
+            });
+        }
 
         const response = await window.orariooAuth.apiFetch(
             "/api/audit-entries/export/?" + params.toString(),
@@ -844,12 +856,15 @@
         window.URL.revokeObjectURL(downloadUrl);
     }
 
-    filtersForm.addEventListener("submit", function (event) {
-        event.preventDefault();
-        fetchAuditEntries(1).catch(function (error) {
-            setError(error.message || "No se pudo cargar el registro de cambios.");
-            setLoading("No se pudo cargar la actividad.");
-        });
+    [entityFilter, actionFilter, userFilter].forEach(function (select) {
+        if (select) {
+            select.addEventListener("change", function () {
+                fetchAuditEntries(1).catch(function (error) {
+                    setError(error.message || "No se pudo cargar el registro de cambios.");
+                    setLoading("No se pudo cargar la actividad.");
+                });
+            });
+        }
     });
 
     if (resetFiltersButton) {
@@ -903,21 +918,49 @@
         });
     }
 
-    if (exportCsvButton) {
-        exportCsvButton.addEventListener("click", function () {
-            exportAudit("csv").catch(function (error) {
-                setError(error.message || "No se pudo exportar en CSV.");
-            });
-        });
-    }
+    (function () {
+        const auditExportModalElement = document.getElementById("auditExportModal");
+        const auditExportConfirmBtn = document.getElementById("auditExportConfirmBtn");
+        const auditExportColCards = auditExportModalElement
+            ? Array.from(auditExportModalElement.querySelectorAll("[data-audit-export-col]"))
+            : [];
 
-    if (exportPdfButton) {
-        exportPdfButton.addEventListener("click", function () {
-            exportAudit("pdf").catch(function (error) {
-                setError(error.message || "No se pudo exportar en PDF.");
+        auditExportColCards.forEach(function (card) {
+            card.addEventListener("click", function () {
+                const isActive = card.classList.toggle("active");
+                card.setAttribute("aria-pressed", isActive ? "true" : "false");
             });
         });
-    }
+
+        if (auditExportModalElement) {
+            auditExportModalElement.addEventListener("hidden.bs.modal", function () {
+                auditExportColCards.forEach(function (card) {
+                    card.classList.remove("active");
+                    card.setAttribute("aria-pressed", "false");
+                });
+            });
+        }
+
+        if (auditExportConfirmBtn) {
+            auditExportConfirmBtn.addEventListener("click", function () {
+                const format = document.getElementById("auditExportFormat")
+                    ? document.getElementById("auditExportFormat").value
+                    : "csv";
+
+                const selectedColumns = auditExportColCards
+                    .filter(function (card) { return card.classList.contains("active"); })
+                    .map(function (card) { return card.getAttribute("data-audit-export-col"); });
+
+                if (auditExportModalElement && window.bootstrap) {
+                    window.bootstrap.Modal.getInstance(auditExportModalElement).hide();
+                }
+
+                exportAudit(format, selectedColumns).catch(function (error) {
+                    setError(error.message || "No se pudo exportar el registro de cambios.");
+                });
+            });
+        }
+    }());
 
     tableBody.addEventListener("click", function (event) {
         const button = event.target.closest(".audit-detail-button");

@@ -12,9 +12,13 @@ from classroom.models import Classroom
 from common.test_utils import AuthenticatedAdminAPIMixin
 from group.models import EducationalStage, Group
 from schedule.algorithm import assignment as schedule_assignment
+from schedule.algorithm.diagnostics import collect_generation_diagnostics
+from schedule.algorithm.generator import BasicScheduleGenerator
 from schedule.algorithm.slots import (
     build_slot_preference_index,
+    build_windows_from_stage_config,
     build_weekly_slots,
+    parse_schedule_config_to_slot_windows,
     slot_preference_key_from_datetime,
 )
 from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
@@ -92,6 +96,14 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("_error", response.data)
         self.assertIn("errors", response.data)
         self.assertEqual(response.data["_meta"]["success"], False)
+
+    def assert_generate_bad_request_has_codes(self, response, *codes):
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("errors", response.data)
+        non_field_errors = response.data["errors"].get("non_field_errors", [])
+        returned_codes = [entry.get("code") for entry in non_field_errors]
+        for code in codes:
+            self.assertIn(code, returned_codes)
 
     def create_schedule(
         self,
@@ -1257,6 +1269,32 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("detail", response.data)
         self.assertIn("include_tc must be a boolean value", response.data["detail"])
 
+    def test_generate_accepts_timeout_minutes_and_returns_it_in_response(self):
+        response = self.generate_schedule({"timeout_minutes": 15})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["generation_options"]["timeout_minutes"], 15)
+
+    def test_generate_rejects_non_integer_timeout_minutes(self):
+        response = self.generate_schedule({"timeout_minutes": "invalid"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+        self.assertIn(
+            "timeout_minutes must be an integer value",
+            response.data["detail"],
+        )
+
+    def test_generate_rejects_non_positive_timeout_minutes(self):
+        response = self.generate_schedule({"timeout_minutes": 0})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+        self.assertIn(
+            "timeout_minutes must be between 1 and 1440",
+            response.data["detail"],
+        )
+
     def test_generate_ignores_tc_capacity_when_include_tc_is_false(self):
         response = self.generate_schedule({"include_tc": False, "tc_capacity": 0})
 
@@ -1308,6 +1346,20 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
                 for session in generated_sessions
             )
         )
+
+    def test_optimization_timeout_uses_explicit_timeout_minutes(self):
+        timeout_seconds = schedule_assignment._resolve_optimization_timeout_seconds(
+            generation_options={"timeout_minutes": 15},
+        )
+
+        self.assertEqual(timeout_seconds, 900.0)
+
+    def test_optimization_timeout_defaults_to_cap_when_no_timeout_set(self):
+        timeout_seconds = schedule_assignment._resolve_optimization_timeout_seconds(
+            generation_options={},
+        )
+
+        self.assertEqual(timeout_seconds, schedule_assignment._UNLIMITED_OPTIMIZATION_CAP_SECONDS)
 
     @skipIf(
         schedule_assignment.cp_model is None,
@@ -1627,6 +1679,10 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             response,
             "Could not generate a feasible schedule",
         )
+        self.assert_generate_bad_request_has_codes(
+            response,
+            "SUBJECT_NO_AVAILABLE_SLOTS",
+        )
 
     @skipIf(
         schedule_assignment.cp_model is None,
@@ -1665,6 +1721,121 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             response,
             "Could not generate a feasible schedule",
         )
+        self.assert_generate_bad_request_has_codes(
+            response,
+            "TEACHER_NO_AVAILABLE_SLOTS",
+        )
+
+    def test_generate_returns_structured_diagnostics_when_teachers_are_missing(self):
+        Teacher.objects.filter(team=self.team).delete()
+
+        response = self.generate_schedule()
+
+        self.assert_generate_bad_request_has_codes(
+            response,
+            "MISSING_TEACHERS",
+            "MISSING_SUBJECTS",
+        )
+
+    def test_collect_generation_diagnostics_skips_missing_configuration_when_not_provided(self):
+        slots = build_weekly_slots()
+        sessions = BasicScheduleGenerator._build_sessions(
+            subjects=[self.subject],
+            fallback_teacher=self.teacher,
+            include_tc=True,
+        )
+
+        diagnostics = collect_generation_diagnostics(
+            sessions=sessions,
+            slots=slots,
+            classrooms=[self.classroom],
+            generation_options={},
+        )
+
+        codes = [entry["code"] for entry in diagnostics]
+        self.assertNotIn("MISSING_TEACHERS", codes)
+        self.assertNotIn("MISSING_SUBJECTS", codes)
+
+    def test_generate_returns_teacher_insufficient_available_slots_diagnostic(self):
+        self.subject.weekly_hours = 2
+        self.subject.save(update_fields=["weekly_hours"])
+        slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
+        self.teacher.time_preferences = {
+            key: TeacherTimePreferenceState.UNAVAILABLE
+            for key in slot_pref_index.values()
+            if key != "MON_09:00"
+        }
+        self.teacher.save(update_fields=["time_preferences"])
+
+        response = self.generate_schedule()
+
+        self.assert_generate_bad_request_has_codes(
+            response,
+            "TEACHER_INSUFFICIENT_AVAILABLE_SLOTS",
+            "SUBJECT_INSUFFICIENT_AVAILABLE_SLOTS",
+        )
+
+    def test_generate_returns_classroom_bottleneck_diagnostic(self):
+        self.subject.weekly_hours = 1
+        self.subject.save(update_fields=["weekly_hours"])
+        self.subject.allowed_classrooms.set([self.classroom])
+
+        other_teacher = Teacher.objects.create(
+            team=self.team,
+            name="Lucia Lopez",
+            max_weekly_hours=20,
+            working_hours=8,
+        )
+        other_group = Group.objects.create(
+            name="2A",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
+        other_subject = Subject.objects.create(
+            team=self.team,
+            name="Science 2A",
+            weekly_hours=1,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=other_teacher,
+            group=other_group,
+        )
+        other_subject.allowed_classrooms.set([self.classroom])
+
+        slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
+        self.teacher.time_preferences = {
+            key: TeacherTimePreferenceState.UNAVAILABLE
+            for key in slot_pref_index.values()
+            if key != "MON_09:00"
+        }
+        other_teacher.time_preferences = dict(self.teacher.time_preferences)
+        self.teacher.save(update_fields=["time_preferences"])
+        other_teacher.save(update_fields=["time_preferences"])
+
+        response = self.generate_schedule()
+
+        self.assert_generate_bad_request_has_codes(
+            response,
+            "CLASSROOM_BOTTLENECK",
+        )
+
+    def test_generate_returns_multiple_sorted_diagnostics(self):
+        self.subject.weekly_hours = 26
+        self.subject.save(update_fields=["weekly_hours"])
+        self.teacher.max_weekly_hours = 10
+        self.teacher.save(update_fields=["max_weekly_hours"])
+
+        response = self.generate_schedule()
+
+        self.assert_generate_bad_request_has_codes(
+            response,
+            "GROUP_WEEKLY_CAPACITY_EXCEEDED",
+            "TEACHER_WEEKLY_CAPACITY_EXCEEDED",
+        )
+        non_field_errors = response.data["errors"]["non_field_errors"]
+        self.assertEqual(non_field_errors[0]["code"], "GROUP_WEEKLY_CAPACITY_EXCEEDED")
 
     @skipIf(
         schedule_assignment.cp_model is None,
@@ -2007,3 +2178,222 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             any("08:00" in desc and "Sesión faltante" in desc for desc in descriptions),
             "Secondary stage should not report 08:00 as missing",
         )
+
+
+class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
+    def setUp(self):
+        self.authenticate_admin(email_prefix="schedule-slot-config")
+        self.teacher = Teacher.objects.create(
+            team=self.team,
+            name="Ana Perez",
+            max_weekly_hours=40,
+            working_hours=12,
+        )
+        self.classroom = Classroom.objects.create(name="Aula 1A", team=self.team)
+        self.group = Group.objects.create(
+            name="1A",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
+        self.subject = Subject.objects.create(
+            team=self.team,
+            name="Mathematics",
+            weekly_hours=25,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=self.group,
+        )
+        self.subject.allowed_classrooms.set([self.classroom])
+
+    def test_build_windows_from_stage_config_keeps_primary_half_slot_split_by_break(self):
+        windows = build_windows_from_stage_config(
+            {
+                "start_time": "09:00",
+                "end_time": "14:00",
+                "breaks": [{"start": "11:30", "end": "12:00"}],
+                "session_duration": 60,
+            }
+        )
+
+        self.assertEqual(
+            windows,
+            [
+                (datetime.strptime("09:00", "%H:%M").time(), datetime.strptime("10:00", "%H:%M").time(), False),
+                (datetime.strptime("10:00", "%H:%M").time(), datetime.strptime("11:00", "%H:%M").time(), False),
+                (datetime.strptime("11:00", "%H:%M").time(), datetime.strptime("11:30", "%H:%M").time(), False),
+                (datetime.strptime("11:30", "%H:%M").time(), datetime.strptime("12:00", "%H:%M").time(), True),
+                (datetime.strptime("12:00", "%H:%M").time(), datetime.strptime("13:00", "%H:%M").time(), False),
+                (datetime.strptime("13:00", "%H:%M").time(), datetime.strptime("14:00", "%H:%M").time(), False),
+            ],
+        )
+
+    def test_build_windows_from_stage_config_keeps_preschool_half_slots_split_by_breaks(self):
+        windows = build_windows_from_stage_config(
+            {
+                "start_time": "09:00",
+                "end_time": "14:00",
+                "breaks": [
+                    {"start": "10:30", "end": "11:00"},
+                    {"start": "13:30", "end": "14:00"},
+                ],
+                "session_duration": 60,
+            }
+        )
+
+        self.assertEqual(
+            windows,
+            [
+                (datetime.strptime("09:00", "%H:%M").time(), datetime.strptime("10:00", "%H:%M").time(), False),
+                (datetime.strptime("10:00", "%H:%M").time(), datetime.strptime("10:30", "%H:%M").time(), False),
+                (datetime.strptime("10:30", "%H:%M").time(), datetime.strptime("11:00", "%H:%M").time(), True),
+                (datetime.strptime("11:00", "%H:%M").time(), datetime.strptime("12:00", "%H:%M").time(), False),
+                (datetime.strptime("12:00", "%H:%M").time(), datetime.strptime("13:00", "%H:%M").time(), False),
+                (datetime.strptime("13:00", "%H:%M").time(), datetime.strptime("13:30", "%H:%M").time(), False),
+                (datetime.strptime("13:30", "%H:%M").time(), datetime.strptime("14:00", "%H:%M").time(), True),
+            ],
+        )
+
+    def test_stage_window_diagnostics_do_not_flag_primary_config_split_by_recess(self):
+        self.team.schedule_config = {
+            "PRIMARY": {
+                "label": "Primaria",
+                "color": "blue",
+                "start_time": "09:00",
+                "end_time": "14:00",
+                "breaks": [{"start": "11:30", "end": "12:00"}],
+                "session_duration": 60,
+            }
+        }
+        self.team.save(update_fields=["schedule_config"])
+        slots = build_weekly_slots(
+            stage_slot_windows=parse_schedule_config_to_slot_windows(
+                self.team.schedule_config
+            )
+        )
+        sessions = BasicScheduleGenerator._build_sessions(
+            subjects=[self.subject],
+            fallback_teacher=self.teacher,
+            include_tc=True,
+        )
+
+        diagnostics = collect_generation_diagnostics(
+            subjects=[self.subject],
+            teachers=[self.teacher],
+            sessions=sessions,
+            slots=slots,
+            classrooms=[self.classroom],
+            generation_options={},
+        )
+
+        self.assertNotIn(
+            "STAGE_SLOT_WINDOW_TOO_NARROW",
+            [entry["code"] for entry in diagnostics],
+        )
+
+    @skipIf(
+        schedule_assignment.cp_model is None,
+        "Requires OR-Tools CP-SAT to validate slot overlap constraints.",
+    )
+    def test_solver_prevents_overlap_between_30_and_60_minute_slots(self):
+        other_group = Group.objects.create(
+            name="2A",
+            stage=EducationalStage.PRIMARY,
+            team=self.team,
+        )
+        other_subject = Subject.objects.create(
+            team=self.team,
+            name="Science",
+            weekly_hours=1,
+            duration=1.0,
+            preferred_time_slot="Morning",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=other_group,
+        )
+        other_subject.allowed_classrooms.set([self.classroom])
+
+        sessions = [
+            {
+                "teacher": self.teacher,
+                "teacher_id": self.teacher.id,
+                "group": self.group,
+                "subject": self.subject,
+                "allowed_classroom_ids": {self.classroom.id},
+                "name": self.subject.name,
+            },
+            {
+                "teacher": self.teacher,
+                "teacher_id": self.teacher.id,
+                "group": other_group,
+                "subject": other_subject,
+                "allowed_classroom_ids": {self.classroom.id},
+                "name": other_subject.name,
+            },
+        ]
+        today = timezone.localdate()
+        slots = [
+            {
+                "start": timezone.make_aware(
+                    datetime.combine(today, datetime.min.time()).replace(hour=11)
+                ),
+                "end": timezone.make_aware(
+                    datetime.combine(today, datetime.min.time()).replace(hour=12)
+                ),
+                "stage": SubjectEducationalStage.PRIMARY,
+                "day_code": "MON",
+                "is_recess": False,
+            },
+            {
+                "start": timezone.make_aware(
+                    datetime.combine(today, datetime.min.time()).replace(hour=11)
+                ),
+                "end": timezone.make_aware(
+                    datetime.combine(today, datetime.min.time()).replace(
+                        hour=11, minute=30
+                    )
+                ),
+                "stage": SubjectEducationalStage.PRIMARY,
+                "day_code": "MON",
+                "is_recess": False,
+            },
+            {
+                "start": timezone.make_aware(
+                    datetime.combine(today, datetime.min.time()).replace(hour=12)
+                ),
+                "end": timezone.make_aware(
+                    datetime.combine(today, datetime.min.time()).replace(hour=13)
+                ),
+                "stage": SubjectEducationalStage.PRIMARY,
+                "day_code": "MON",
+                "is_recess": False,
+            },
+        ]
+
+        compatible_classrooms_by_session = (
+            schedule_assignment._build_compatible_classroom_index(
+                sessions=sessions,
+                classrooms=[self.classroom],
+            )
+        )
+        slot_by_session, _classroom_by_session, _ = schedule_assignment._cp_sat_session_assignment(
+            sessions=sessions,
+            slots=slots,
+            compatible_classrooms_by_session=compatible_classrooms_by_session,
+            random_seed=None,
+            fixed_assignments=None,
+            previous_assignment_by_session=None,
+            generation_options=None,
+        )
+
+        assigned_ranges = [
+            (slots[slot_index]["start"], slots[slot_index]["end"])
+            for slot_index in slot_by_session
+        ]
+        self.assertEqual(len(assigned_ranges), 2)
+        left_start, left_end = assigned_ranges[0]
+        right_start, right_end = assigned_ranges[1]
+        self.assertFalse(left_start < right_end and right_start < left_end)

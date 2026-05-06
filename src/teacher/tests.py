@@ -104,6 +104,34 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("name", response.data)
 
+    def test_allow_same_name_in_different_team(self):
+        Teacher.objects.create(
+            name="Laura",
+            max_weekly_hours=20,
+            working_hours=10,
+            team=self.team,
+        )
+        other_user, other_team = self.create_isolated_user(
+            email_prefix="teacher-api-other"
+        )
+        self.client.force_authenticate(other_user)
+
+        response = self.client.post(
+            reverse("teacher-list"),
+            {
+                "name": "laura",
+                "max_weekly_hours": 18,
+                "working_hours": 8,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Teacher.objects.filter(name__iexact="Laura").count(), 2)
+        self.assertTrue(
+            Teacher.objects.filter(name__iexact="Laura", team=other_team).exists()
+        )
+
     def test_list_summary_count_and_options_are_team_scoped(self):
         Teacher.objects.create(
             name="Ana Perez",

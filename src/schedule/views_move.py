@@ -210,7 +210,7 @@ def is_stage_window_allowed(*, schedule, start_dt, end_dt):
     )
     normalized_allowed = {
         (normalize_clock(left), normalize_clock(right))
-        for left, right in allowed_windows
+        for left, right, _ in allowed_windows
     }
     return candidate_window in normalized_allowed
 
@@ -379,7 +379,7 @@ def window_index_by_stage(group):
     allowed_windows = STAGE_SLOT_WINDOWS.get(stage_code, [])
     return {
         (normalize_clock(left), normalize_clock(right)): index
-        for index, (left, right) in enumerate(allowed_windows)
+        for index, (left, right, _) in enumerate(allowed_windows)
     }
 
 

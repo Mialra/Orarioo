@@ -375,7 +375,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 )
 
         try:
-            schedules = BasicScheduleGenerator.generate(
+            schedules, is_optimal, soft_score_info = BasicScheduleGenerator.generate(
                 actor_email=actor,
                 user=request.user,
                 team=active_team,
@@ -396,6 +396,8 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "detail": "Schedule generated successfully.",
                 "seed": generation_seed,
                 "generation_options": generation_options,
+                "optimization_is_optimal": is_optimal,
+                "soft_score": soft_score_info,
                 "schedules": serialized.data,
                 "generated_count": len(serialized.data),
                 "teacher_workloads": build_teacher_workloads(schedules),

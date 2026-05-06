@@ -148,6 +148,15 @@ class CollaborationTeam(NamedEntity):
         related_name="collaboration_teams",
         blank=True,
     )
+    schedule_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Per-stage timetable configuration. Keys are stage codes "
+            "(PRESCHOOL/PRIMARY/SECONDARY/ALEVELS); values are objects with "
+            "start_time, end_time, break_start, break_end, session_duration."
+        ),
+    )
 
     class Meta:
         db_table = "collaboration_team"

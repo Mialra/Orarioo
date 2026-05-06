@@ -4,6 +4,8 @@ Exposes solve_session_assignment as the single entry point.  All internal
 functions build decision variables, add constraints and extract the solution.
 """
 
+import time
+
 try:
     from ortools.sat.python import cp_model
 except ModuleNotFoundError:  # pragma: no cover - depends on local Python version
@@ -12,11 +14,20 @@ except ModuleNotFoundError:  # pragma: no cover - depends on local Python versio
 from schedule.algorithm.constraints import (
     add_group_daily_capacity_constraints,
     add_group_no_intraday_gap_constraints,
+    add_recess_slot_hard_constraints,
     add_stage_slot_hard_constraints,
     add_subject_time_hard_constraints,
     add_tc_slot_capacity_constraints,
     add_teacher_time_hard_constraints,
     apply_soft_constraints,
+)
+from schedule.algorithm.constraints.soft import evaluate_soft_score
+from schedule.algorithm.postprocessing import apply_teacher_gap_local_search
+from schedule.algorithm.diagnostics import (
+    BOTTLENECK_RANK,
+    analyze_schedule_infeasibility,
+    collect_generation_diagnostics,
+    raise_schedule_generation_diagnostics,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
 from schedule.algorithm.slots import build_real_time_intervals
@@ -44,9 +55,11 @@ def solve_session_assignment(
            previous_assignment_by_session - dict {session_idx: {slot_index, classroom_id}}
                used to build stability objective terms;
            generation_options - dict with generation parameters
-    Output: tuple (slot_by_session, classroom_by_session) —
+    Output: tuple (slot_by_session, classroom_by_session, is_optimal, soft_score_info) —
             slot_by_session[i] is the assigned slot index for session i,
-            classroom_by_session[i] is the assigned Classroom instance
+            classroom_by_session[i] is the assigned Classroom instance,
+            is_optimal is True when CP-SAT proved the objective cannot be improved,
+            soft_score_info is a dict comparing Phase 1 vs Phase 2 soft scores
     """
     if cp_model is None:  # pragma: no cover
         raise ScheduleGenerationError(
@@ -58,12 +71,27 @@ def solve_session_assignment(
             ],
         )
 
+    preflight_diagnostics = collect_generation_diagnostics(
+        sessions=sessions,
+        slots=slots,
+        classrooms=classrooms,
+        generation_options=generation_options or {},
+        fixed_assignments=fixed_assignments or {},
+    )
+    blocking = [d for d in preflight_diagnostics if d.get("rank", 90) < BOTTLENECK_RANK]
+    if blocking:
+        raise_schedule_generation_diagnostics(
+            diagnostics=blocking,
+            detail="Could not generate a feasible schedule with current basic constraints.",
+            code=blocking[0]["code"],
+        )
+
     compatible_classrooms_by_session = _build_compatible_classroom_index(
         sessions=sessions,
         classrooms=classrooms,
     )
 
-    return _cp_sat_session_assignment(
+    slot_by_session, classroom_by_session, is_optimal, soft_score_info = _cp_sat_session_assignment(
         sessions=sessions,
         slots=slots,
         compatible_classrooms_by_session=compatible_classrooms_by_session,
@@ -72,6 +100,7 @@ def solve_session_assignment(
         previous_assignment_by_session=previous_assignment_by_session,
         generation_options=generation_options,
     )
+    return slot_by_session, classroom_by_session, is_optimal, soft_score_info
 
 
 def _cp_sat_session_assignment(
@@ -122,6 +151,12 @@ def _cp_sat_session_assignment(
                 raise ScheduleGenerationError(f"Invalid slot index: {slot_idx}")
             model.Add(x[(session_idx, slot_idx)] == 1)
 
+    add_recess_slot_hard_constraints(
+        model=model,
+        x=x,
+        sessions=sessions,
+        slots=slots,
+    )
     add_stage_slot_hard_constraints(
         model=model,
         x=x,
@@ -187,12 +222,8 @@ def _cp_sat_session_assignment(
             slots=slots,
         )
 
-    timeout_seconds = _cp_sat_timeout_seconds(
-        session_count=session_count,
-        slot_count=slot_count,
-    )
-    feasible_timeout = _phase_feasible_timeout(total_timeout=timeout_seconds)
-    optimization_timeout = max(1.0, timeout_seconds - feasible_timeout)
+    feasible_timeout = None
+    optimization_timeout = _resolve_optimization_timeout_seconds(generation_options=opts)
 
     # Phase 1: find any feasible assignment with hard constraints only.
     feasible_solver = _build_solver(
@@ -205,22 +236,44 @@ def _cp_sat_session_assignment(
     feasible_status = feasible_solver.Solve(model)
 
     if feasible_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        raise ScheduleGenerationError(
-            f"Could not generate a feasible schedule with current basic constraints. "
-            f"(Solver status: {_solver_status_name(feasible_status)}, "
-            f"timeout: {feasible_timeout}s, sessions: {session_count}, slots: {slot_count})",
-            context={
-                "solver_status": _solver_status_name(feasible_status),
-                "timeout_seconds": feasible_timeout,
-                "session_count": session_count,
-                "slot_count": slot_count,
-            },
-            suggestions=[
-                "Review teacher and subject unavailable time preferences.",
-                "Check whether any teacher or group exceeds its weekly capacity.",
-                "Add more compatible classrooms if specialized rooms are required.",
-            ],
+        solver_context = {
+            "solver_status": _solver_status_name(feasible_status),
+            "timeout_seconds": feasible_timeout,
+            "session_count": session_count,
+            "slot_count": slot_count,
+        }
+        diagnostics = analyze_schedule_infeasibility(
+            sessions=sessions,
+            slots=slots,
+            classrooms=_flatten_compatible_classrooms(
+                compatible_classrooms_by_session=compatible_classrooms_by_session
+            ),
+            compatible_classrooms_by_session=compatible_classrooms_by_session,
+            generation_options=opts,
+            fixed_assignments=fixed_assignments or {},
+            solver_status=_solver_status_name(feasible_status),
+            solver_context=solver_context,
         )
+        raise_schedule_generation_diagnostics(
+            diagnostics=diagnostics,
+            detail=(
+                "Could not generate a feasible schedule with current basic constraints. "
+                f"(Solver status: {_solver_status_name(feasible_status)}, "
+                f"timeout: {feasible_timeout}s, sessions: {session_count}, slots: {slot_count})"
+            ),
+            code=_fallback_error_code_for_status(feasible_status),
+            context=solver_context,
+        )
+
+    # Extract Phase 1 solution before adding soft constraints to the model.
+    phase1_slots, phase1_classrooms = _extract_slot_and_classroom_assignment(
+        solver=feasible_solver,
+        x=x,
+        y=y,
+        compatible_classrooms_by_session=compatible_classrooms_by_session,
+        session_count=session_count,
+        slot_count=slot_count,
+    )
 
     # Phase 2: optimise soft constraints, starting from the feasible solution.
     stability_terms = _build_schedule_stability_terms(
@@ -243,6 +296,7 @@ def _cp_sat_session_assignment(
         y=y,
     )
 
+    phase2_start = time.monotonic()
     optimization_solver = _build_solver(
         timeout_seconds=optimization_timeout,
         random_seed=random_seed,
@@ -251,9 +305,10 @@ def _cp_sat_session_assignment(
         stop_after_first_solution=False,
     )
     optimization_status = optimization_solver.Solve(model)
+    phase2_deadline = phase2_start + optimization_timeout
 
     if optimization_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        return _extract_slot_and_classroom_assignment(
+        phase2_slots, phase2_classrooms = _extract_slot_and_classroom_assignment(
             solver=optimization_solver,
             x=x,
             y=y,
@@ -261,16 +316,44 @@ def _cp_sat_session_assignment(
             session_count=session_count,
             slot_count=slot_count,
         )
+        pre_ls_slots = list(phase2_slots)
+        phase2_slots, phase2_classrooms = apply_teacher_gap_local_search(
+            slot_by_session=phase2_slots,
+            classroom_by_session=phase2_classrooms,
+            sessions=sessions,
+            slots=slots,
+            fixed_assignments=fixed_assignments,
+            deadline=phase2_deadline,
+        )
+        soft_score_info = _build_soft_score_info(
+            phase1_slots=phase1_slots,
+            pre_local_search_slots=pre_ls_slots,
+            phase2_slots=phase2_slots,
+            sessions=sessions,
+            slots=slots,
+            generation_options=generation_options,
+        )
+        return phase2_slots, phase2_classrooms, optimization_status == cp_model.OPTIMAL, soft_score_info
 
     # Fallback: keep the feasible phase solution if optimisation times out/fails.
-    return _extract_slot_and_classroom_assignment(
-        solver=feasible_solver,
-        x=x,
-        y=y,
-        compatible_classrooms_by_session=compatible_classrooms_by_session,
-        session_count=session_count,
-        slot_count=slot_count,
+    pre_ls_slots = list(phase1_slots)
+    phase1_slots, phase1_classrooms = apply_teacher_gap_local_search(
+        slot_by_session=phase1_slots,
+        classroom_by_session=phase1_classrooms,
+        sessions=sessions,
+        slots=slots,
+        fixed_assignments=fixed_assignments,
+        deadline=phase2_deadline,
     )
+    soft_score_info = _build_soft_score_info(
+        phase1_slots=phase1_slots,
+        pre_local_search_slots=pre_ls_slots,
+        phase2_slots=phase1_slots,
+        sessions=sessions,
+        slots=slots,
+        generation_options=generation_options,
+    )
+    return phase1_slots, phase1_classrooms, False, soft_score_info
 
 
 def _build_solver(
@@ -288,7 +371,8 @@ def _build_solver(
     Output: configured CpSolver instance
     """
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = timeout_seconds
+    if timeout_seconds is not None:
+        solver.parameters.max_time_in_seconds = timeout_seconds
     solver.parameters.log_search_progress = False
     if random_seed is not None:
         solver.parameters.random_seed = int(random_seed)
@@ -303,6 +387,23 @@ def _build_solver(
     return solver
 
 
+_UNLIMITED_OPTIMIZATION_CAP_SECONDS = 60 * 60  # 1-hour safety cap for unlimited mode
+
+
+def _resolve_optimization_timeout_seconds(*, generation_options):
+    """Compute the Phase 2 (optimisation) timeout from the user's generation options.
+    Input: generation_options - dict of generation parameters, or None
+    Output: float seconds for the optimisation phase;
+            falls back to the 1-hour cap when the user selects unlimited mode
+    """
+    if generation_options is None:
+        return _UNLIMITED_OPTIMIZATION_CAP_SECONDS
+    timeout_minutes = generation_options.get("timeout_minutes")
+    if timeout_minutes is None:
+        return _UNLIMITED_OPTIMIZATION_CAP_SECONDS
+    return float(timeout_minutes) * 60.0
+
+
 def _add_solution_hints(*, model, solver, x, y):
     """Seed the model with the values from a previous solver run as warm-start hints.
     Input: model - CP-SAT CpModel; solver - solved CpSolver instance; x, y - decision variables
@@ -312,36 +413,6 @@ def _add_solution_hints(*, model, solver, x, y):
         model.AddHint(variable, solver.Value(variable))
     for variable in y.values():
         model.AddHint(variable, solver.Value(variable))
-
-
-def _phase_feasible_timeout(*, total_timeout):
-    """Compute the time budget for the feasibility phase given the total timeout.
-    Input: total_timeout - total allowed seconds as a float
-    Output: float seconds allocated to the feasibility phase
-    """
-    if total_timeout >= 120.0:
-        return total_timeout - 30.0
-    if total_timeout >= 60.0:
-        return total_timeout - 15.0
-    return max(5.0, min(total_timeout * 0.75, total_timeout - 1.0))
-
-
-def _cp_sat_timeout_seconds(*, session_count, slot_count):
-    """Calculate the total solver timeout based on problem size.
-    Input: session_count - number of sessions; slot_count - number of slots
-    Output: float total timeout in seconds
-    """
-    if session_count >= 300 or slot_count >= 45:
-        return 600.0
-    if session_count >= 150 or slot_count >= 40:
-        return 300.0
-    if session_count >= 80 or slot_count >= 35:
-        return 180.0
-    if session_count >= 40 or slot_count >= 25:
-        return 120.0
-    if session_count >= 20 or slot_count >= 15:
-        return 60.0
-    return 30.0
 
 
 def _solver_status_name(status):
@@ -540,7 +611,22 @@ def _extract_slot_and_classroom_assignment(
                         break
                 break
         if selected is None or selected_classroom is None:
-            raise ScheduleGenerationError("Solver returned an incomplete assignment.")
+            raise_schedule_generation_diagnostics(
+                diagnostics=[
+                    {
+                        "code": "SCHEDULE_INCOMPLETE_ASSIGNMENT",
+                        "message": "Solver returned an incomplete assignment.",
+                        "context": {
+                            "session_index": s_idx,
+                        },
+                        "severity": "error",
+                        "scope": "schedule",
+                        "rank": 90,
+                    }
+                ],
+                detail="Solver returned an incomplete assignment.",
+                code="SCHEDULE_INCOMPLETE_ASSIGNMENT",
+            )
         slot_by_session.append(selected)
         classroom_by_session.append(selected_classroom)
 
@@ -600,6 +686,27 @@ def _build_compatible_classroom_index(*, sessions, classrooms):
     return compatible_classrooms_by_session
 
 
+def _flatten_compatible_classrooms(*, compatible_classrooms_by_session):
+    """Return a de-duplicated classroom list from the compatibility index."""
+    seen = {}
+    for compatible in compatible_classrooms_by_session.values():
+        for classroom in compatible:
+            classroom_id = getattr(classroom, "id", None)
+            if classroom_id is not None:
+                seen[classroom_id] = classroom
+    return list(seen.values())
+
+
+def _fallback_error_code_for_status(status):
+    """Map a CP-SAT status code to the top-level API error code."""
+    status_name = _solver_status_name(status)
+    if status_name == "UNKNOWN":
+        return "SCHEDULE_SOLVER_TIMEOUT"
+    if status_name == "MODEL_INVALID":
+        return "SCHEDULE_MODEL_INVALID"
+    return "SCHEDULE_INFEASIBLE"
+
+
 def _build_schedule_stability_terms(*, x, y, previous_assignment_by_session):
     """Build soft terms that reward keeping sessions in their original slot and classroom.
 
@@ -633,6 +740,43 @@ def _build_schedule_stability_terms(*, x, y, previous_assignment_by_session):
             )
 
     return weighted_terms
+
+
+def _build_soft_score_info(
+    *, phase1_slots, pre_local_search_slots, phase2_slots, sessions, slots, generation_options
+):
+    """Compute soft scores at three checkpoints and return a comparison dict.
+    Input: phase1_slots - slot_by_session from the feasibility phase;
+           pre_local_search_slots - slot_by_session after CP-SAT opt, before local search;
+           phase2_slots - slot_by_session after local search post-processing;
+           sessions, slots, generation_options - forwarded to evaluate_soft_score
+    Output: dict {feasible_phase, cp_sat_phase, optimized_phase, delta, local_search_delta}
+    """
+    phase1_score = evaluate_soft_score(
+        slot_by_session=phase1_slots,
+        sessions=sessions,
+        slots=slots,
+        generation_options=generation_options,
+    )
+    pre_ls_score = evaluate_soft_score(
+        slot_by_session=pre_local_search_slots,
+        sessions=sessions,
+        slots=slots,
+        generation_options=generation_options,
+    )
+    phase2_score = evaluate_soft_score(
+        slot_by_session=phase2_slots,
+        sessions=sessions,
+        slots=slots,
+        generation_options=generation_options,
+    )
+    return {
+        "feasible_phase": phase1_score,
+        "cp_sat_phase": pre_ls_score,
+        "optimized_phase": phase2_score,
+        "delta": phase2_score["total"] - phase1_score["total"],
+        "local_search_delta": phase2_score["total"] - pre_ls_score["total"],
+    }
 
 
 def _is_classroom_compatible(*, session, classroom):

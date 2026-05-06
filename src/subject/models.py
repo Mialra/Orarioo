@@ -4,11 +4,10 @@ Domain models for subjects, including type/stage choices and time-preference sta
 
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import UniqueConstraint
-from django.db.models.functions import Lower
 
 from auditableEntity.models import AuditableEntity, TeamScopedModel
-from common.stages import EducationalStage
+from common.stages import EducationalStage  # noqa: F401 – kept for backward compat
+from namedEntity.models import team_scoped_case_insensitive_name_constraint
 
 
 class SubjectType(models.TextChoices):
@@ -35,9 +34,8 @@ class Subject(TeamScopedModel, AuditableEntity):
     preferred_time_slot = models.CharField(max_length=150, blank=True)
     time_preferences = models.JSONField(default=dict, blank=True)
     stage = models.CharField(
-        max_length=20,
-        choices=EducationalStage.choices,
-        default=EducationalStage.PRIMARY,
+        max_length=50,
+        default="PRIMARY",
     )
     type = models.CharField(
         max_length=20,
@@ -64,9 +62,8 @@ class Subject(TeamScopedModel, AuditableEntity):
         db_table = "subject"
         ordering = ["name", "id"]
         constraints = [
-            UniqueConstraint(
-                Lower("name"),
-                name="subject_name_ci_unique",
+            team_scoped_case_insensitive_name_constraint(
+                "subject_team_name_ci_unique"
             )
         ]
 

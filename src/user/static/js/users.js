@@ -82,6 +82,7 @@
    * Input: users - array of user objects
    */
   function renderUsers(users) {
+    listContainer.classList.remove("justify-content-center");
     listRenderer.renderCollection(listContainer, users, renderUserItem);
     uiState.refreshIconsIfNeeded(listContainer);
   }

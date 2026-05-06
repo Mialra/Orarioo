@@ -18,13 +18,17 @@ class Schedule(TeamScopedModel, AuditableEntity):
     )
     classroom = models.ForeignKey(
         "classroom.Classroom",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         related_name="schedules",
+        null=True,
+        blank=True,
     )
     group = models.ForeignKey(
         "group.Group",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         related_name="schedules",
+        null=True,
+        blank=True,
     )
     subject = models.ForeignKey(
         "subject.Subject",

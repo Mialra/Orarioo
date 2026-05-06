@@ -8,9 +8,10 @@ from django.db import models
 class EducationalStage(models.TextChoices):
     """Canonical educational stage codes used across scheduling logic."""
 
-    PRESCHOOL = "PRESCHOOL", "Preschool"
-    PRIMARY = "PRIMARY", "Primary"
-    SECONDARY = "SECONDARY", "Secondary"
+    PRESCHOOL = "PRESCHOOL", "Infantil"
+    PRIMARY = "PRIMARY", "Primaria"
+    SECONDARY = "SECONDARY", "ESO"
+    ALEVELS = "ALEVELS", "Bachillerato"
 
 
 class GroupEducationalStage(models.TextChoices):
@@ -19,29 +20,60 @@ class GroupEducationalStage(models.TextChoices):
     PRESCHOOL = "preschool", EducationalStage.PRESCHOOL.label
     PRIMARY = "primary", EducationalStage.PRIMARY.label
     SECONDARY = "secondary", EducationalStage.SECONDARY.label
+    ALEVELS = "alevels", EducationalStage.ALEVELS.label
 
 
 GROUP_STAGE_TO_CANONICAL = {
     GroupEducationalStage.PRESCHOOL: EducationalStage.PRESCHOOL,
     GroupEducationalStage.PRIMARY: EducationalStage.PRIMARY,
     GroupEducationalStage.SECONDARY: EducationalStage.SECONDARY,
+    GroupEducationalStage.ALEVELS: EducationalStage.ALEVELS,
 }
 
 SUBJECT_STAGE_TO_CANONICAL = {
     EducationalStage.PRESCHOOL: EducationalStage.PRESCHOOL,
     EducationalStage.PRIMARY: EducationalStage.PRIMARY,
     EducationalStage.SECONDARY: EducationalStage.SECONDARY,
+    EducationalStage.ALEVELS: EducationalStage.ALEVELS,
+}
+
+STAGE_COLOR_CHOICES = (
+    "red",
+    "yellow",
+    "orange",
+    "green",
+    "blue",
+    "purple",
+    "pink",
+    "gray",
+)
+
+DEFAULT_STAGE_COLORS = {
+    EducationalStage.PRESCHOOL: "green",
+    EducationalStage.PRIMARY: "blue",
+    EducationalStage.SECONDARY: "orange",
+    EducationalStage.ALEVELS: "purple",
 }
 
 
 def canonical_group_stage(group_stage, default=EducationalStage.PRIMARY):
     """Return the canonical stage code for a group-stage value."""
-    return GROUP_STAGE_TO_CANONICAL.get(group_stage, default)
+    result = GROUP_STAGE_TO_CANONICAL.get(group_stage)
+    if result is not None:
+        return result
+    if group_stage:
+        return group_stage  # pass through custom code
+    return default
 
 
 def canonical_subject_stage(subject_stage, default=EducationalStage.PRIMARY):
     """Return the canonical stage code for a subject-stage value."""
-    return SUBJECT_STAGE_TO_CANONICAL.get(subject_stage, default)
+    result = SUBJECT_STAGE_TO_CANONICAL.get(subject_stage)
+    if result is not None:
+        return result
+    if subject_stage:
+        return subject_stage
+    return default
 
 
 def canonical_educational_stage(

@@ -1,0 +1,155 @@
+<section class="card border-0 shadow-sm admin-shell">
+  {% include "main/tabs/_admin_tabs.html" %}
+  <div class="card-body admin-shell-body">
+    {% include "main/tabs/_admin_section_header.html" with button_id="schedule-config-add-btn" modal_target="#schedule-config-modal" %}
+    <div id="schedule-config-alert"
+         class="alert d-none mb-3"
+         role="status"
+         aria-live="polite"></div>
+    <p id="schedule-config-empty-message" class="d-none text-center">{{ dashboard_admin_state.empty_message }}</p>
+    <div id="schedule-config-stages"
+         class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3 pt-1 admin-list-grid"
+         aria-busy="false"
+         aria-live="polite"></div>
+  </div>
+
+  <div class="modal fade"
+       id="schedule-config-modal"
+       tabindex="-1"
+       aria-labelledby="schedule-config-modal-title"
+       aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
+      <div class="modal-content shadow-lg">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title h4 mb-0" id="schedule-config-modal-title">Añadir etapa</h3>
+            <p class="admin-modal-note">Completa los datos para crear o editar una etapa educativa.</p>
+          </div>
+          <button type="button"
+                  class="btn-close"
+                  data-bs-dismiss="modal"
+                  aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <form id="schedule-config-form" class="row g-3" novalidate>
+            <input type="hidden" id="schedule-config-mode" value="create">
+            <input type="hidden" id="schedule-config-editing-code" value="">
+
+            <div class="col-12">
+              <div class="d-flex align-items-center gap-1 mb-1">
+                <label class="form-label fw-semibold mb-0" for="schedule-config-name">Nombre de la etapa</label>
+                <span class="text-danger" aria-hidden="true">*</span>
+              </div>
+              <input class="form-control"
+                     id="schedule-config-name"
+                     type="text"
+                     placeholder="Ej: Bachillerato"
+                     maxlength="150"
+                     required>
+              <div class="invalid-feedback" id="schedule-config-name-error"></div>
+            </div>
+
+            <div class="col-12">
+              <div class="d-flex align-items-center gap-1 mb-2">
+                <span class="form-label fw-semibold d-block mb-0">Color</span>
+                <span class="text-danger" aria-hidden="true">*</span>
+              </div>
+              <div id="schedule-config-color-options" class="schedule-config-color-options"></div>
+              <div class="invalid-feedback d-block" id="schedule-config-color-error"></div>
+            </div>
+
+            <div class="col-6">
+              <div class="d-flex align-items-center gap-1 mb-1">
+                <label class="form-label fw-semibold mb-0" for="schedule-config-start-time">Hora de entrada</label>
+                <span class="text-danger" aria-hidden="true">*</span>
+              </div>
+              <input class="form-control"
+                     id="schedule-config-start-time"
+                     type="time"
+                     required>
+              <div class="invalid-feedback" id="schedule-config-start-time-error"></div>
+            </div>
+
+            <div class="col-6">
+              <div class="d-flex align-items-center gap-1 mb-1">
+                <label class="form-label fw-semibold mb-0" for="schedule-config-end-time">Hora de salida</label>
+                <span class="text-danger" aria-hidden="true">*</span>
+              </div>
+              <input class="form-control"
+                     id="schedule-config-end-time"
+                     type="time"
+                     required>
+              <div class="invalid-feedback" id="schedule-config-end-time-error"></div>
+            </div>
+
+            <div class="col-12">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="form-label fw-semibold mb-0">Recreos</span>
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        id="schedule-config-add-break-btn">+ Añadir recreo</button>
+              </div>
+              <div id="schedule-config-breaks-list"></div>
+              <p id="schedule-config-no-breaks"
+                 class="text-body-secondary small mb-0">No hay recreos configurados.</p>
+              <div class="invalid-feedback d-block" id="schedule-config-breaks-error"></div>
+            </div>
+
+            <div class="col-12 admin-form-actions">
+              <button type="button"
+                      class="btn btn-outline-secondary px-4 admin-modal-action-btn"
+                      id="schedule-config-cancel-btn"
+                      data-bs-dismiss="modal">Cancelar</button>
+              <button type="submit"
+                      class="btn btn-primary px-4 admin-modal-action-btn"
+                      id="schedule-config-submit-btn">
+                <span id="schedule-config-submit-spinner"
+                      class="spinner-border spinner-border-sm d-none me-2"
+                      aria-hidden="true"></span>
+                <span id="schedule-config-submit-text">Crear</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade"
+       id="schedule-config-delete-modal"
+       tabindex="-1"
+       aria-labelledby="schedule-config-delete-title"
+       aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title h5 mb-0" id="schedule-config-delete-title">Confirmar eliminación</h3>
+          <button type="button"
+                  class="btn-close"
+                  data-bs-dismiss="modal"
+                  aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body py-4">
+          <p class="mb-2 text-center fw-semibold">
+            ¿Está seguro de que quiere eliminar la etapa <strong id="schedule-config-delete-name">seleccionada</strong>?
+          </p>
+          <p class="mb-0 text-center text-body-secondary">Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-footer justify-content-center gap-2">
+          <button type="button"
+                  class="btn btn-outline-secondary"
+                  id="schedule-config-delete-cancel-btn"
+                  data-bs-dismiss="modal">Cancelar</button>
+          <button type="button"
+                  class="btn btn-danger"
+                  id="schedule-config-delete-confirm-btn">
+            <span id="schedule-config-delete-spinner"
+                  class="spinner-border spinner-border-sm d-none me-2"
+                  aria-hidden="true"></span>
+            <span id="schedule-config-delete-text">Eliminar</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

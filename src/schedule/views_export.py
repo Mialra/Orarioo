@@ -34,6 +34,8 @@ except ImportError:
 # Column order used for every export entity type.
 EXPORT_ENTITY_ORDER = ["teacher", "classroom", "group"]
 
+_DAY_ORDER = {"Lunes": 0, "Martes": 1, "Miércoles": 2, "Jueves": 3, "Viernes": 4}
+
 
 def build_teacher_workloads(schedules):
     """Compute per-teacher total workload in minutes and hours from a schedule list.
@@ -167,24 +169,40 @@ def build_export_units(queryset, params, active_team, export_entity_config):
             continue
 
         model_cls = config["model"]
-        name_map = {
-            obj.id: obj.name
-            for obj in model_cls.objects.filter(
-                id__in=selected_ids,
-                team=active_team,
-            ).only("id", "name")
-        }
+        if entity_type == "group":
+            group_objs = list(
+                model_cls.objects.filter(
+                    id__in=selected_ids,
+                    team=active_team,
+                ).only("id", "name", "stage")
+            )
+            name_map = {obj.id: obj.name for obj in group_objs}
+            stage_map = {obj.id: getattr(obj, "stage", "") for obj in group_objs}
+        else:
+            name_map = {
+                obj.id: obj.name
+                for obj in model_cls.objects.filter(
+                    id__in=selected_ids,
+                    team=active_team,
+                ).only("id", "name")
+            }
+            stage_map = {}
 
         for object_id in selected_ids:
             object_name = name_map.get(object_id, f"{config['label']} {object_id}")
             object_queryset = queryset.filter(
                 **{f"{field_name}_id": object_id}
             ).order_by("start_time", "id")
+            rows = build_export_rows(object_queryset)
+            if entity_type == "group":
+                rows = _inject_group_recess_rows(
+                    rows, stage_map.get(object_id, ""), object_name
+                )
             units.append(
                 {
                     "entity_type": entity_type,
                     "header": f"{config['label']} {object_name}",
-                    "rows": build_export_rows(object_queryset),
+                    "rows": rows,
                     "schedules": list(object_queryset),
                 }
             )
@@ -429,6 +447,51 @@ def collect_slots_and_content(schedules):
     return slot_keys, cell_content, day_stage_map
 
 
+def inject_recess_breaks(slot_keys, cell_content, day_stage_map):
+    """Insert recess slots into the timetable data for group (course) schedule views.
+    Input: slot_keys - mutable list of (start, end) slot tuples;
+           cell_content - mutable dict {(day, slot): [content, ...]};
+           day_stage_map - dict {day_name: set(stage_code)}
+    Output: None; side-effect: mutates slot_keys and cell_content in place
+    """
+    for day_name, stages in day_stage_map.items():
+        for stage in stages:
+            for recess_slot in STAGE_TC_BREAK_SLOTS.get(stage, []):
+                if recess_slot not in slot_keys:
+                    slot_keys.append(recess_slot)
+                cell_content.setdefault((day_name, recess_slot), []).append("Recreo")
+
+
+def _inject_group_recess_rows(rows, group_stage, group_name):
+    """Append recess time slot rows for a group's stage and re-sort by day and start time.
+    Input: rows - list of row dicts from build_export_rows;
+           group_stage - raw stage string from Group.stage;
+           group_name - display name of the group
+    Output: new sorted list including recess rows
+    """
+    normalized = normalize_stage(group_stage)
+    breaks = STAGE_TC_BREAK_SLOTS.get(normalized, [])
+    if not breaks:
+        return rows
+    existing_days = {row["day"] for row in rows if row["day"]}
+    recess_rows = [
+        {
+            "day": day,
+            "start": start_hm,
+            "end": end_hm,
+            "subject": "Recreo",
+            "teacher": "",
+            "group": group_name,
+            "classroom": "",
+        }
+        for day in existing_days
+        for start_hm, end_hm in breaks
+    ]
+    combined = rows + recess_rows
+    combined.sort(key=lambda r: (_DAY_ORDER.get(r["day"], 99), r["start"]))
+    return combined
+
+
 def inject_tc_breaks(slot_keys, cell_content, day_stage_map):
     """Insert TC break slots into the timetable data for teacher schedule views.
     Input: slot_keys - mutable list of (start, end) slot tuples;
@@ -471,6 +534,8 @@ def build_timetable_table_data(schedules, entity_type):
 
     if entity_type == "teacher":
         inject_tc_breaks(slot_keys, cell_content, day_stage_map)
+    elif entity_type == "group":
+        inject_recess_breaks(slot_keys, cell_content, day_stage_map)
 
     slot_keys.sort()
     if not slot_keys:

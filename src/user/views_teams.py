@@ -2,12 +2,28 @@
 Collaboration team management views: create, invite, respond to invitations, and leave a team.
 """
 
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from auditableEntity.audit import AUDITABLE_ENTITY_TYPES, suppress_audit_events
+from auditableEntity.models import AuditActionType
 from common.errors.exceptions import ResourceConflictError, ValidationAppError
+from common.stages import (
+    DEFAULT_STAGE_COLORS,
+    EducationalStage,
+    canonical_group_stage,
+    canonical_subject_stage,
+)
+from common.tenancy import get_active_team
+from group.models import Group
+from schedule.algorithm.slots import (
+    STAGE_SLOT_WINDOWS,
+    parse_schedule_config_to_slot_windows,
+)
+from subject.models import Subject
 from user.models import (
     CollaborationTeam,
     CollaborationTeamInvitation,
@@ -19,6 +35,8 @@ from user.serializers import (
     CollaborationTeamInvitationRespondSerializer,
     CollaborationTeamInvitationSerializer,
     CollaborationTeamInviteSerializer,
+    OnboardingSerializer,
+    ScheduleConfigSerializer,
     UserSerializer,
 )
 
@@ -132,12 +150,7 @@ class CollaborationTeamInviteView(APIView):
         email = serializer.validated_data["email"]
         invited_user = User.objects.filter(email=email, is_enabled=True).first()
         if invited_user is None:
-            raise ValidationAppError(
-                "INVITED_USER_NOT_FOUND",
-                "No active user exists with that email. Ask that person to sign up first.",
-                field_name="email",
-                context={"field": "email", "value": email},
-            )
+            return Response({}, status=status.HTTP_200_OK)
 
         if team.members.filter(id=invited_user.id).exists():
             raise ResourceConflictError(
@@ -339,6 +352,12 @@ class CollaborationTeamLeaveView(APIView):
                 context={"field": "team_id", "team_id": team_id},
             )
 
+        if request.user.collaboration_teams.count() == 1:
+            raise ValidationAppError(
+                "LAST_TEAM_CANNOT_LEAVE",
+                "You cannot leave your only team. Create or join another team first.",
+            )
+
         team.members.remove(request.user)
 
         if request.user.active_team_id == team.id:
@@ -347,9 +366,200 @@ class CollaborationTeamLeaveView(APIView):
             request.user.save(update_fields=["active_team"])
 
         if not team.members.exists():
-            team.delete()
+            suppress_rules = tuple(
+                (entity_type, AuditActionType.DELETE)
+                for entity_type in AUDITABLE_ENTITY_TYPES
+            )
+            with suppress_audit_events(*suppress_rules), transaction.atomic():
+                team.schedule_schedule_items.all().delete()
+                team.subject_subject_items.all().delete()
+                team.group_group_items.all().delete()
+                team.teacher_teacher_items.all().delete()
+                team.classroom_classroom_items.all().delete()
+                team.invitations.all().delete()
+                team.audit_entries.all().delete()
+                team.delete()
 
         return Response(
             {"user": UserSerializer(request.user).data},
             status=status.HTTP_200_OK,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Onboarding and schedule configuration
+# ---------------------------------------------------------------------------
+
+_DEFAULT_STAGE_LABELS = {stage.value: stage.label for stage in EducationalStage}
+
+
+def _stage_labels_from_config(config):
+    """Build a {stage_code: label} dict from a schedule_config.
+    Input: config - dict of stage configs (may be empty or None)
+    Output: dict mapping each stage code to its display label
+    """
+    if not config:
+        return dict(_DEFAULT_STAGE_LABELS)
+    return {
+        code: (cfg.get("label") or _DEFAULT_STAGE_LABELS.get(code, code))
+        for code, cfg in config.items()
+    }
+
+
+def _stage_colors_from_config(config):
+    """Build a {stage_code: color} dict from a schedule_config."""
+    if not config:
+        return dict(DEFAULT_STAGE_COLORS)
+    return {
+        code: (cfg.get("color") or DEFAULT_STAGE_COLORS.get(code, "blue"))
+        for code, cfg in config.items()
+    }
+
+
+def _default_schedule_config():
+    """Return the default schedule config derived from STAGE_SLOT_WINDOWS.
+    Output: dict {stage_code: {label, start_time, end_time, breaks, session_duration}}
+    """
+    result = {}
+    for stage, windows in STAGE_SLOT_WINDOWS.items():
+        lesson_windows = [(s, e) for s, e, is_r in windows if not is_r]
+        recess_windows = [(s, e) for s, e, is_r in windows if is_r]
+        if not lesson_windows:
+            continue
+        start_t = lesson_windows[0][0]
+        end_t = windows[-1][1]
+        first_start, first_end = lesson_windows[0]
+        dur = (first_end.hour * 60 + first_end.minute) - (first_start.hour * 60 + first_start.minute)
+        result[stage.value] = {
+            "label": _DEFAULT_STAGE_LABELS.get(stage.value, stage.value),
+            "color": DEFAULT_STAGE_COLORS.get(stage.value, "blue"),
+            "start_time": start_t.strftime("%H:%M"),
+            "end_time": end_t.strftime("%H:%M"),
+            "breaks": [
+                {"start": s.strftime("%H:%M"), "end": e.strftime("%H:%M")}
+                for s, e in recess_windows
+            ],
+            "session_duration": dur,
+        }
+    return result
+
+
+def _compute_slot_start_times(schedule_config):
+    """Return sorted unique lesson-slot start times (HH:MM) for a schedule config.
+    Input: schedule_config - dict from CollaborationTeam.schedule_config (may be empty)
+    Output: list of HH:MM strings
+    """
+    windows = parse_schedule_config_to_slot_windows(schedule_config)
+    if windows is None:
+        windows = {stage: list(entries) for stage, entries in STAGE_SLOT_WINDOWS.items()}
+    times = set()
+    for stage_windows in windows.values():
+        for start_t, _end_t, is_recess in stage_windows:
+            if not is_recess:
+                times.add(start_t.strftime("%H:%M"))
+    return sorted(times)
+
+
+class OnboardingView(APIView):
+    """Create a new collaboration team with schedule config and assign it to the user."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        """Create team + schedule config atomically and set it as the user's active team.
+        Input: request body with team_name (str) and optional schedule_config (dict)
+        Output: Response with updated user data on success
+        """
+        serializer = OnboardingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        team = CollaborationTeam.objects.create(
+            name=data["team_name"],
+            schedule_config=data.get("schedule_config") or {},
+        )
+        team.members.add(request.user)
+        request.user.active_team = team
+        request.user.save(update_fields=["active_team"])
+
+        return Response(UserSerializer(request.user).data, status=status.HTTP_201_CREATED)
+
+
+class ScheduleConfigView(APIView):
+    """Read and update the active team's schedule configuration."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """Return current schedule config and computed slot start times.
+        Output: {schedule_config, slot_start_times}; returns an empty config when no stages are configured
+        """
+        team = get_active_team(request)
+        if team is None:
+            return Response(
+                {"detail": "No active team."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        config = team.schedule_config or {}
+        return Response(
+            {
+                "schedule_config": config,
+                "slot_start_times": _compute_slot_start_times(config),
+                "stage_labels": _stage_labels_from_config(config),
+                "stage_colors": _stage_colors_from_config(config),
+            }
+        )
+
+    def put(self, request):
+        """Replace the team's schedule config with the validated payload.
+        Input: request body with schedule_config dict
+        Output: Response with updated {schedule_config, slot_start_times}
+        """
+        team = get_active_team(request)
+        if team is None:
+            return Response(
+                {"detail": "No active team."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = ScheduleConfigSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        next_config = serializer.validated_data["schedule_config"]
+        current_display_config = team.schedule_config or {}
+        removed_stages = sorted(
+            set(current_display_config.keys()) - set(next_config.keys())
+        )
+        if removed_stages:
+            blocking_group_exists = any(
+                canonical_group_stage(group.stage) in removed_stages
+                for group in Group.objects.filter(team=team).only("stage")
+            )
+            blocking_subject_exists = any(
+                canonical_subject_stage(subject.stage) in removed_stages
+                for subject in Subject.objects.filter(team=team).only("stage")
+            )
+            if blocking_group_exists or blocking_subject_exists:
+                stage_labels = _stage_labels_from_config(current_display_config)
+                removed_stage_names = [
+                    stage_labels.get(stage, stage) for stage in removed_stages
+                ]
+                raise ValidationAppError(
+                    "STAGE_IN_USE",
+                    "No se puede eliminar una etapa que esta siendo usada en cursos o asignaturas.",
+                    field_name="schedule_config",
+                    context={
+                        "stages": removed_stages,
+                        "stage_labels": removed_stage_names,
+                    },
+                )
+
+        team.schedule_config = next_config
+        team.save(update_fields=["schedule_config"])
+        return Response(
+            {
+                "schedule_config": team.schedule_config,
+                "slot_start_times": _compute_slot_start_times(team.schedule_config),
+                "stage_labels": _stage_labels_from_config(team.schedule_config),
+                "stage_colors": _stage_colors_from_config(team.schedule_config),
+            }
         )

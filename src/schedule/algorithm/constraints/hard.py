@@ -303,6 +303,18 @@ def add_resource_non_overlap_constraints(
             continue
 
 
+def add_recess_slot_hard_constraints(*, model, x, sessions, slots):
+    """Forbid any session from being placed in recess slots.
+    Input: model - CP-SAT CpModel; x - slot decision variables;
+           sessions - list of session dicts; slots - list of slot dicts
+    Output: None; side-effect: adds x[s,p]==0 for every (session, recess_slot) pair
+    """
+    for p_idx, slot in enumerate(slots):
+        if slot.get("is_recess"):
+            for s_idx in range(len(sessions)):
+                model.Add(x[(s_idx, p_idx)] == 0)
+
+
 def add_stage_slot_hard_constraints(*, model, x, sessions, slots):
     """Forbid each session from being placed in slots outside its stage's allowed windows.
     Input: model - CP-SAT CpModel; x - slot decision variables;
@@ -404,7 +416,7 @@ def add_group_no_intraday_gap_constraints(*, model, x, sessions, slots):
             filtered_day_slots = [
                 slot_idx
                 for slot_idx in day_slot_list
-                if slot_idx in stage_allowed_slots
+                if slot_idx in stage_allowed_slots and not slots[slot_idx].get("is_recess")
             ]
             if len(filtered_day_slots) < 3:
                 continue

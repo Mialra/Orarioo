@@ -200,9 +200,8 @@
      */
     async function openExportModal(exportConfig) {
       var modal = document.getElementById("exportModal");
-      var contextText = document.getElementById("exportContextText");
       var exportFormat = document.getElementById("exportFormat");
-      if (!modal || !contextText || !exportFormat) {
+      if (!modal || !exportFormat) {
         return;
       }
       var safeConfig = exportConfig || {};
@@ -211,11 +210,6 @@
       if (state.currentExportSource === "saved") {
         var activeName = state.currentExportSavedName || state.selectedSavedTimetableName || state.generatedSavedName;
         state.currentExportSavedName = activeName || "";
-        contextText.textContent = activeName
-          ? 'Exportar sesiones de "' + activeName + '"'
-          : "Exportar sesiones de horarios guardados";
-      } else {
-        contextText.textContent = "Exportar sesiones de horario generado";
       }
       state.exportEntityState.group = false;
       state.exportEntityState.teacher = false;
@@ -314,6 +308,16 @@
           }
           state.exportEntityState[entityType] = !state.exportEntityState[entityType];
           renderExportEntityCards();
+          var selectId = button.dataset.exportSelect;
+          if (selectId) {
+            var container = document.getElementById(selectId);
+            if (container) {
+              var nowActive = state.exportEntityState[entityType];
+              container.querySelectorAll("input[type='checkbox']").forEach(function (cb) {
+                cb.checked = nowActive;
+              });
+            }
+          }
         });
       });
     }

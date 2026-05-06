@@ -10,7 +10,7 @@
 
   var WORK_CENTER_SUBJECT = "Trabajo de Centro";
   var BOARD_DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
-  var BOARD_DAY_INDEX = { Lunes: 1, Martes: 2, "Miércoles": 3, Jueves: 4, Viernes: 5 };
+  var BOARD_DAY_INDEX = { Lunes: 1, Martes: 2, Miércoles: 3, Jueves: 4, Viernes: 5 };
   var DEFAULT_BOARD_ROWS = [
     ["08:00", "09:00"],
     ["09:00", "10:00"],
@@ -57,9 +57,7 @@
     var getSubjectType = safeOptions.getSessionSubjectType || utils.getSubjectTypeValue;
     var forceWorkCenterLabel = safeOptions.forceWorkCenterSubjectLabel === true;
     var displaySubjectName =
-      forceWorkCenterLabel && getSubjectType(session) === "TC"
-        ? WORK_CENTER_SUBJECT
-        : session.subject_name || "-";
+      forceWorkCenterLabel && getSubjectType(session) === "TC" ? WORK_CENTER_SUBJECT : session.subject_name || "-";
 
     return {
       id: session.id,
@@ -80,10 +78,12 @@
 
   /**
    * Groups mapped sessions into board rows keyed by time range; falls back to DEFAULT_BOARD_ROWS.
+   * Injects recess rows from scheduleConfig when provided.
    * Input: mappedSessions - array of board session objects from mapSessionForBoard
-   * Output: sorted array of { start, end, cells } row objects
+   *        scheduleConfig - optional schedule_config dict from /api/schedule-config/
+   * Output: sorted array of { start, end, isRecess, cells } row objects
    */
-  function buildBoardRows(mappedSessions) {
+  function buildBoardRows(mappedSessions, scheduleConfig) {
     var byRange = new Map();
 
     mappedSessions.forEach(function (session) {
@@ -92,11 +92,54 @@
         byRange.set(rangeKey, {
           start: session.startHm,
           end: session.endHm,
+          isRecess: false,
           cells: createEmptyDayCells(),
         });
       }
       byRange.get(rangeKey).cells[session.dayName].push(session);
     });
+
+    if (scheduleConfig) {
+      var sessionRanges = [];
+      byRange.forEach(function (row) {
+        if (!row.isRecess) {
+          sessionRanges.push({ start: row.start, end: row.end });
+        }
+      });
+
+      Object.values(scheduleConfig).forEach(function (stageCfg) {
+        var breakList = Array.isArray(stageCfg.breaks) ? stageCfg.breaks : [];
+        if (!breakList.length && stageCfg.break_start && stageCfg.break_end) {
+          breakList = [{ start: stageCfg.break_start, end: stageCfg.break_end }];
+        }
+        breakList.forEach(function (b) {
+          if (!b.start || !b.end) {
+            return;
+          }
+          var overlapsSession = sessionRanges.some(function (r) {
+            return r.start < b.end && b.start < r.end;
+          });
+          var hasSessionBefore = sessionRanges.some(function (r) {
+            return r.end <= b.start;
+          });
+          var hasSessionAfter = sessionRanges.some(function (r) {
+            return r.start >= b.end;
+          });
+          if (overlapsSession || !hasSessionBefore || !hasSessionAfter) {
+            return;
+          }
+          var key = b.start + "-" + b.end;
+          if (!byRange.has(key)) {
+            byRange.set(key, {
+              start: b.start,
+              end: b.end,
+              isRecess: true,
+              cells: createEmptyDayCells(),
+            });
+          }
+        });
+      });
+    }
 
     var rows = Array.from(byRange.values()).sort(utils.compareRowsByTime);
     if (rows.length) {
@@ -104,7 +147,7 @@
     }
 
     return DEFAULT_BOARD_ROWS.map(function (range) {
-      return { start: range[0], end: range[1], cells: createEmptyDayCells() };
+      return { start: range[0], end: range[1], isRecess: false, cells: createEmptyDayCells() };
     });
   }
 
@@ -245,13 +288,27 @@
           .map(function (item) {
             return (
               "<tr>" +
-              "<td>" + item.dayName + "</td>" +
-              "<td>" + item.startHm + "</td>" +
-              "<td>" + item.endHm + "</td>" +
-              "<td>" + item.groupName + "</td>" +
-              "<td>" + item.teacherName + "</td>" +
-              "<td>" + item.classroomName + "</td>" +
-              "<td>" + item.subjectName + "</td>" +
+              "<td>" +
+              item.dayName +
+              "</td>" +
+              "<td>" +
+              item.startHm +
+              "</td>" +
+              "<td>" +
+              item.endHm +
+              "</td>" +
+              "<td>" +
+              item.groupName +
+              "</td>" +
+              "<td>" +
+              item.teacherName +
+              "</td>" +
+              "<td>" +
+              item.classroomName +
+              "</td>" +
+              "<td>" +
+              item.subjectName +
+              "</td>" +
               "</tr>"
             );
           })
@@ -264,14 +321,23 @@
     var html =
       '<section class="schedule-detail-block">' +
       '<div class="schedule-detail-head">' +
-      '<h4 class="schedule-detail-title">' + (safeOptions.title || "Detalle de sesiones") + "</h4>" +
+      '<h4 class="schedule-detail-title">' +
+      (safeOptions.title || "Detalle de sesiones") +
+      "</h4>" +
       '<span class="schedule-detail-meta">Mostrando ' +
-      firstItem + "-" + lastItem + " de " + totalItems + " sesiones</span>" +
+      firstItem +
+      "-" +
+      lastItem +
+      " de " +
+      totalItems +
+      " sesiones</span>" +
       "</div>" +
       '<div class="schedule-detail-table-wrap">' +
       '<table class="table table-sm align-middle mb-0 schedule-detail-table">' +
       "<thead><tr><th>Día</th><th>Inicio</th><th>Fin</th><th>Curso</th><th>Profesor</th><th>Aula</th><th>Asignatura</th></tr></thead>" +
-      "<tbody>" + rowsHtml + "</tbody></table></div>" +
+      "<tbody>" +
+      rowsHtml +
+      "</tbody></table></div>" +
       createDetailPaginationHtml(currentPage, totalPages) +
       "</section>";
 
@@ -303,20 +369,44 @@
         return left.start - right.start;
       });
 
-    var rows = buildBoardRows(mappedSessions);
+    var rows = buildBoardRows(mappedSessions, safeOptions.scheduleConfig || null);
 
     var rowHtml = rows
       .map(function (row) {
+        if (row.isRecess) {
+          return (
+            '<tr class="schedule-board-row-recess">' +
+            '<td class="schedule-board-time"><strong>' +
+            row.start +
+            "</strong><span>" +
+            row.end +
+            "</span></td>" +
+            '<td colspan="' +
+            BOARD_DAYS.length +
+            '" class="schedule-board-recess-cell">Recreo</td>' +
+            "</tr>"
+          );
+        }
+
         var dayCells = BOARD_DAYS.map(function (dayName) {
           var entries = row.cells[dayName] || [];
           var cellKey = utils.createBoardCellKey(dayName, row.start, row.end);
           return (
-            '<td class="schedule-board-cell" data-board-day="' + dayName +
-            '" data-board-start="' + row.start +
-            '" data-board-end="' + row.end +
-            '" data-board-key="' + cellKey + '">' +
+            '<td class="schedule-board-cell" data-board-day="' +
+            dayName +
+            '" data-board-start="' +
+            row.start +
+            '" data-board-end="' +
+            row.end +
+            '" data-board-key="' +
+            cellKey +
+            '">' +
             (entries.length
-              ? entries.map(function (entry) { return renderSessionCard(entry, safeOptions); }).join("")
+              ? entries
+                  .map(function (entry) {
+                    return renderSessionCard(entry, safeOptions);
+                  })
+                  .join("")
               : renderEmptyCell()) +
             "</td>"
           );
@@ -324,7 +414,11 @@
 
         return (
           "<tr>" +
-          '<td class="schedule-board-time"><strong>' + row.start + "</strong><span>" + row.end + "</span></td>" +
+          '<td class="schedule-board-time"><strong>' +
+          row.start +
+          "</strong><span>" +
+          row.end +
+          "</span></td>" +
           dayCells +
           "</tr>"
         );
@@ -341,9 +435,13 @@
       '<div class="schedule-board-wrap">' +
       '<table class="schedule-board-table">' +
       '<thead><tr><th class="schedule-board-time-head">Horario</th>' +
-      BOARD_DAYS.map(function (dayName) { return "<th>" + dayName + "</th>"; }).join("") +
+      BOARD_DAYS.map(function (dayName) {
+        return "<th>" + dayName + "</th>";
+      }).join("") +
       "</tr></thead>" +
-      "<tbody>" + rowHtml + "</tbody></table></div>" +
+      "<tbody>" +
+      rowHtml +
+      "</tbody></table></div>" +
       '<p class="schedule-board-scroll-hint">Desliza lateralmente para ver todo el horario.</p>' +
       detail.html;
     output.style.display = "block";

@@ -75,6 +75,7 @@
             group.name +
             '">' +
             '<div class="saved-card-body">' +
+            '<div class="saved-card-heading">' +
             '<h3 class="saved-card-title">' +
             group.name +
             "</h3>" +
@@ -82,7 +83,6 @@
             utils.toIsoDateDisplay(group.updated_at) +
             "</p>" +
             "</div>" +
-            '<div class="saved-card-footer">' +
             '<button type="button" class="btn btn-link text-danger p-0 saved-card-delete" data-action="delete" data-index="' +
             index +
             '" title="Eliminar horario" aria-label="Eliminar horario ' +
@@ -241,34 +241,91 @@
       return openSavedWorkspace(index);
     }
 
+    function openDeleteConfirmModal(name) {
+      return new Promise(function (resolve) {
+        var modal = document.getElementById("deleteSavedTimetableModal");
+        var nameEl = document.getElementById("deleteSavedTimetableName");
+        var confirmBtn = document.getElementById("confirmDeleteSavedTimetableBtn");
+        if (!modal || !confirmBtn) {
+          resolve(window.confirm('¿Eliminar el horario guardado "' + name + '"?'));
+          return;
+        }
+        if (nameEl) {
+          nameEl.textContent = name;
+        }
+        var resolved = false;
+        var instance = window.bootstrap && window.bootstrap.Modal
+          ? window.bootstrap.Modal.getOrCreateInstance(modal)
+          : null;
+
+        function closeModal() {
+          if (instance) {
+            instance.hide();
+          } else {
+            modal.classList.remove("show");
+            modal.style.display = "none";
+            document.body.classList.remove("modal-open");
+          }
+        }
+
+        function onConfirm() {
+          if (resolved) { return; }
+          resolved = true;
+          closeModal();
+          resolve(true);
+        }
+
+        function onDismiss() {
+          if (resolved) { return; }
+          resolved = true;
+          resolve(false);
+        }
+
+        confirmBtn.addEventListener("click", onConfirm, { once: true });
+        modal.addEventListener("hidden.bs.modal", onDismiss, { once: true });
+
+        if (instance) {
+          instance.show();
+        } else {
+          modal.classList.add("show");
+          modal.style.display = "block";
+          document.body.classList.add("modal-open");
+        }
+      });
+    }
+
     /**
      * Prompts for confirmation and deletes a saved timetable via the API.
      * Input: index - zero-based index into state.savedTimetableGroups
      * Output: Promise<void>; shows alert and reloads saved list on success
      */
     async function deleteSavedTimetable(index) {
-      var selected = state.savedTimetableGroups[index];
-      if (!selected) {
-        showAlert("error", "Horario guardado no encontrado.");
-        return;
+      try {
+        var selected = state.savedTimetableGroups[index];
+        if (!selected) {
+          showAlert("error", "Horario guardado no encontrado.");
+          return;
+        }
+        if (!(await openDeleteConfirmModal(selected.name))) {
+          return;
+        }
+        var result = await apiJson("/schedules/delete-saved-timetable/", "POST", {
+          timetable_name: selected.name,
+        });
+        if (!result.ok) {
+          showAlert("error", extractApiErrorMessage(result.data, "No se pudo eliminar el horario guardado."));
+          return;
+        }
+        if (utils.normalizeForCompare(state.selectedSavedTimetableName) === utils.normalizeForCompare(selected.name)) {
+          state.selectedSavedTimetableIndex = null;
+          state.selectedSavedTimetableName = null;
+          config.onShowSavedPicker();
+        }
+        showAlert("success", "Horario eliminado correctamente.");
+        await loadSavedSchedules();
+      } catch (_error) {
+        showAlert("error", "No se pudo eliminar el horario guardado.");
       }
-      if (!window.confirm('¿Eliminar el horario guardado "' + selected.name + '"?')) {
-        return;
-      }
-      var result = await apiJson("/schedules/delete-saved-timetable/", "POST", {
-        timetable_name: selected.name,
-      });
-      if (!result.ok) {
-        showAlert("error", extractApiErrorMessage(result.data, "No se pudo eliminar el horario guardado."));
-        return;
-      }
-      if (utils.normalizeForCompare(state.selectedSavedTimetableName) === utils.normalizeForCompare(selected.name)) {
-        state.selectedSavedTimetableIndex = null;
-        state.selectedSavedTimetableName = null;
-        config.onShowSavedPicker();
-      }
-      showAlert("success", "Horario eliminado correctamente.");
-      await loadSavedSchedules();
     }
 
     /**

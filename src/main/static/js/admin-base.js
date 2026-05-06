@@ -4,6 +4,27 @@
 (function () {
     const core = window.OrariooAdmin || {};
 
+    async function loadScheduleConfig() {
+        try {
+            const res = await core.api.get("/api/schedule-config/");
+            if (res.ok && res.data) {
+                if (res.data.slot_start_times) {
+                    core.constants.setHoursFromConfig(res.data.slot_start_times);
+                }
+                if (res.data.stage_labels) {
+                    core.constants.setStageLabels(res.data.stage_labels);
+                }
+                if (res.data.stage_colors) {
+                    core.constants.setStageColors(res.data.stage_colors);
+                }
+            }
+        } catch (_) {
+            // silently fall back to default HOURS and STAGE_LABELS
+        }
+    }
+
+    loadScheduleConfig();
+
     /**
      * Delegates to core.initCrudModule, throwing if the admin-core library is not loaded.
      * Input: config - initCrudModule configuration object

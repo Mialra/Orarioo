@@ -33,6 +33,7 @@ class GroupApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
         self.assertEqual(detail_response.data["name"], "2B")
         self.assertEqual(detail_response.data["stage"], EducationalStage.SECONDARY)
+        self.assertEqual(detail_response.data["stage_color"], "orange")
 
     def test_update_group(self):
         group = Group.objects.create(
@@ -95,3 +96,20 @@ class GroupApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("name", response.data)
+
+    def test_allow_same_name_in_different_team(self):
+        Group.objects.create(name="2A", stage=EducationalStage.PRIMARY, team=self.team)
+        other_user, other_team = self.create_isolated_user(email_prefix="group-api-other")
+        self.client.force_authenticate(other_user)
+
+        response = self.client.post(
+            reverse("group-list"),
+            {"name": "2a", "stage": EducationalStage.PRIMARY},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Group.objects.filter(name__iexact="2A").count(), 2)
+        self.assertTrue(
+            Group.objects.filter(name__iexact="2A", team=other_team).exists()
+        )

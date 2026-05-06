@@ -52,15 +52,9 @@ AUDIT_ACTION_FILTER_CHOICES = (
     "modificacion",
     "borrado",
 )
-AUDIT_EXPORT_HEADERS = [
-    "Fecha",
-    "Usuario",
-    "Entidad",
-    "Nombre",
-    "Acción",
-    "Resumen",
-    "Detalle",
-]
+AUDIT_EXPORT_OPTIONAL_HEADERS = ["Fecha", "Usuario", "Elemento", "Acción"]
+AUDIT_EXPORT_FIXED_HEADERS = ["Resumen", "Detalle"]
+AUDIT_EXPORT_HEADERS = AUDIT_EXPORT_OPTIONAL_HEADERS + AUDIT_EXPORT_FIXED_HEADERS
 
 
 class AuditPagination(pagination.PageNumberPagination):
@@ -342,33 +336,36 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
         return f"{stem}.{export_format}"
 
     @staticmethod
-    def _build_export_rows(queryset, *, for_csv=False):
+    def _build_export_rows(queryset, *, for_csv=False, optional_indices=None):
         """Serialize audit entries into row values for CSV or PDF export.
-        Input: queryset - AuditEntry QuerySet; for_csv - if True, prefix date cell with quote
-        Output: list of lists, each inner list matching the AUDIT_EXPORT_HEADERS columns
+        Input: queryset - AuditEntry QuerySet; for_csv - if True, prefix date cell with quote;
+               optional_indices - indices into AUDIT_EXPORT_OPTIONAL_HEADERS to include (None = all)
+        Output: list of lists with [selected optional cols...] + [Resumen, Detalle]
         """
+        all_optional_indices = list(range(len(AUDIT_EXPORT_OPTIONAL_HEADERS)))
+        indices = optional_indices if optional_indices is not None else all_optional_indices
         rows = []
         for entry in queryset:
             occurred_at = timezone.localtime(entry.occurred_at).strftime(
                 "%d/%m/%Y %H:%M"
             )
-            rows.append(
-                [
-                    f"'{occurred_at}" if for_csv else occurred_at,
-                    entry.actor_name or "-",
-                    ENTITY_LABELS.get(entry.entity_type, entry.entity_type),
-                    entry.entity_name or "-",
-                    get_action_label(entry.action_type),
-                    entry.detail or "-",
-                    format_changed_fields_for_export(entry.changed_fields) or "-",
-                ]
-            )
+            optional_cells = [
+                f"'{occurred_at}" if for_csv else occurred_at,
+                entry.actor_name or "-",
+                ENTITY_LABELS.get(entry.entity_type, entry.entity_type),
+                get_action_label(entry.action_type),
+            ]
+            row = [optional_cells[i] for i in indices] + [
+                entry.detail or "-",
+                format_changed_fields_for_export(entry.changed_fields) or "-",
+            ]
+            rows.append(row)
         return rows
 
     @action(detail=False, methods=["get"], url_path="export")
     def export(self, request):
         """Export the filtered audit history as CSV or PDF.
-        Input: request - HTTP GET with optional export_format and filter query params
+        Input: request - HTTP GET with optional export_format, columns, and filter query params
         Output: HttpResponse with CSV or PDF content and appropriate Content-Disposition header
         """
         export_format = self._parse_export_format(
@@ -377,9 +374,19 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = self.get_queryset()
         filename = self._build_export_filename(export_format)
 
+        requested_columns = request.query_params.getlist("columns")
+        if requested_columns:
+            valid = {col for col in requested_columns if col in AUDIT_EXPORT_OPTIONAL_HEADERS}
+            optional_headers = [col for col in AUDIT_EXPORT_OPTIONAL_HEADERS if col in valid]
+            optional_indices = [AUDIT_EXPORT_OPTIONAL_HEADERS.index(col) for col in optional_headers]
+        else:
+            optional_headers = []
+            optional_indices = []
+        headers = optional_headers + AUDIT_EXPORT_FIXED_HEADERS
+
         if export_format == "csv":
-            rows = self._build_export_rows(queryset, for_csv=True)
-            return build_csv_response(AUDIT_EXPORT_HEADERS, rows, filename)
+            rows = self._build_export_rows(queryset, for_csv=True, optional_indices=optional_indices)
+            return build_csv_response(headers, rows, filename)
 
         if not REPORTLAB_AVAILABLE:
             raise ValidationError(
@@ -391,8 +398,8 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
                 }
             )
         return build_table_pdf_response(
-            headers=AUDIT_EXPORT_HEADERS,
-            rows=self._build_export_rows(queryset),
+            headers=headers,
+            rows=self._build_export_rows(queryset, optional_indices=optional_indices),
             filename=filename,
             title_text="Historial de auditoría",
         )

@@ -6,6 +6,13 @@ from urllib.parse import unquote
 
 from django.shortcuts import redirect, render
 
+from common.stages import STAGE_COLOR_CHOICES
+from user.views_teams import (
+    _default_schedule_config,
+    _stage_colors_from_config,
+    _stage_labels_from_config,
+)
+
 _SCHEDULE_SCRIPTS = [
     "js/schedule-utils.js",
     "js/schedule-board.js",
@@ -34,7 +41,7 @@ SECTION_CONFIG = {
         "title": "Registro de cambios",
         "template": "main/tabs/audit.html",
         "extra_css": ["css/audit.css"],
-        "extra_scripts": ["js/audit.js"],
+        "extra_scripts": ["js/spinner-manager.js", "js/audit.js"],
     },
 }
 
@@ -78,6 +85,11 @@ ADMIN_ROUTE_CONFIG = {
         "extra_css": [],
         "extra_scripts": [*_ADMIN_CORE_SCRIPTS, "js/classrooms.js"],
     },
+    "schedule_config": {
+        "template": "administration_schedule_config.html",
+        "extra_css": ["css/schedule-config.css"],
+        "extra_scripts": [*_ADMIN_CORE_SCRIPTS, "js/schedule-config.js"],
+    },
 }
 
 ADMIN_BASE_CSS = [
@@ -120,7 +132,43 @@ ADMIN_TAB_CONFIG = {
         "empty_message": "No hay aulas registradas. Añade la primera para comenzar.",
         "add_cta": "Añadir Aula",
     },
+    "schedule_config": {
+        "title": "Configuración de Tramos",
+        "description": "Define y ajusta los tramos horarios de cada etapa educativa.",
+        "count_label": "",
+        "empty_message": "No hay etapas registradas. Añade la primera para comenzar.",
+        "add_cta": "Añadir Etapa",
+    },
 }
+
+
+def onboarding(request):
+    """Render the onboarding screen for new users to configure their team and schedule.
+    Input: request - the incoming HTTP request
+    Output: HTTP response rendering auth/onboarding.html
+    """
+    initial_schedule_config = _default_schedule_config()
+    onboarding_initial_data = {
+        "schedule_config": initial_schedule_config,
+        "stage_labels": _stage_labels_from_config(initial_schedule_config),
+        "stage_colors": _stage_colors_from_config(initial_schedule_config),
+        "color_options": [
+            {"value": "red", "label": "Rojo"},
+            {"value": "yellow", "label": "Amarillo"},
+            {"value": "orange", "label": "Naranja"},
+            {"value": "green", "label": "Verde"},
+            {"value": "blue", "label": "Azul"},
+            {"value": "purple", "label": "Morado"},
+            {"value": "pink", "label": "Rosa"},
+            {"value": "gray", "label": "Gris"},
+        ],
+        "stage_color_choices": list(STAGE_COLOR_CHOICES),
+    }
+    return render(
+        request,
+        "auth/onboarding.html",
+        {"onboarding_initial_data": onboarding_initial_data},
+    )
 
 
 def root_redirect(request):

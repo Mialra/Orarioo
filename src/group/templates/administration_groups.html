@@ -54,14 +54,14 @@
                             </div>
                             <select class="form-select orarioo-custom-select"
                                     id="admin-group-stage"
-                                    required>
-                                <option value="preschool">Infantil</option>
-                                <option value="primary" selected>Primaria</option>
-                                <option value="secondary">Secundaria</option>
-                            </select>
+                                    required></select>
                             <div class="invalid-feedback" id="admin-group-stage-error"></div>
                         </div>
                         <div class="col-12 admin-form-actions">
+                            <button type="button"
+                                    class="btn btn-outline-secondary px-4 admin-modal-action-btn"
+                                    id="admin-group-cancel-btn"
+                                    data-bs-dismiss="modal">Cancelar</button>
                             <button type="submit"
                                     class="btn btn-primary px-4 admin-modal-action-btn"
                                     id="admin-group-submit-btn">
@@ -70,10 +70,6 @@
                                       aria-hidden="true"></span>
                                 <span id="admin-group-submit-text">Crear</span>
                             </button>
-                            <button type="button"
-                                    class="btn btn-light border px-4 admin-modal-action-btn"
-                                    id="admin-group-cancel-btn"
-                                    data-bs-dismiss="modal">Cancelar</button>
                         </div>
                     </form>
                 </div>
@@ -102,7 +98,7 @@
                 </div>
                 <div class="modal-footer justify-content-center gap-2">
                     <button type="button"
-                            class="btn btn-light border"
+                            class="btn btn-outline-secondary"
                             id="admin-group-delete-cancel-btn"
                             data-bs-dismiss="modal">Cancelar</button>
                     <button type="button"

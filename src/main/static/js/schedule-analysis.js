@@ -45,12 +45,15 @@
         '<div class="modal-dialog modal-dialog-centered modal-lg">' +
         '<div class="modal-content">' +
         '<div class="modal-header">' +
+        '<div>' +
         '<h5 class="modal-title">' + modalTitle + "</h5>" +
+        '<p class="text-secondary small mb-0 mt-1">Analiza el horario para detectar posibles problemas de distribución.</p>' +
+        "</div>" +
         '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>' +
         "</div>" +
         '<div class="modal-body"><div id="' + contentId + '"></div></div>' +
         '<div class="modal-footer">' +
-        '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>' +
+        '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>' +
         "</div></div></div>";
       document.body.appendChild(modal);
     }

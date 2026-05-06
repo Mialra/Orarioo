@@ -28,7 +28,7 @@ PREFER_NO_WEIGHT = -2
 TEACHER_PREFER_YES_WEIGHT = 2
 TEACHER_PREFER_NO_WEIGHT = -2
 SUBJECT_DAY_SPREAD_WEIGHT = 3
-TEACHER_GAP_PENALTY_WEIGHT = 4
+TEACHER_GAP_PENALTY_WEIGHT = 8
 
 
 def apply_soft_constraints(
@@ -517,3 +517,232 @@ def _bind_has_any(*, model, expr, bool_var):
     """
     model.Add(expr >= 1).OnlyEnforceIf(bool_var)
     model.Add(expr == 0).OnlyEnforceIf(bool_var.Not())
+
+
+# ---------------------------------------------------------------------------
+# Pure-Python score evaluation (no CP-SAT required)
+# ---------------------------------------------------------------------------
+
+
+def evaluate_soft_score(*, slot_by_session, sessions, slots, generation_options=None):
+    """Compute the soft constraint score for a concrete assignment without CP-SAT.
+
+    Replicates the weighted objective terms from apply_soft_constraints so that
+    the Phase 1 (feasibility) and Phase 2 (optimised) solutions can be compared.
+    Input: slot_by_session - list[int] mapping session index → assigned slot index;
+           sessions - list of session dicts; slots - list of slot dicts;
+           generation_options - dict controlling which terms are active
+    Output: dict {total: int, breakdown: {component: int}}
+    """
+    opts = generation_options or {}
+    total = 0
+    breakdown = {}
+
+    if opts.get("enable_tc_distribution", True):
+        score = _eval_tc_distribution_score(
+            slot_by_session=slot_by_session, sessions=sessions, slots=slots
+        )
+        breakdown["tc_distribution"] = score
+        total += score
+
+    if opts.get("enable_subject_time_preferences", True):
+        score = _eval_subject_time_preference_score(
+            slot_by_session=slot_by_session, sessions=sessions, slots=slots
+        )
+        breakdown["subject_preferences"] = score
+        total += score
+
+    if opts.get("enable_teacher_time_preferences", True):
+        score = _eval_teacher_time_preference_score(
+            slot_by_session=slot_by_session, sessions=sessions, slots=slots
+        )
+        breakdown["teacher_preferences"] = score
+        total += score
+
+    if opts.get("enable_subject_day_spread", True):
+        score = _eval_subject_day_spread_score(
+            slot_by_session=slot_by_session, sessions=sessions, slots=slots
+        )
+        breakdown["subject_spread"] = score
+        total += score
+
+    if opts.get("enable_teacher_gap_minimization", True):
+        score = _eval_teacher_gap_score(
+            slot_by_session=slot_by_session, sessions=sessions, slots=slots
+        )
+        breakdown["teacher_gaps"] = score
+        total += score
+
+    return {"total": total, "breakdown": breakdown}
+
+
+def _eval_teacher_gap_score(*, slot_by_session, sessions, slots):
+    """Compute the teacher gap penalty for a concrete assignment.
+    Mirrors _teacher_gap_minimization_terms: -TEACHER_GAP_PENALTY_WEIGHT per inner gap.
+    """
+    slot_day_index = build_slot_day_index(slots=slots)
+    slots_by_day = _build_slots_by_day(slots=slots)
+
+    teacher_slots_by_day = {}
+    for s_idx, session in enumerate(sessions):
+        teacher_id = session.get("teacher_id")
+        if teacher_id is None:
+            continue
+        assigned = slot_by_session[s_idx]
+        day_idx = slot_day_index.get(assigned)
+        if day_idx is None:
+            continue
+        teacher_slots_by_day.setdefault(teacher_id, {}).setdefault(day_idx, set()).add(
+            assigned
+        )
+
+    total = 0
+    for _teacher_id, days in teacher_slots_by_day.items():
+        for day_idx, day_slot_list in slots_by_day.items():
+            if len(day_slot_list) < 3:
+                continue
+            assigned_in_day = days.get(day_idx, set())
+            for inner_pos, p_i in enumerate(day_slot_list[1:-1], start=1):
+                before_slots = set(day_slot_list[:inner_pos])
+                after_slots = set(day_slot_list[inner_pos + 1 :])
+                has_before = bool(assigned_in_day & before_slots)
+                has_after = bool(assigned_in_day & after_slots)
+                has_at = p_i in assigned_in_day
+                if has_before and has_after and not has_at:
+                    total -= TEACHER_GAP_PENALTY_WEIGHT
+    return total
+
+
+def _eval_subject_day_spread_score(*, slot_by_session, sessions, slots):
+    """Compute the subject day-spread bonus for a concrete assignment.
+    Mirrors _subject_day_spread_terms: +SUBJECT_DAY_SPREAD_WEIGHT per (subject, day) covered.
+    """
+    slot_day_index = build_slot_day_index(slots=slots)
+    sessions_by_subject = {}
+    for s_idx, session in enumerate(sessions):
+        subject = session.get("subject")
+        if subject is not None:
+            sessions_by_subject.setdefault(subject.id, []).append(s_idx)
+
+    total = 0
+    for _subj_id, s_indices in sessions_by_subject.items():
+        if len(s_indices) < 2:
+            continue
+        days_covered = set()
+        for s_idx in s_indices:
+            day_idx = slot_day_index.get(slot_by_session[s_idx])
+            if day_idx is not None:
+                days_covered.add(day_idx)
+        total += SUBJECT_DAY_SPREAD_WEIGHT * len(days_covered)
+    return total
+
+
+def _eval_subject_time_preference_score(*, slot_by_session, sessions, slots):
+    """Compute the subject time-preference score for a concrete assignment."""
+    slot_preference_by_idx = build_slot_preference_index(slots=slots)
+    total = 0
+    for s_idx, session in enumerate(sessions):
+        slot_key = slot_preference_by_idx.get(slot_by_session[s_idx])
+        if slot_key is None:
+            continue
+        state = session_preference_state(session=session, slot_preference_key=slot_key)
+        if state == SubjectTimePreferenceState.PREFER_YES:
+            total += PREFER_YES_WEIGHT
+        elif state == SubjectTimePreferenceState.PREFER_NO:
+            total += PREFER_NO_WEIGHT
+    return total
+
+
+def _eval_teacher_time_preference_score(*, slot_by_session, sessions, slots):
+    """Compute the teacher time-preference score for a concrete assignment."""
+    slot_preference_by_idx = build_slot_preference_index(slots=slots)
+    total = 0
+    for s_idx, session in enumerate(sessions):
+        slot_key = slot_preference_by_idx.get(slot_by_session[s_idx])
+        if slot_key is None:
+            continue
+        state = teacher_preference_state(session=session, slot_preference_key=slot_key)
+        if state == TeacherTimePreferenceState.PREFER_YES:
+            total += TEACHER_PREFER_YES_WEIGHT
+        elif state == TeacherTimePreferenceState.PREFER_NO:
+            total += TEACHER_PREFER_NO_WEIGHT
+    return total
+
+
+def _eval_tc_distribution_score(*, slot_by_session, sessions, slots):
+    """Compute the TC distribution score for a concrete assignment.
+    Mirrors _tc_distribution_terms: coverage reward, overload penalty, spread, consecutive penalty.
+    """
+    tc_session_indices = [
+        s_idx
+        for s_idx, session in enumerate(sessions)
+        if getattr(session.get("subject"), "type", None) == "TC"
+    ]
+    if not tc_session_indices:
+        return 0
+
+    total = _eval_tc_interval_coverage(
+        slot_by_session=slot_by_session, slots=slots, tc_session_indices=tc_session_indices
+    )
+    total += _eval_tc_teacher_spread_and_consecutive(
+        slot_by_session=slot_by_session,
+        sessions=sessions,
+        slots=slots,
+        tc_session_indices=tc_session_indices,
+    )
+    return total
+
+
+def _eval_tc_interval_coverage(*, slot_by_session, slots, tc_session_indices):
+    """Reward unique real-time interval coverage and penalise overload for TC sessions."""
+    real_time_intervals = build_real_time_intervals(slots=slots)
+    total = 0
+    for interval in real_time_intervals:
+        interval_slots = set(interval["slot_indices"])
+        tc_count = sum(
+            1 for s_idx in tc_session_indices if slot_by_session[s_idx] in interval_slots
+        )
+        if tc_count > 0:
+            total += TC_REAL_INTERVAL_COVERAGE_WEIGHT
+            total -= TC_REAL_INTERVAL_OVERLOAD_PENALTY_WEIGHT * (tc_count - 1)
+    return total
+
+
+def _eval_tc_teacher_spread_and_consecutive(
+    *, slot_by_session, sessions, slots, tc_session_indices
+):
+    """Reward day spread and penalise consecutive TC sessions per teacher."""
+    slots_by_day = _build_slots_by_day(slots=slots)
+    tc_by_teacher = _tc_sessions_by_teacher(
+        sessions=sessions, tc_session_indices=tc_session_indices
+    )
+    total = 0
+    for _teacher_id, teacher_tc_sessions in tc_by_teacher.items():
+        if len(teacher_tc_sessions) < 2:
+            continue
+        for day_slot_list in slots_by_day.values():
+            total += _eval_tc_teacher_day(
+                slot_by_session=slot_by_session,
+                teacher_tc_sessions=teacher_tc_sessions,
+                day_slot_list=day_slot_list,
+            )
+    return total
+
+
+def _eval_tc_teacher_day(*, slot_by_session, teacher_tc_sessions, day_slot_list):
+    """Compute spread bonus and consecutive penalty for one teacher on one day."""
+    day_slots_set = set(day_slot_list)
+    has_tc = any(slot_by_session[s_idx] in day_slots_set for s_idx in teacher_tc_sessions)
+    total = TC_TEACHER_DAY_SPREAD_WEIGHT if has_tc else 0
+
+    if len(day_slot_list) < 2:
+        return total
+
+    has_tc_in_slot = {
+        p: any(slot_by_session[s_idx] == p for s_idx in teacher_tc_sessions)
+        for p in day_slot_list
+    }
+    for left_slot, right_slot in zip(day_slot_list, day_slot_list[1:]):
+        if has_tc_in_slot[left_slot] and has_tc_in_slot[right_slot]:
+            total -= TC_TEACHER_CONSECUTIVE_PENALTY_WEIGHT
+    return total

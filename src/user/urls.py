@@ -14,6 +14,8 @@ from user.views_teams import (
     CollaborationTeamInvitationRespondView,
     CollaborationTeamInviteView,
     CollaborationTeamLeaveView,
+    OnboardingView,
+    ScheduleConfigView,
     SetActiveTeamView,
 )
 
@@ -58,4 +60,7 @@ urlpatterns = [
     path("login/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("signup/", UserViewSet.as_view({"post": "create"}), name="signup"),
+    # Onboarding and schedule config
+    path("onboarding/", OnboardingView.as_view(), name="onboarding"),
+    path("schedule-config/", ScheduleConfigView.as_view(), name="schedule-config"),
 ]

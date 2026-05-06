@@ -2,6 +2,8 @@
  * Dashboard page: authentication guard, team management, and invitation handling.
  */
 (function () {
+    let autoCreatingTeam = false;
+
     const logoutButton = document.getElementById("logout-button");
     const avatar = document.getElementById("dashboard-user-initials");
     const currentTeamName = document.getElementById("dashboard-current-team-name");
@@ -15,6 +17,9 @@
     const createTeamModalElement = document.getElementById("dashboardCreateTeamModal");
     const inviteTeamModalElement = document.getElementById("dashboardInviteTeamModal");
     const invitationsModalElement = document.getElementById("dashboardInvitationsModal");
+    const leaveTeamModalElement = document.getElementById("dashboardLeaveTeamModal");
+    const leaveTeamConfirmButton = document.getElementById("dashboard-leave-team-confirm");
+    const leaveTeamError = document.getElementById("dashboard-leave-team-error");
 
     const createTeamInput = document.getElementById("dashboard-new-team-name");
     const createTeamSubmit = document.getElementById("dashboard-create-team-submit");
@@ -43,6 +48,10 @@
     const invitationsModal =
         invitationsModalElement && window.bootstrap
             ? new window.bootstrap.Modal(invitationsModalElement)
+            : null;
+    const leaveTeamModal =
+        leaveTeamModalElement && window.bootstrap
+            ? new window.bootstrap.Modal(leaveTeamModalElement)
             : null;
 
     if (window.lucide && typeof window.lucide.createIcons === "function") {
@@ -153,6 +162,28 @@
         const error = new Error(message);
         error.payload = payload || null;
         return error;
+    }
+
+    /**
+     * Shows a green slide-in toast at the top-right of the screen for the given message.
+     * Input: message - string to display in the toast
+     */
+    function showSuccessToast(message) {
+        var toastEl = document.getElementById("orarioo-success-toast");
+        if (!toastEl) {
+            toastEl = document.createElement("div");
+            toastEl.id = "orarioo-success-toast";
+            toastEl.className = "orarioo-toast";
+            toastEl.setAttribute("role", "status");
+            toastEl.setAttribute("aria-live", "polite");
+            document.body.appendChild(toastEl);
+        }
+        toastEl.textContent = message;
+        clearTimeout(toastEl._hideTimer);
+        toastEl.classList.add("orarioo-toast--visible");
+        toastEl._hideTimer = setTimeout(function () {
+            toastEl.classList.remove("orarioo-toast--visible");
+        }, 3000);
     }
 
     /**
@@ -334,6 +365,7 @@
             throw buildHandledError(payload, "No se pudo salir del equipo.");
         }
         window.orariooAuth.setAuthSession(payload);
+        sessionStorage.setItem("orarioo_pending_toast", "Has salido del equipo");
         window.location.reload();
     }
 
@@ -394,6 +426,7 @@
                 rejectButton.disabled = true;
                 respondInvitation(item.id, "accept")
                     .then(function () {
+                        showSuccessToast("Invitación aceptada");
                         return Promise.all([refreshProfileData(), fetchInvitations()]);
                     })
                     .then(function (results) {
@@ -456,6 +489,7 @@
         }
 
         window.orariooAuth.setAuthSession(payload);
+        sessionStorage.setItem("orarioo_pending_toast", "Equipo cambiado correctamente");
         window.location.reload();
     }
 
@@ -477,6 +511,11 @@
      * Redirects to sign-in on authentication failure.
      */
     async function ensureAuthenticated() {
+        const pendingToast = sessionStorage.getItem("orarioo_pending_toast");
+        if (pendingToast) {
+            sessionStorage.removeItem("orarioo_pending_toast");
+            showSuccessToast(pendingToast);
+        }
         const tokens = window.orariooAuth.getTokens();
         if (!tokens.access && !tokens.refresh) {
             window.location.replace("/sign-in/");
@@ -494,14 +533,18 @@
 
         const teams = (userData && userData.collaboration_teams) || [];
         if (!teams.length) {
+            if (autoCreatingTeam) {
+                return;
+            }
+            autoCreatingTeam = true;
             try {
-                window.alert("No tenias equipo de colaboracion. Se creara uno para que puedas trabajar.");
                 const baseName = (userData && userData.given_name) || "Mi";
                 await createCollaborationTeam("Equipo de " + baseName);
+                sessionStorage.setItem("orarioo_pending_toast", "Se ha creado tu equipo de trabajo");
                 window.location.reload();
                 return;
             } catch (error) {
-                // Keep session alive and let user retry from profile menu.
+                autoCreatingTeam = false;
                 console.warn("Auto-create team failed:", error);
             }
         }
@@ -572,6 +615,7 @@
             createTeamSubmit.disabled = true;
             createCollaborationTeam(teamName)
                 .then(function () {
+                    sessionStorage.setItem("orarioo_pending_toast", "Equipo creado correctamente");
                     window.location.reload();
                 })
                 .catch(function (error) {
@@ -622,10 +666,12 @@
                     if (inviteTeamModal) {
                         inviteTeamModal.hide();
                     }
+                    showSuccessToast("Invitación enviada");
                 })
                 .catch(function (error) {
                     if (inviteError) {
                         inviteError.textContent = error.message || "No se pudo invitar al usuario.";
+                        inviteError.className = "small mt-2 text-danger";
                         inviteError.classList.remove("d-none");
                     }
                 })
@@ -656,17 +702,28 @@
 
     if (leaveTeamButton) {
         leaveTeamButton.addEventListener("click", function () {
-            if (!window.confirm("¿Seguro que quieres salir del equipo actual?")) {
-                return;
+            if (leaveTeamError) {
+                leaveTeamError.classList.add("d-none");
+                leaveTeamError.textContent = "";
             }
+            if (leaveTeamModal) {
+                leaveTeamModal.show();
+            }
+        });
+    }
 
-            leaveTeamButton.disabled = true;
+    if (leaveTeamConfirmButton) {
+        leaveTeamConfirmButton.addEventListener("click", function () {
+            leaveTeamConfirmButton.disabled = true;
             leaveCurrentTeam()
                 .catch(function (error) {
-                    window.alert(error.message || "No se pudo salir del equipo.");
+                    if (leaveTeamError) {
+                        leaveTeamError.textContent = error.message || "No se pudo salir del equipo.";
+                        leaveTeamError.classList.remove("d-none");
+                    }
                 })
                 .finally(function () {
-                    leaveTeamButton.disabled = false;
+                    leaveTeamConfirmButton.disabled = false;
                 });
         });
     }

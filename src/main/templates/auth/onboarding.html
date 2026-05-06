@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}
+    Orarioo | Configura tu centro
+{% endblock title %}
+{% block body_class %}
+    auth-page
+{% endblock body_class %}
+{% block extra_head %}
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+    <link rel="stylesheet" href="{% static 'css/admin.css' %}">
+    <link rel="stylesheet" href="{% static 'css/schedule-config.css' %}">
+{% endblock extra_head %}
+{% block content %}
+    <main class="auth-shell container-fluid px-0">
+        <div class="auth-layout min-vh-100 d-flex flex-column flex-lg-row">
+            {% include "auth/auth_branding.html" %}
+            <section class="auth-form-section flex-grow-1 d-flex align-items-center justify-content-center p-3 p-md-4 p-xl-5">
+                <div class="card shadow-sm border-0 auth-card onboarding-card w-100">
+                    <div class="card-body p-4 p-md-5">
+                        <nav class="ob-stepper d-flex align-items-center gap-0 mb-4"
+                             aria-label="Progreso del asistente">
+                            <div class="ob-stepper-step" id="ob-stepper-step-1">
+                                <span class="ob-stepper-circle">
+                                    <i data-lucide="check" aria-hidden="true"></i>
+                                </span>
+                                <span class="ob-stepper-label">Centro</span>
+                            </div>
+                            <div class="ob-stepper-line flex-grow-1" id="ob-stepper-line"></div>
+                            <div class="ob-stepper-step" id="ob-stepper-step-2">
+                                <span class="ob-stepper-circle">2</span>
+                                <span class="ob-stepper-label">Etapas</span>
+                            </div>
+                        </nav>
+                        <div id="onboarding-alert"
+                             class="onboarding-alert alert d-none"
+                             role="status"
+                             aria-live="polite"></div>
+                        <header class="mb-4">
+                            <div id="ob-header-team">
+                                <p class="text-uppercase fw-semibold small text-body-secondary mb-2">
+                                    Configuraci&oacute;n inicial &middot; Paso 1 de 2
+                                </p>
+                                <h2 class="h3 mb-1">Configura tu centro</h2>
+                                <p class="text-body-secondary mb-0">Primero indica el nombre del centro.</p>
+                            </div>
+                            <div id="ob-header-schedule" class="d-none">
+                                <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+                                    <div>
+                                        <p class="text-uppercase fw-semibold small text-body-secondary mb-2">
+                                            Configuraci&oacute;n inicial &middot; Paso 2 de 2
+                                        </p>
+                                        <h2 class="h3 mb-1">Etapas educativas</h2>
+                                        <p class="text-body-secondary mb-0">
+                                            Define cada etapa del centro: horario de entrada/salida, duraci&oacute;n de sesi&oacute;n y recreos.
+                                        </p>
+                                    </div>
+                                    <button id="onboarding-add-stage-btn"
+                                            type="button"
+                                            class="btn btn-outline-primary align-self-start flex-shrink-0"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#onboarding-add-stage-modal">+ A&ntilde;adir etapa</button>
+                                </div>
+                            </div>
+                        </header>
+                        <form id="onboarding-form" class="d-grid gap-4" novalidate>
+                            <section id="onboarding-team-step" class="onboarding-step">
+                                <div class="d-flex align-items-center gap-1 mb-1">
+                                    <label class="form-label fw-semibold mb-0" for="onboarding-team-name">Nombre del centro</label>
+                                    <span class="text-danger">*</span>
+                                </div>
+                                <input id="onboarding-team-name"
+                                       name="team_name"
+                                       class="form-control form-control-lg"
+                                       type="text"
+                                       placeholder="Ej: IES Ejemplo"
+                                       maxlength="150"
+                                       required>
+                                <div id="onboarding-team-name-error" class="invalid-feedback"></div>
+                                <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mt-4">
+                                    <a href="/sign-up/"
+                                       class="btn btn-outline-secondary">&larr; Volver</a>
+                                    <button id="onboarding-next-step"
+                                            class="btn btn-primary ms-auto"
+                                            type="button">Continuar &rarr;</button>
+                                </div>
+                            </section>
+                            <section id="onboarding-schedule-step" class="onboarding-step d-none">
+                                <div id="onboarding-stages-error" class="invalid-feedback d-block mb-2"></div>
+                                <div id="onboarding-stages-config" class="ob-stages-accordion"></div>
+                                <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mt-4">
+                                    <button id="onboarding-back-step"
+                                            class="btn btn-outline-secondary"
+                                            type="button">&larr; Volver</button>
+                                    <button id="onboarding-skip-schedule"
+                                            class="btn btn-link text-body-secondary px-0"
+                                            type="button">Saltar paso</button>
+                                    <button id="onboarding-submit"
+                                            class="btn btn-primary auth-submit ms-auto"
+                                            type="submit">
+                                        <span class="btn-label">Guardar y continuar &rarr;</span>
+                                        <span class="btn-loader" aria-hidden="true"></span>
+                                    </button>
+                                </div>
+                            </section>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+    <div class="modal fade"
+         id="onboarding-add-stage-modal"
+         tabindex="-1"
+         aria-labelledby="onboarding-add-stage-title"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow-lg">
+                <div class="modal-header">
+                    <div>
+                        <h3 class="modal-title h4 mb-0" id="onboarding-add-stage-title">A&ntilde;adir etapa</h3>
+                        <p class="admin-modal-note mb-0">Crea una etapa personalizada con su color inicial.</p>
+                    </div>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="onboarding-add-stage-form" class="row g-3" novalidate>
+                        <div class="col-12">
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="onboarding-new-stage-name">Nombre de la etapa</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
+                            <input class="form-control"
+                                   id="onboarding-new-stage-name"
+                                   type="text"
+                                   placeholder="Ej: FP B&aacute;sica"
+                                   maxlength="150"
+                                   required>
+                            <div class="invalid-feedback" id="onboarding-new-stage-name-error"></div>
+                        </div>
+                        <div class="col-12">
+                            <div class="d-flex align-items-center gap-1 mb-2">
+                                <span class="form-label fw-semibold d-block mb-0">Color</span>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
+                            <div id="onboarding-color-options" class="schedule-config-color-options"></div>
+                            <div class="invalid-feedback d-block"
+                                 id="onboarding-new-stage-color-error"></div>
+                        </div>
+                        <div class="col-12 d-flex flex-wrap gap-2">
+                            <button type="button"
+                                    class="btn btn-outline-secondary px-4"
+                                    data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit"
+                                    class="btn btn-primary px-4"
+                                    id="onboarding-add-stage-submit-btn">Crear etapa</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock content %}
+{% block extra_scripts %}
+    {{ onboarding_initial_data|json_script:"onboarding-initial-data" }}
+    <script src="{% static 'js/onboarding.js' %}"></script>
+{% endblock extra_scripts %}

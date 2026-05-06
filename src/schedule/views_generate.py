@@ -135,6 +135,8 @@ def parse_base_generation_int_options(payload, options):
     if options.get("include_tc", True):
         int_fields["tc_capacity"] = (1, 10)
 
+    int_fields["timeout_minutes"] = (1, 1440)
+
     for field_name, bounds in int_fields.items():
         parsed, error_response = parse_generation_int(
             payload,

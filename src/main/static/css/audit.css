@@ -1,5 +1,29 @@
 .audit-panel {
-    border: 1px solid #d9e3f2;
+    border: 0;
+}
+
+.export-entity-card.active {
+    background: #e7f0ff !important;
+    border-color: #80a6ff !important;
+    color: #1f4db8 !important;
+    font-weight: 700;
+}
+
+.btn.export-entity-card:not(.active):hover {
+    background: #e7f0ff !important;
+    border-color: #80a6ff !important;
+    color: #1f4db8 !important;
+}
+
+.btn.export-entity-card:active {
+    background: #e7f0ff !important;
+    border-color: #80a6ff !important;
+    color: #1f4db8 !important;
+}
+
+.audit-export-icon {
+    width: 1rem;
+    height: 1rem;
 }
 
 .audit-filters {
@@ -78,14 +102,8 @@
 
 .audit-actions-row {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
-.audit-actions-primary {
-    display: flex;
     gap: 0.65rem;
     flex-wrap: wrap;
 }
@@ -109,48 +127,7 @@
     box-shadow: 0 10px 20px rgba(36, 93, 214, 0.28);
 }
 
-.audit-btn-ghost {
-    border: 1px solid #d4dceb;
-    border-radius: 0.65rem;
-    color: #3f5578;
-    background: #ffffff;
-    padding: 0.56rem 0.95rem;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
-}
 
-.audit-btn-ghost:hover,
-.audit-btn-ghost:focus {
-    background: #f5f8ff;
-    border-color: #becce6;
-    color: #2b3f63;
-}
-
-.audit-export-group {
-    display: inline-flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    padding: 0.25rem;
-    border-radius: 0.75rem;
-    border: 1px solid #e3eaf8;
-    background: #fbfcff;
-}
-
-.audit-btn-export {
-    border: 1px solid #cfdcf4;
-    border-radius: 0.62rem;
-    background: #ffffff;
-    color: #2d4f91;
-    font-weight: 600;
-    padding: 0.5rem 0.82rem;
-    transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-
-.audit-btn-export:hover,
-.audit-btn-export:focus {
-    border-color: #9db8ee;
-    background: #eef4ff;
-    color: #213f79;
-}
 
 .audit-table {
     min-width: 940px;
@@ -333,13 +310,7 @@
         align-items: stretch;
     }
 
-    .audit-actions-primary,
-    .audit-export-group {
-        width: 100%;
-    }
-
-    .audit-actions-primary .btn,
-    .audit-export-group .btn {
+    .audit-actions-row .btn {
         flex: 1 1 auto;
         text-align: center;
         justify-content: center;

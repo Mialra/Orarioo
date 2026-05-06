@@ -103,20 +103,6 @@
                     <div class="form-check mb-2">
                         <input class="form-check-input"
                                type="checkbox"
-                               id="gen-opt-tc-distribution"
-                               checked>
-                        <label class="form-check-label small" for="gen-opt-tc-distribution">
-                            Distribución de sesiones TC
-                            <i data-lucide="info"
-                               class="gen-opt-info-icon"
-                               data-bs-toggle="tooltip"
-                               data-bs-placement="top"
-                               data-bs-title="Incentiva repartir las sesiones de Trabajo de Centro en distintos intervalos del día y penaliza que un mismo profesor tenga varias TC consecutivas."></i>
-                        </label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input"
-                               type="checkbox"
                                id="gen-opt-subject-preferences"
                                checked>
                         <label class="form-check-label small" for="gen-opt-subject-preferences">
@@ -168,6 +154,63 @@
                                data-bs-toggle="tooltip"
                                data-bs-placement="top"
                                data-bs-title="Penaliza los huecos intermedios libres en el horario de un profesor."></i>
+                        </label>
+                    </div>
+                </div>
+                <hr class="my-3">
+                <p class="text-uppercase text-muted gen-opt-section-label mb-2">Trabajo de Centro</p>
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="gen-opt-include-tc"
+                               checked>
+                        <label class="form-check-label small" for="gen-opt-include-tc">
+                            Incluir horas de Trabajo de Centro (TC)
+                            <i data-lucide="info"
+                               class="gen-opt-info-icon"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               data-bs-title="Asigna automáticamente un profesor libre como TC en cada franja horaria, garantizando que siempre haya un profesor disponible para sustituciones."></i>
+                        </label>
+                    </div>
+                </div>
+                <hr class="my-3">
+                <p class="text-uppercase text-muted gen-opt-section-label mb-2">Tiempo de ejecución</p>
+                <div class="mb-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input"
+                               type="radio"
+                               name="gen-timeout-mode"
+                               id="gen-timeout-limited"
+                               value="limited"
+                               checked>
+                        <label class="form-check-label small" for="gen-timeout-limited">
+                            Límite máximo
+                        </label>
+                    </div>
+                    <div class="row g-2 align-items-center mb-2">
+                        <div class="col-sm-4">
+                            <input class="form-control form-control-sm"
+                                   type="number"
+                                   id="gen-timeout-minutes"
+                                   min="1"
+                                   step="1"
+                                   value="15"
+                                   aria-label="Tiempo máximo en minutos">
+                        </div>
+                        <div class="col-sm-8">
+                            <p class="small text-secondary mb-0">Minutos dedicados a optimizar el horario (distribución de asignaturas, huecos del profesor, preferencias) una vez encontrada una solución válida.</p>
+                        </div>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="radio"
+                               name="gen-timeout-mode"
+                               id="gen-timeout-unlimited"
+                               value="unlimited">
+                        <label class="form-check-label small" for="gen-timeout-unlimited">
+                            Sin tiempo máximo
                         </label>
                     </div>
                 </div>

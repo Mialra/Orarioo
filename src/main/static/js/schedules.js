@@ -66,6 +66,7 @@
     savedSummaryPromise: null,
     exportOptionsLoaded: false,
     exportOptionsPromise: null,
+    scheduleConfig: null,
     exportEntityState: {
       group: false,
       teacher: false,
@@ -422,7 +423,7 @@
   }
 
   /**
-   * Displays a contextual alert banner that auto-dismisses after 4.5 seconds.
+   * Displays a contextual alert banner. Errors stay visible until a later alert replaces them.
    * Input: type - "success" | "error" | "info" | "warning"
    *        message - string or error info object (rendered via errorHandler.renderAlertContent)
    */
@@ -452,9 +453,12 @@
     }
     alert.classList.remove("d-none");
     window.clearTimeout(showAlert._timer);
-    showAlert._timer = window.setTimeout(function () {
-      alert.classList.add("d-none");
-    }, 4500);
+    showAlert._timer = null;
+    if (type !== "error") {
+      showAlert._timer = window.setTimeout(function () {
+        alert.classList.add("d-none");
+      }, 4500);
+    }
   }
 
   // ── API helpers ────────────────────────────────────────────────────────────
@@ -769,6 +773,7 @@
    */
   function showGeneratedWorkspace() {
     toggleSection("generatedLandingSection", false);
+    toggleSection("generatedProgressSection", false);
     toggleSection("generatedWorkspaceSection", true);
   }
 
@@ -779,7 +784,149 @@
    */
   function showGeneratedLanding() {
     toggleSection("generatedLandingSection", true);
+    toggleSection("generatedProgressSection", false);
     toggleSection("generatedWorkspaceSection", false);
+  }
+
+  // ── Generation progress animation ─────────────────────────────────────────
+  var _genProgressPhase2Timer = null;
+  var _genProgressPhase1Timer = null;
+  var GEN_PHASE1_FAKE_MS = 5000; // estimated Phase 1 duration shown before Phase 2 starts
+
+  function _genProgressSetPhase1Active() {
+    var step1 = document.getElementById("genProgressStep1");
+    var icon1 = document.getElementById("genProgressIcon1");
+    var bar1 = document.getElementById("genProgressBar1");
+    if (step1) {
+      step1.classList.remove("gen-progress-step--pending");
+    }
+    if (icon1) {
+      icon1.className = "gen-progress-step-icon gen-progress-step-icon--active";
+      icon1.innerHTML = "<div class='gen-spinner'></div>";
+    }
+    if (bar1) {
+      bar1.className = "progress-bar progress-bar-striped progress-bar-animated";
+      bar1.style.width = "100%";
+    }
+  }
+
+  function _genProgressSetPhase1Done() {
+    var icon1 = document.getElementById("genProgressIcon1");
+    var bar1 = document.getElementById("genProgressBar1");
+    if (icon1) {
+      icon1.className = "gen-progress-step-icon gen-progress-step-icon--done";
+      icon1.innerHTML = "<i data-lucide='check' style='width:1rem;height:1rem;color:#fff'></i>";
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+    if (bar1) {
+      bar1.className = "progress-bar bg-primary";
+      bar1.style.width = "100%";
+    }
+  }
+
+  function _genProgressStartPhase2(timeoutMinutes) {
+    var step2 = document.getElementById("genProgressStep2");
+    var icon2 = document.getElementById("genProgressIcon2");
+    var bar2Wrap = document.getElementById("genProgressBar2Wrap");
+    var bar2 = document.getElementById("genProgressBar2");
+    var label = document.getElementById("genProgressTimeLabel");
+
+    if (step2) {
+      step2.classList.remove("gen-progress-step--pending");
+    }
+
+    if (timeoutMinutes) {
+      if (label) {
+        label.textContent = "(" + timeoutMinutes + " min)";
+      }
+      if (icon2) {
+        icon2.className = "gen-progress-step-icon gen-progress-step-icon--active";
+        icon2.innerHTML = "<div class='gen-spinner'></div>";
+      }
+      if (bar2Wrap) {
+        bar2Wrap.classList.remove("d-none");
+      }
+
+      var totalMs = timeoutMinutes * 60 * 1000;
+      var startMs = Date.now();
+      _genProgressPhase2Timer = setInterval(function () {
+        var pct = Math.min(100, ((Date.now() - startMs) / totalMs) * 100);
+        if (bar2) {
+          bar2.style.width = pct + "%";
+          bar2.setAttribute("aria-valuenow", Math.round(pct));
+        }
+        if (pct >= 100) {
+          clearInterval(_genProgressPhase2Timer);
+          _genProgressPhase2Timer = null;
+        }
+      }, 200);
+    } else {
+      if (label) {
+        label.textContent = "(sin límite)";
+      }
+      if (icon2) {
+        icon2.className = "gen-progress-step-icon gen-progress-step-icon--active";
+        icon2.innerHTML = "<div class='gen-spinner'></div>";
+      }
+      if (bar2Wrap) {
+        bar2Wrap.classList.remove("d-none");
+      }
+      if (bar2) {
+        bar2.className = "progress-bar progress-bar-striped progress-bar-animated bg-success";
+        bar2.style.width = "100%";
+      }
+    }
+  }
+
+  function startGenerationProgress(timeoutMinutes) {
+    clearInterval(_genProgressPhase2Timer);
+    clearTimeout(_genProgressPhase1Timer);
+    _genProgressPhase2Timer = null;
+    _genProgressPhase1Timer = null;
+
+    // Reset step 2 to pending state
+    var step2 = document.getElementById("genProgressStep2");
+    var icon2 = document.getElementById("genProgressIcon2");
+    var bar2Wrap = document.getElementById("genProgressBar2Wrap");
+    var bar2 = document.getElementById("genProgressBar2");
+    var label = document.getElementById("genProgressTimeLabel");
+    if (step2) {
+      step2.classList.add("gen-progress-step--pending");
+    }
+    if (icon2) {
+      icon2.className = "gen-progress-step-icon";
+      icon2.innerHTML = "<span class='gen-progress-step-num'>2</span>";
+    }
+    if (bar2Wrap) {
+      bar2Wrap.classList.add("d-none");
+    }
+    if (bar2) {
+      bar2.className = "progress-bar bg-success";
+      bar2.style.width = "0%";
+    }
+    if (label) {
+      label.textContent = "";
+    }
+
+    _genProgressSetPhase1Active();
+    toggleSection("generatedLandingSection", false);
+    toggleSection("generatedProgressSection", true);
+    toggleSection("generatedWorkspaceSection", false);
+
+    _genProgressPhase1Timer = setTimeout(function () {
+      _genProgressSetPhase1Done();
+      _genProgressStartPhase2(timeoutMinutes);
+    }, GEN_PHASE1_FAKE_MS);
+  }
+
+  function stopGenerationProgress() {
+    clearInterval(_genProgressPhase2Timer);
+    clearTimeout(_genProgressPhase1Timer);
+    _genProgressPhase2Timer = null;
+    _genProgressPhase1Timer = null;
+    toggleSection("generatedProgressSection", false);
   }
 
   /**
@@ -821,6 +968,7 @@
       detailPageSize: state.detailPageSize,
       enableDragDrop: true,
       teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
+      scheduleConfig: state.scheduleConfig,
     });
     state.generatedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
   }
@@ -850,6 +998,7 @@
       detailPageSize: state.detailPageSize,
       enableDragDrop: true,
       teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
+      scheduleConfig: state.scheduleConfig,
     });
     state.savedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
   }
@@ -915,14 +1064,20 @@
       text.textContent = state.generatedSaved
         ? "Se generará una nueva propuesta en borrador. El horario guardado actual seguirá disponible."
         : "Se generará una nueva propuesta y reemplazará el borrador actual que estás viendo.";
-      if (hintText) { hintText.textContent = "Usará las restricciones actuales y puede tardar unos segundos si el problema es complejo."; }
+      if (hintText) {
+        hintText.textContent =
+          "Usará las restricciones actuales y puede tardar unos segundos si el problema es complejo.";
+      }
       confirmButton.textContent = "Regenerar horario";
     } else {
       title.textContent = "Generar horario";
       text.textContent = "Se lanzará una nueva generación con las restricciones actuales.";
-      if (hintText) { hintText.textContent = "Este proceso puede tardar unos segundos si el problema es complejo."; }
+      if (hintText) {
+        hintText.textContent = "Este proceso puede tardar bastante tiempo si el problema es complejo.";
+      }
       confirmButton.textContent = "Generar horario";
     }
+    resetGenerationTimeoutControls();
     showModalElement(modal, function () {
       confirmButton.focus();
       if (window.orariooAuth && typeof window.orariooAuth.initBootstrapTooltips === "function") {
@@ -1063,6 +1218,43 @@
   }
 
   /**
+   * Restores the generation timeout controls to the default state.
+   * Input: none
+   * Output: void
+   */
+  function resetGenerationTimeoutControls() {
+    var limitedRadio = document.getElementById("gen-timeout-limited");
+    var unlimitedRadio = document.getElementById("gen-timeout-unlimited");
+    var timeoutInput = document.getElementById("gen-timeout-minutes");
+
+    if (limitedRadio) {
+      limitedRadio.checked = true;
+    }
+    if (unlimitedRadio) {
+      unlimitedRadio.checked = false;
+    }
+    if (timeoutInput) {
+      timeoutInput.value = "15";
+    }
+    syncGenerationTimeoutControls();
+  }
+
+  /**
+   * Enables or disables the timeout input depending on the selected mode.
+   * Input: none
+   * Output: void
+   */
+  function syncGenerationTimeoutControls() {
+    var limitedRadio = document.getElementById("gen-timeout-limited");
+    var timeoutInput = document.getElementById("gen-timeout-minutes");
+    var isLimited = !limitedRadio || limitedRadio.checked;
+
+    if (timeoutInput) {
+      timeoutInput.disabled = !isLimited;
+    }
+  }
+
+  /**
    * Reads the state of the generation options checkboxes and returns an options object.
    * Input: none
    * Output: object with boolean fields for each generation option
@@ -1081,6 +1273,25 @@
       enable_teacher_time_preferences: checked("gen-opt-teacher-preferences"),
       enable_subject_day_spread: checked("gen-opt-day-spread"),
       enable_teacher_gap_minimization: checked("gen-opt-gap-minimization"),
+      include_tc: checked("gen-opt-include-tc"),
+    };
+  }
+
+  /**
+   * Reads the user-selected timeout mode and returns the generation payload fragment.
+   * Input: none
+   * Output: object containing timeout_minutes only when the limited mode is selected
+   */
+  function readGenerationTimeoutOption() {
+    var limitedRadio = document.getElementById("gen-timeout-limited");
+    var timeoutInput = document.getElementById("gen-timeout-minutes");
+
+    if (!limitedRadio || !limitedRadio.checked) {
+      return {};
+    }
+
+    return {
+      timeout_minutes: timeoutInput ? timeoutInput.value : "",
     };
   }
 
@@ -1093,7 +1304,11 @@
     setGenerateActionButtonsDisabled(true);
     generatedWorkspace.clearDropFeedback();
     resetGeneratedDragState();
-    const result = await apiJson("/schedules/generate/", "POST", _readGenerationOptions());
+    const timeoutOpt = readGenerationTimeoutOption();
+    const payload = Object.assign({}, _readGenerationOptions(), timeoutOpt);
+    startGenerationProgress(timeoutOpt.timeout_minutes ? parseInt(timeoutOpt.timeout_minutes, 10) : null);
+    const result = await apiJson("/schedules/generate/", "POST", payload);
+    stopGenerationProgress();
     setGenerateActionButtonsDisabled(false);
     if (!result.ok) {
       state.latestGeneratedSchedules = [];
@@ -1204,7 +1419,7 @@
 
       generatedOutput.addEventListener("click", function (event) {
         const target = event.target;
-        if (!(target instanceof HTMLElement)) {
+        if (!(target instanceof Element)) {
           return;
         }
         const pageButton = target.closest("button[data-detail-page]");
@@ -1258,6 +1473,16 @@
     if (confirmGenerateButton) {
       confirmGenerateButton.addEventListener("click", handleGenerateModalConfirm);
     }
+
+    ["gen-timeout-limited", "gen-timeout-unlimited"].forEach(function (id) {
+      const radio = document.getElementById(id);
+      if (!radio) {
+        return;
+      }
+      radio.addEventListener("change", syncGenerationTimeoutControls);
+    });
+
+    syncGenerationTimeoutControls();
   }
 
   /**
@@ -1268,11 +1493,13 @@
     if (cardsContainer) {
       cardsContainer.addEventListener("click", async function (event) {
         const target = event.target;
-        if (!(target instanceof HTMLElement)) {
+        if (!(target instanceof Element)) {
           return;
         }
         const deleteButton = target.closest("button[data-action='delete'][data-index]");
         if (deleteButton) {
+          event.preventDefault();
+          event.stopPropagation();
           const deleteIndex = Number.parseInt(deleteButton.dataset.index || "", 10);
           if (Number.isNaN(deleteIndex) || deleteIndex < 0) {
             return;
@@ -1300,7 +1527,7 @@
 
       cardsContainer.addEventListener("keydown", async function (event) {
         const target = event.target;
-        if (!(target instanceof HTMLElement)) {
+        if (!(target instanceof Element)) {
           return;
         }
         if (target.closest("button")) {
@@ -1348,7 +1575,7 @@
 
       savedOutput.addEventListener("click", function (event) {
         const target = event.target;
-        if (!(target instanceof HTMLElement)) {
+        if (!(target instanceof Element)) {
           return;
         }
         const pageButton = target.closest("button[data-detail-page]");
@@ -1493,6 +1720,13 @@
     if (savedSection) {
       initTasks.push(savedManager.ensureSavedSchedulesLoaded());
     }
+    initTasks.push(
+      apiJson("/schedule-config/").then(function (res) {
+        if (res.ok && res.data && res.data.schedule_config) {
+          state.scheduleConfig = res.data.schedule_config;
+        }
+      }),
+    );
     await Promise.all(initTasks);
 
     if (window.orariooAuth && typeof window.orariooAuth.initLucideIcons === "function") {

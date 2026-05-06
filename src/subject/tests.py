@@ -62,6 +62,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
         self.assertEqual(detail_response.data["name"], "Science")
         self.assertEqual(detail_response.data["stage"], EducationalStage.SECONDARY)
+        self.assertEqual(detail_response.data["stage_color"], "orange")
 
     def test_update_subject(self):
         subject = Subject.objects.create(
@@ -229,6 +230,57 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("name", response.data)
+
+    def test_allow_same_name_in_different_team(self):
+        Subject.objects.create(
+            name="Historia Compartida",
+            weekly_hours=3,
+            duration=1.0,
+            stage=EducationalStage.SECONDARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=self.group,
+            team=self.team,
+        )
+        other_user, other_team = self.create_isolated_user(
+            email_prefix="subject-api-other"
+        )
+        other_teacher = Teacher.objects.create(
+            name="Other Teacher",
+            max_weekly_hours=40,
+            working_hours=20,
+            team=other_team,
+        )
+        other_group = Group.objects.create(
+            name="2º ESO B",
+            stage=GroupEducationalStage.SECONDARY,
+            team=other_team,
+        )
+        self.client.force_authenticate(other_user)
+
+        response = self.client.post(
+            reverse("subject-list"),
+            {
+                "name": "historia compartida",
+                "weekly_hours": 2,
+                "stage": EducationalStage.SECONDARY,
+                "type": SubjectType.NORMAL,
+                "teacher": other_teacher.id,
+                "group": other_group.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            Subject.objects.filter(name__iexact="Historia Compartida").count(), 2
+        )
+        self.assertTrue(
+            Subject.objects.filter(
+                name__iexact="Historia Compartida",
+                team=other_team,
+            ).exists()
+        )
 
     def test_list_summary_options_include_type(self):
         Subject.objects.create(

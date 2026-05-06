@@ -74,18 +74,13 @@
                         </section>
                     </div>
                     <div class="audit-actions-row">
-                        <div class="audit-actions-primary">
-                            <button id="audit-apply-filters" type="submit" class="btn audit-btn-primary">Aplicar filtros</button>
-                            <button id="audit-reset-filters" type="button" class="btn audit-btn-ghost">Limpiar</button>
-                        </div>
-                        <div class="audit-export-group" aria-label="Exportación de datos">
-                            <button id="audit-export-csv" type="button" class="btn audit-btn-export">
-                                <i data-lucide="download" aria-hidden="true"></i> CSV
-                            </button>
-                            <button id="audit-export-pdf" type="button" class="btn audit-btn-export">
-                                <i data-lucide="download" aria-hidden="true"></i> PDF
-                            </button>
-                        </div>
+                        <button id="audit-reset-filters" type="button" class="btn btn-outline-secondary schedule-toolbar-btn">Limpiar</button>
+                        <button type="button"
+                                class="btn btn-outline-secondary schedule-toolbar-btn"
+                                data-bs-toggle="modal"
+                                data-bs-target="#auditExportModal">
+                            <i data-lucide="download" class="btn-icon audit-export-icon" aria-hidden="true"></i> Exportar
+                        </button>
                     </div>
                 </form>
             </div>
@@ -97,7 +92,7 @@
                     <tr>
                         <th scope="col">Fecha</th>
                         <th scope="col">Usuario</th>
-                        <th scope="col">Entidad</th>
+                        <th scope="col">Elemento</th>
                         <th scope="col">Acción</th>
                         <th scope="col">Resumen</th>
                         <th scope="col"></th>
@@ -138,3 +133,4 @@
         </div>
     </div>
 </section>
+{% include "main/tabs/_audit_export_modal.html" %}
