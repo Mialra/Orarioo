@@ -40,9 +40,7 @@ class Teacher(TeamScopedModel, AuditableEntity):
         Output: None; raises ValidationError on constraint violations
         """
         if self.max_weekly_minutes not in (0, 30):
-            raise ValidationError(
-                {"max_weekly_minutes": "Minutes must be 0 or 30."}
-            )
+            raise ValidationError({"max_weekly_minutes": "Minutes must be 0 or 30."})
         if self.max_weekly_hours == 0 and self.max_weekly_minutes == 0:
             raise ValidationError(
                 {"max_weekly_hours": "Total weekly load cannot be zero."}

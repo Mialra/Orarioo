@@ -415,7 +415,9 @@ def _recess_supervision_extra_hours(*, sessions, generation_options):
         required = int(generation_options.get(_STAGE_OPTION_FIELD[stage], 0) or 0)
         if required <= 0 or not teacher_ids:
             continue
-        per_teacher = (_RECESS_MINUTES_PER_DAY[stage] / 60.0) * 5 * required / len(teacher_ids)
+        per_teacher = (
+            (_RECESS_MINUTES_PER_DAY[stage] / 60.0) * 5 * required / len(teacher_ids)
+        )
         for tid in teacher_ids:
             extra[tid] = extra.get(tid, 0.0) + per_teacher
     return extra
@@ -428,10 +430,9 @@ def _check_teacher_capacities(sessions_by_teacher, sessions, recess_extra=None):
     for session_indices in sessions_by_teacher.values():
         teacher = sessions[session_indices[0]].get("teacher")
         assigned = len(session_indices) + recess_extra.get(teacher.id, 0.0)
-        max_weekly_hours = (
-            (getattr(teacher, "max_weekly_hours", 0) or 0)
-            + (getattr(teacher, "max_weekly_minutes", 0) or 0) / 60.0
-        )
+        max_weekly_hours = (getattr(teacher, "max_weekly_hours", 0) or 0) + (
+            getattr(teacher, "max_weekly_minutes", 0) or 0
+        ) / 60.0
         if assigned > max_weekly_hours:
             diagnostics.append(
                 build_diagnostic(
@@ -535,9 +536,8 @@ def _check_exact_hours_feasibility(sessions_by_teacher, sessions, generation_opt
         teacher = sessions[session_indices[0]].get("teacher")
         if not getattr(teacher, "weekly_hours_exact", False):
             continue
-        target = (
-            (getattr(teacher, "max_weekly_hours", 0) or 0) * 60
-            + (getattr(teacher, "max_weekly_minutes", 0) or 0)
+        target = (getattr(teacher, "max_weekly_hours", 0) or 0) * 60 + (
+            getattr(teacher, "max_weekly_minutes", 0) or 0
         )
         regular = sum(
             int(getattr(sessions[idx].get("subject"), "duration", 1.0) * 60)
@@ -575,8 +575,16 @@ def _collect_capacity_diagnostics(*, sessions, slots, generation_options):
     )
     diagnostics = []
     diagnostics.extend(_check_group_capacities(sessions_by_group, sessions, slots))
-    diagnostics.extend(_check_teacher_capacities(sessions_by_teacher, sessions, recess_extra=recess_extra))
-    diagnostics.extend(_check_exact_hours_feasibility(sessions_by_teacher, sessions, generation_options))
+    diagnostics.extend(
+        _check_teacher_capacities(
+            sessions_by_teacher, sessions, recess_extra=recess_extra
+        )
+    )
+    diagnostics.extend(
+        _check_exact_hours_feasibility(
+            sessions_by_teacher, sessions, generation_options
+        )
+    )
     diagnostics.extend(
         _check_tc_capacity(tc_session_indices, slots, generation_options)
     )

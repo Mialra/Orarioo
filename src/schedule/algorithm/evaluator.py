@@ -275,9 +275,8 @@ class ScheduleEvaluator:
 
         defects = []
         for tid, teacher in teacher_obj.items():
-            target = (
-                (getattr(teacher, "max_weekly_hours", 0) or 0) * 60
-                + (getattr(teacher, "max_weekly_minutes", 0) or 0)
+            target = (getattr(teacher, "max_weekly_hours", 0) or 0) * 60 + (
+                getattr(teacher, "max_weekly_minutes", 0) or 0
             )
             assigned = teacher_minutes[tid]
             if abs(assigned - target) < 0.5:
@@ -285,7 +284,9 @@ class ScheduleEvaluator:
             target_h, target_m = divmod(int(target), 60)
             assigned_h, assigned_m = divmod(int(round(assigned)), 60)
             target_str = f"{target_h} h {target_m} min" if target_m else f"{target_h} h"
-            assigned_str = f"{assigned_h} h {assigned_m} min" if assigned_m else f"{assigned_h} h"
+            assigned_str = (
+                f"{assigned_h} h {assigned_m} min" if assigned_m else f"{assigned_h} h"
+            )
             defects.append(
                 {
                     "entity_id": tid,
