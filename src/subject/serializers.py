@@ -8,8 +8,7 @@ from app.constants import MAX_LENGTH_EXTENDED, STRING_MAX_LENGTH
 from classroom.models import Classroom
 from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
 from common.serializers import TeamScopedModelSerializerMixin
-from common.stages import DEFAULT_STAGE_COLORS, canonical_subject_stage
-from common.tenancy import get_active_team
+from common.stages import DEFAULT_STAGE_COLORS, canonical_group_stage
 from common.validators import (
     normalize_optional_text,
     raise_validation_error,
@@ -37,6 +36,7 @@ SUBJECT_SERIALIZER_FIELDS = with_audit_fields(
     "mandatory_classroom",
     "mandatory_classroom_name",
 )
+# NOTE: `stage` and `stage_color` are read-only derived fields (from group.stage); not DB columns.
 
 
 class SubjectSerializer(
@@ -55,7 +55,10 @@ class SubjectSerializer(
     }
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
-    mandatory_classroom_name = serializers.CharField(source="mandatory_classroom.name", read_only=True, default=None)
+    mandatory_classroom_name = serializers.CharField(
+        source="mandatory_classroom.name", read_only=True, default=None
+    )
+    stage = serializers.SerializerMethodField(read_only=True)
     stage_color = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -67,6 +70,7 @@ class SubjectSerializer(
             "teacher_name",
             "group_name",
             "mandatory_classroom_name",
+            "stage",
             "stage_color",
         ]
 
@@ -91,19 +95,6 @@ class SubjectSerializer(
             )
         return value
 
-    def validate_stage(self, value):
-        """Allow only stages configured for the active team."""
-        request = self.context.get("request")
-        team = self.instance.team if self.instance else get_active_team(request)
-        allowed_stage_codes = set((getattr(team, "schedule_config", None) or {}).keys())
-        if not allowed_stage_codes:
-            allowed_stage_codes = {str(code) for code in DEFAULT_STAGE_COLORS.keys()}
-
-        canonical_stage = canonical_subject_stage(value, default=None)
-        if canonical_stage not in allowed_stage_codes:
-            raise serializers.ValidationError("Invalid stage.")
-        return value
-
     def validate_preferred_time_slot(self, value):
         """Normalize the preferred_time_slot text, trimming whitespace and enforcing max length.
         Input: value - str submitted for preferred_time_slot
@@ -126,9 +117,13 @@ class SubjectSerializer(
             valid_states={state.value for state in SubjectTimePreferenceState},
         )
 
+    def get_stage(self, obj):
+        """Return the canonical stage code derived from the subject's group."""
+        return canonical_group_stage(getattr(obj.group, "stage", None), default=None)
+
     def get_stage_color(self, obj):
-        """Return the configured color for the subject's educational stage."""
-        stage_code = canonical_subject_stage(obj.stage, default=None) or obj.stage
+        """Return the configured color for the subject's educational stage (derived from group)."""
+        stage_code = canonical_group_stage(getattr(obj.group, "stage", None), default=None)
         config = getattr(getattr(obj, "team", None), "schedule_config", None) or {}
         stage_cfg = config.get(stage_code) or {}
         return stage_cfg.get("color") or DEFAULT_STAGE_COLORS.get(stage_code, "blue")

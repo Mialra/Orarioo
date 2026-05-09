@@ -5,7 +5,8 @@ from rest_framework.test import APITestCase
 from common.test_utils import AuthenticatedAdminAPIMixin
 from group.models import EducationalStage as GroupEducationalStage
 from group.models import Group
-from subject.models import EducationalStage, Subject, SubjectType
+from common.stages import EducationalStage
+from subject.models import Subject, SubjectType
 from teacher.models import Teacher
 
 
@@ -30,7 +31,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "Mathematics",
             "weekly_hours": 5,
             "preferred_time_slot": "Morning",
-            "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -48,7 +48,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=4,
             duration=1.0,
-            stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -69,7 +68,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="History",
             weekly_hours=3,
             duration=1.0,
-            stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -80,7 +78,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "History Updated",
             "weekly_hours": 4,
             "preferred_time_slot": "Afternoon",
-            "stage": EducationalStage.PRIMARY,
             "type": SubjectType.TC,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -101,7 +98,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Art",
             weekly_hours=2,
             duration=1.0,
-            stage=EducationalStage.PRESCHOOL,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -118,7 +114,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "Invalid Subject",
             "weekly_hours": 3,
             "duration": -1.0,
-            "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -133,7 +128,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         payload = {
             "name": "Invalid Subject",
             "weekly_hours": -5,
-            "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -149,7 +143,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Physics",
             weekly_hours=4,
             duration=1.5,
-            stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -164,7 +157,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         payload = {
             "name": "Sin curso",
             "weekly_hours": 3,
-            "stage": EducationalStage.SECONDARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
         }
@@ -178,7 +170,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         payload = {
             "name": "   ",
             "weekly_hours": 3,
-            "stage": EducationalStage.SECONDARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -194,7 +185,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "Biology",
             "weekly_hours": 3,
             "preferred_time_slot": "  Morning  ",
-            "stage": EducationalStage.SECONDARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -210,7 +200,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Historia",
             weekly_hours=3,
             duration=1.0,
-            stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -220,7 +209,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         payload = {
             "name": "historia",
             "weekly_hours": 2,
-            "stage": EducationalStage.SECONDARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -236,7 +224,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Historia Compartida",
             weekly_hours=3,
             duration=1.0,
-            stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -263,7 +250,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             {
                 "name": "historia compartida",
                 "weekly_hours": 2,
-                "stage": EducationalStage.SECONDARY,
                 "type": SubjectType.NORMAL,
                 "teacher": other_teacher.id,
                 "group": other_group.id,
@@ -287,7 +273,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Tutoria",
             weekly_hours=1,
             duration=1.0,
-            stage=EducationalStage.SECONDARY,
             type=SubjectType.TC,
             teacher=self.teacher,
             group=self.group,

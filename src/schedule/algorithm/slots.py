@@ -96,30 +96,15 @@ def _slot_stage(slot):
     return None
 
 
-def _normalize_stage_code(*, group_stage=None, subject_stage=None):
-    """Map a group or subject stage to the algorithm's internal stage code.
-    Input: group_stage - EducationalStage value from the group, or None;
-           subject_stage - EducationalStage value from the subject, or None
-    Output: one of STAGE_PRESCHOOL, STAGE_PRIMARY, STAGE_SECONDARY;
-            STAGE_PRIMARY as fallback when neither matches
-    """
-    return canonical_educational_stage(
-        group_stage=group_stage,
-        subject_stage=subject_stage,
-        default=STAGE_PRIMARY,
-    )
-
-
 def session_stage_code(*, session):
-    """Determine the educational stage code for a session from its group or subject.
-    Input: session - dict with optional keys 'group' and 'subject'
+    """Determine the educational stage code for a session from its group.
+    Input: session - dict with optional key 'group'
     Output: stage code (STAGE_PRESCHOOL, STAGE_PRIMARY or STAGE_SECONDARY)
     """
     group = session.get("group")
-    subject = session.get("subject")
-    return _normalize_stage_code(
+    return canonical_educational_stage(
         group_stage=getattr(group, "stage", None),
-        subject_stage=getattr(subject, "stage", None),
+        default=STAGE_PRIMARY,
     )
 
 

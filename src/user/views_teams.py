@@ -19,7 +19,6 @@ from common.stages import (
     DEFAULT_STAGE_COLORS,
     EducationalStage,
     canonical_group_stage,
-    canonical_subject_stage,
 )
 from common.tenancy import get_active_team
 from group.models import Group
@@ -27,7 +26,6 @@ from schedule.algorithm.slots import (
     STAGE_SLOT_WINDOWS,
     parse_schedule_config_to_slot_windows,
 )
-from subject.models import Subject
 from user.models import (
     CollaborationTeam,
     CollaborationTeamInvitation,
@@ -550,11 +548,7 @@ class ScheduleConfigView(APIView):
                 canonical_group_stage(group.stage) in removed_stages
                 for group in Group.objects.filter(team=team).only("stage")
             )
-            blocking_subject_exists = any(
-                canonical_subject_stage(subject.stage) in removed_stages
-                for subject in Subject.objects.filter(team=team).only("stage")
-            )
-            if blocking_group_exists or blocking_subject_exists:
+            if blocking_group_exists:
                 stage_labels = _stage_labels_from_config(current_display_config)
                 removed_stage_names = [
                     stage_labels.get(stage, stage) for stage in removed_stages

@@ -98,7 +98,7 @@
     }
 
     function normalizeToken(value) {
-        return String(value || "")
+        return String(value ?? "")
             .toLowerCase()
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")
@@ -126,7 +126,7 @@
         if (value === "preschool") {
             return "Infantil";
         }
-        return String(rawValue || "");
+        return String(rawValue ?? "");
     }
 
     /**

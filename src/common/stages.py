@@ -30,13 +30,6 @@ GROUP_STAGE_TO_CANONICAL = {
     GroupEducationalStage.ALEVELS: EducationalStage.ALEVELS,
 }
 
-SUBJECT_STAGE_TO_CANONICAL = {
-    EducationalStage.PRESCHOOL: EducationalStage.PRESCHOOL,
-    EducationalStage.PRIMARY: EducationalStage.PRIMARY,
-    EducationalStage.SECONDARY: EducationalStage.SECONDARY,
-    EducationalStage.ALEVELS: EducationalStage.ALEVELS,
-}
-
 STAGE_COLOR_CHOICES = (
     "red",
     "yellow",
@@ -66,25 +59,12 @@ def canonical_group_stage(group_stage, default=EducationalStage.PRIMARY):
     return default
 
 
-def canonical_subject_stage(subject_stage, default=EducationalStage.PRIMARY):
-    """Return the canonical stage code for a subject-stage value."""
-    result = SUBJECT_STAGE_TO_CANONICAL.get(subject_stage)
-    if result is not None:
-        return result
-    if subject_stage:
-        return subject_stage
-    return default
-
-
 def canonical_educational_stage(
     *,
     group_stage=None,
-    subject_stage=None,
     default=EducationalStage.PRIMARY,
 ):
-    """Resolve a canonical stage code from a group or subject stage value."""
+    """Resolve a canonical stage code from a group stage value."""
     if group_stage is not None:
         return canonical_group_stage(group_stage, default)
-    if subject_stage is not None:
-        return canonical_subject_stage(subject_stage, default)
     return default

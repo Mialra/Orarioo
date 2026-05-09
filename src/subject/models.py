@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from auditableEntity.models import AuditableEntity, TeamScopedModel
-from common.stages import EducationalStage  # noqa: F401 – kept for backward compat
+from common.stages import EducationalStage, canonical_group_stage  # noqa: F401 – EducationalStage kept for backward compat
 from namedEntity.models import team_scoped_case_insensitive_name_constraint
 
 
@@ -33,10 +33,6 @@ class Subject(TeamScopedModel, AuditableEntity):
     duration = models.FloatField(default=1.0)
     preferred_time_slot = models.CharField(max_length=150, blank=True)
     time_preferences = models.JSONField(default=dict, blank=True)
-    stage = models.CharField(
-        max_length=50,
-        default="PRIMARY",
-    )
     type = models.CharField(
         max_length=20,
         choices=SubjectType.choices,
@@ -80,13 +76,11 @@ class Subject(TeamScopedModel, AuditableEntity):
             )
 
     def get_stage_display(self):
+        group_stage = canonical_group_stage(getattr(self.group, "stage", None), default=None)
         config = getattr(getattr(self, "team", None), "schedule_config", None) or {}
-        label = (config.get(self.stage) or {}).get("label")
-        return label or self.stage
+        label = (config.get(group_stage) or {}).get("label")
+        return label or group_stage or ""
 
     def __str__(self):
-        """Return a human-readable representation including the subject's stage.
-        Input: self - Subject instance
-        Output: str in the format 'name (stage)'
-        """
-        return f"{self.name} ({self.stage})"
+        group_stage = getattr(self.group, "stage", "")
+        return f"{self.name} ({group_stage})"

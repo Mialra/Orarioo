@@ -166,7 +166,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         entry = AuditEntry.objects.filter(entity_type="subject").latest("id")
         self.assertEqual(entry.entity_id, self.subject.id)
         campo_names = [f["campo"] for f in entry.changed_fields]
-        self.assertIn("Aula obligatoria", campo_names)
+        self.assertIn("Aula", campo_names)
 
     def test_update_teacher_stores_previous_and_new_values(self):
         teacher = Teacher.objects.create(

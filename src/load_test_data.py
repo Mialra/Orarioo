@@ -937,7 +937,6 @@ def create_subjects(teachers, groups, team):  # noqa: C901
             duration=row.get("duration", 1.0),
             preferred_time_slot=row.get("preferred_time_slot", ""),
             time_preferences=row.get("time_preferences", {}),
-            stage=row["stage"],
             type=row.get("type", SubjectType.NORMAL),
             teacher=teachers[row["teacher_key"]],
             group=groups[row["group_name"]],
@@ -956,15 +955,25 @@ def create_subjects(teachers, groups, team):  # noqa: C901
         lower_name = subject.name.lower()
         mandatory_room = None
         if "educación física" in lower_name or "psicomotricidad" in lower_name:
-            mandatory_room = Classroom.objects.filter(team=team, name="Gimnasio").first()
+            mandatory_room = Classroom.objects.filter(
+                team=team, name="Gimnasio"
+            ).first()
         elif "tecnología" in lower_name:
-            mandatory_room = Classroom.objects.filter(team=team, name="Aula de Tecnología").first()
+            mandatory_room = Classroom.objects.filter(
+                team=team, name="Aula de Tecnología"
+            ).first()
         elif "música" in lower_name:
-            mandatory_room = Classroom.objects.filter(team=team, name="Aula de Música").first()
+            mandatory_room = Classroom.objects.filter(
+                team=team, name="Aula de Música"
+            ).first()
         elif "plástica" in lower_name or "artística" in lower_name:
-            mandatory_room = Classroom.objects.filter(team=team, name="Aula de Plástica").first()
+            mandatory_room = Classroom.objects.filter(
+                team=team, name="Aula de Plástica"
+            ).first()
         elif "biología" in lower_name or "física y química" in lower_name:
-            mandatory_room = Classroom.objects.filter(team=team, name="Laboratorio").first()
+            mandatory_room = Classroom.objects.filter(
+                team=team, name="Laboratorio"
+            ).first()
 
         if mandatory_room is None:
             mandatory_room = default_room

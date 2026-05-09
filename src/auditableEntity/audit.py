@@ -49,6 +49,7 @@ AUDIT_EXCLUDED_FIELD_NAMES = frozenset(
         "is_active",
         "working_hours",
         "type",
+        "duration",
     }
 )
 ENTITY_LABELS = {
@@ -80,7 +81,7 @@ FIELD_LABELS = {
     "email": "Correo",
     "is_enabled": "Activo",
     "max_weekly_hours": "Máximo de horas semanales",
-    "max_weekly_minutes": "Minutos adicionales semanales",
+    "max_weekly_minutes": "Minutos semanales",
     "weekly_hours_exact": "Carga horaria exacta",
     "working_hours": "Horas de trabajo",
     "time_preferences": "Preferencias horarias",
@@ -92,7 +93,7 @@ FIELD_LABELS = {
     "type": "Tipo",
     "teacher": "Profesor",
     "group": "Curso",
-    "mandatory_classroom": "Aula obligatoria",
+    "mandatory_classroom": "Aula",
     "observations": "Observaciones",
     "start_time": "Hora de inicio",
     "end_time": "Hora de fin",

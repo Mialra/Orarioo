@@ -31,7 +31,6 @@
     subjectIdInput: document.getElementById("admin-subject-id"),
     nameInput: document.getElementById("admin-subject-name"),
     weeklyHoursInput: document.getElementById("admin-subject-weekly-hours"),
-    stageInput: document.getElementById("admin-subject-stage"),
     teacherInput: document.getElementById("admin-subject-teacher"),
     groupInput: document.getElementById("admin-subject-group"),
     mandatoryClassroomInput: document.getElementById("admin-subject-mandatory-classroom"),
@@ -50,7 +49,6 @@
     deleteSpinner: document.getElementById("admin-subject-delete-spinner"),
     nameError: document.getElementById("admin-subject-name-error"),
     weeklyHoursError: document.getElementById("admin-subject-weekly-hours-error"),
-    stageError: document.getElementById("admin-subject-stage-error"),
     teacherError: document.getElementById("admin-subject-teacher-error"),
     groupError: document.getElementById("admin-subject-group-error"),
     mandatoryClassroomError: document.getElementById("admin-subject-mandatory-classroom-error"),
@@ -75,7 +73,7 @@
 
   /**
    * Normalizes a stage value to uppercase, passing through any custom code.
-   * Input: stage - raw stage string from the API or form
+   * Input: stage - raw stage string from the API
    * Output: string uppercased stage code
    */
   function normalizeStage(stage) {
@@ -96,7 +94,7 @@
    * Refreshes all custom select inputs in the subject form.
    */
   function refreshSubjectSelects() {
-    [elements.stageInput, elements.teacherInput, elements.groupInput, elements.mandatoryClassroomInput].forEach(refreshCustomSelect);
+    [elements.teacherInput, elements.groupInput, elements.mandatoryClassroomInput].forEach(refreshCustomSelect);
   }
 
   /**
@@ -114,33 +112,6 @@
       ? stageConstants.getStageColor(code)
       : "blue");
     return { label: label, color: color };
-  }
-
-  /**
-   * Populates the stage select from STAGE_LABELS constants.
-   * Input: none
-   * Output: options are added to elements.stageInput
-   */
-  function fillStageSelect(stageLabels) {
-    const entries = Object.entries(stageLabels);
-    while (elements.stageInput.options.length > 0) { elements.stageInput.remove(0); }
-    entries.forEach(function ([code, label]) {
-      var opt = document.createElement("option"); opt.value = code; opt.textContent = label; elements.stageInput.appendChild(opt);
-    });
-    refreshCustomSelect(elements.stageInput);
-  }
-
-  function populateStageSelect() {
-    const constants = window.OrariooAdmin && window.OrariooAdmin.constants;
-    const stageLabels = (constants && constants.STAGE_LABELS) || {};
-    if (Object.keys(stageLabels).length > 0) {
-      fillStageSelect(stageLabels);
-    } else {
-      fillStageSelect((constants && constants.FALLBACK_STAGE_LABELS) || { PRESCHOOL: "Infantil", PRIMARY: "Primaria", SECONDARY: "ESO", ALEVELS: "Bachillerato" });
-      if (constants && typeof constants.onStageLabelsReady === "function") {
-        constants.onStageLabelsReady(fillStageSelect);
-      }
-    }
   }
 
   /**
@@ -418,12 +389,6 @@
           rules: [fv.weeklyHours(function () { return elements.weeklyHoursInput; })],
         },
         {
-          name: "stage",
-          input: elements.stageInput,
-          feedback: elements.stageError,
-          rules: [fv.requiredSelect(function () { return elements.stageInput; })],
-        },
-        {
           name: "teacher",
           input: elements.teacherInput,
           feedback: elements.teacherError,
@@ -453,7 +418,6 @@
       clearValidationOnInput: [
         { input: elements.nameInput, feedback: elements.nameError, event: "input" },
         { input: elements.weeklyHoursInput, feedback: elements.weeklyHoursError, event: "input" },
-        { input: elements.stageInput, feedback: elements.stageError, event: "change" },
         { input: elements.teacherInput, feedback: elements.teacherError, event: "change" },
         { input: elements.groupInput, feedback: elements.groupError, event: "change" },
         { input: elements.mandatoryClassroomInput, feedback: elements.mandatoryClassroomError, event: "change" },
@@ -463,10 +427,6 @@
         elements.subjectIdInput.value = "";
         elements.nameInput.value = "";
         elements.weeklyHoursInput.value = "";
-        populateStageSelect();
-        if (elements.stageInput.options.length > 0) {
-          elements.stageInput.value = elements.stageInput.options[0].value;
-        }
         elements.teacherInput.value = "";
         elements.groupInput.value = "";
         elements.mandatoryClassroomInput.value = "";
@@ -482,8 +442,6 @@
       fillValues: function (item) {
         elements.nameInput.value = item.name || "";
         elements.weeklyHoursInput.value = item.weekly_hours ?? "";
-        populateStageSelect();
-        elements.stageInput.value = normalizeStage(item.stage);
         elements.teacherInput.value = item.teacher ? String(item.teacher) : "";
         elements.groupInput.value = item.group ? String(item.group) : "";
         elements.mandatoryClassroomInput.value = item.mandatory_classroom ? String(item.mandatory_classroom) : "";
@@ -496,7 +454,6 @@
           weekly_hours: Number(elements.weeklyHoursInput.value),
           preferred_time_slot: "",
           time_preferences: admin.parsePreferences(elements.timePreferencesInput.value),
-          stage: normalizeStage(elements.stageInput.value),
           teacher: Number(elements.teacherInput.value),
           group: Number(elements.groupInput.value),
           mandatory_classroom: Number(elements.mandatoryClassroomInput.value) || null,
@@ -520,7 +477,6 @@
   });
 
   window.addEventListener("orarioo:stage-metadata-changed", function () {
-    populateStageSelect();
     refreshStagePills();
   });
 })();

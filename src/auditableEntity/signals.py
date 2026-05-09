@@ -28,9 +28,7 @@ from auditableEntity.models import AuditActionType
 
 SIGNALS_REGISTERED = False
 
-M2M_AUDITED_FIELDS = (
-    ("schedule", "Schedule", "users", "audit_schedule_users_m2m"),
-)
+M2M_AUDITED_FIELDS = (("schedule", "Schedule", "users", "audit_schedule_users_m2m"),)
 
 
 def _handle_pre_save(sender, instance, **kwargs):
