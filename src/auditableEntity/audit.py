@@ -80,6 +80,8 @@ FIELD_LABELS = {
     "email": "Correo",
     "is_enabled": "Activo",
     "max_weekly_hours": "Máximo de horas semanales",
+    "max_weekly_minutes": "Minutos adicionales semanales",
+    "weekly_hours_exact": "Carga horaria exacta",
     "working_hours": "Horas de trabajo",
     "time_preferences": "Preferencias horarias",
     "is_shared": "Compartida",

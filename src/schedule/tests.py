@@ -92,10 +92,16 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
     def assert_generate_bad_request_with_detail(self, response, detail_snippet):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
-        self.assertIn(detail_snippet, response.data["detail"])
         self.assertIn("_error", response.data)
         self.assertIn("errors", response.data)
         self.assertEqual(response.data["_meta"]["success"], False)
+        candidates = [response.data.get("detail", "")]
+        for entry in response.data.get("errors", {}).get("non_field_errors", []):
+            candidates.append(str(entry.get("message", "")))
+        self.assertTrue(
+            any(detail_snippet in text for text in candidates),
+            f"'{detail_snippet}' not found in detail or error messages: {candidates}",
+        )
 
     def assert_generate_bad_request_has_codes(self, response, *codes):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -2182,6 +2188,126 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             any("08:00" in desc and "Sesión faltante" in desc for desc in descriptions),
             "Secondary stage should not report 08:00 as missing",
         )
+
+    @skipIf(
+        schedule_assignment.cp_model is None,
+        "Requires OR-Tools CP-SAT to run the full generation pipeline.",
+    )
+    def test_exact_mode_teacher_gets_30min_tc_to_reach_target(self):
+        # Teacher needs exactly 1h30min (90 min). Subject provides 1 session.
+        # The algorithm should assign TC minutes to reach exactly 90 min total.
+        self.teacher.max_weekly_hours = 1
+        self.teacher.max_weekly_minutes = 30
+        self.teacher.weekly_hours_exact = True
+        self.teacher.working_hours = 0
+        self.teacher.save(
+            update_fields=[
+                "max_weekly_hours",
+                "max_weekly_minutes",
+                "weekly_hours_exact",
+                "working_hours",
+            ]
+        )
+
+        self.subject.weekly_hours = 1
+        self.subject.save(update_fields=["weekly_hours"])
+
+        Subject.objects.create(
+            team=self.team,
+            name="TC 1A",
+            weekly_hours=1,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.PRIMARY,
+            type=SubjectType.TC,
+            teacher=self.teacher,
+            group=self.group,
+        )
+
+        response = self.generate_schedule({"include_tc": True})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        all_teacher_schedules = Schedule.objects.filter(
+            teacher=self.teacher,
+            observations=AUTO_GENERATED_OBSERVATION,
+        )
+        total_minutes = sum(
+            (s.end_time - s.start_time).total_seconds() / 60
+            for s in all_teacher_schedules
+        )
+        self.assertEqual(total_minutes, 90)
+
+    @skipIf(
+        schedule_assignment.cp_model is None,
+        "Requires OR-Tools CP-SAT to run the full generation pipeline.",
+    )
+    def test_exact_mode_blocks_when_no_30min_tc_available(self):
+        # Configure SECONDARY-only slots: all non-recess windows are 60 min (no 30-min TC slots).
+        # Teacher needs exactly 10h30min (630 min) but can only reach 600 min with 60-min slots.
+        self.team.schedule_config = {
+            "SECONDARY": {
+                "start_time": "08:00",
+                "end_time": "14:30",
+                "session_duration": 60,
+                "breaks": [{"start": "11:00", "end": "11:30"}],
+            }
+        }
+        self.team.save(update_fields=["schedule_config"])
+
+        self.teacher.max_weekly_hours = 10
+        self.teacher.max_weekly_minutes = 30
+        self.teacher.weekly_hours_exact = True
+        self.teacher.working_hours = 8
+        self.teacher.save(
+            update_fields=[
+                "max_weekly_hours",
+                "max_weekly_minutes",
+                "weekly_hours_exact",
+                "working_hours",
+            ]
+        )
+
+        self.subject.delete()
+        secondary_group = Group.objects.create(
+            name="1ESO",
+            stage=EducationalStage.SECONDARY,
+            team=self.team,
+        )
+        Subject.objects.create(
+            team=self.team,
+            name="Math ESO",
+            weekly_hours=10,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.SECONDARY,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=secondary_group,
+        )
+        Subject.objects.create(
+            team=self.team,
+            name="TC ESO",
+            weekly_hours=2,
+            duration=1.0,
+            preferred_time_slot="Any",
+            stage=SubjectEducationalStage.SECONDARY,
+            type=SubjectType.TC,
+            teacher=self.teacher,
+            group=secondary_group,
+        )
+
+        # Generation now succeeds; the analysis phase is where unmet exact hours surface.
+        response = self.generate_schedule({"include_tc": True})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        analyze_response = self.client.post(
+            reverse("schedule-analyze"),
+            {"source": "generated"},
+            format="json",
+        )
+        self.assertEqual(analyze_response.status_code, status.HTTP_200_OK)
+        gap_types = [d["gap_type"] for d in analyze_response.data["defects"]]
+        self.assertIn("EXACT_HOURS_NOT_MET", gap_types)
 
 
 class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):

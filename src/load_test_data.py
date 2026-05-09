@@ -257,22 +257,25 @@ def create_teachers(team):
                 prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"]),
                 prefer_no=slot_keys(DAY_CODES, ["09:00"]),
             ),
+            {"max_weekly_minutes": 30},
         ),
         (
             "pri_4",
             "Raquel Núñez",
-            32,
+            29,
             build_time_preferences(
                 prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"]),
                 prefer_no=slot_keys(DAY_CODES, ["09:00", "10:00"]),
             ),
+            {"weekly_hours_exact": True},
         ),
         # ── Primaria 5º-6º: sin preferencias → baseline neutro ──────────────
         (
             "pri_5",
             "Javier Ortiz",
-            32,
+            29,
             build_time_preferences(),
+            {"max_weekly_minutes": 30, "weekly_hours_exact": True},
         ),
         (
             "pri_6",
@@ -418,11 +421,13 @@ def create_teachers(team):
             build_time_preferences(
                 prefer_no=slot_keys(DAY_CODES, ["13:30"]),
             ),
+            {"max_weekly_minutes": 30, "weekly_hours_exact": True},
         ),
     ]
 
     teachers = {}
-    for key, name, max_hours, time_preferences in teachers_data:
+    for key, name, max_hours, time_preferences, *rest in teachers_data:
+        extra = rest[0] if rest else {}
         teacher = Teacher.objects.create(
             name=name,
             max_weekly_hours=max_hours,
@@ -430,9 +435,13 @@ def create_teachers(team):
             time_preferences=time_preferences,
             team=team,
             created_by="system",
+            **extra,
         )
         teachers[key] = teacher
-        print(f"  ✓ Created teacher: {teacher.name}")
+        mins = extra.get("max_weekly_minutes", 0)
+        mode = "exactas" if extra.get("weekly_hours_exact") else "máximo"
+        mins_str = f" {mins} min" if mins else ""
+        print(f"  ✓ Created teacher: {teacher.name} ({max_hours} h{mins_str} {mode})")
 
     return teachers
 

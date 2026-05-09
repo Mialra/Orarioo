@@ -318,22 +318,25 @@ def _build_slots_by_day(*, slots, slot_day_index):
 
 
 def _build_tc_occupation(*, sessions, slot_by_session, slots, teachers, slot_day_index):
-    """Build teacher occupation index from CP-SAT assignments using slot indices.
+    """Build teacher occupation index from CP-SAT assignments using actual slot durations.
     Input: sessions - session dicts; slot_by_session - CP-SAT result;
            slots - slot dicts; teachers - Teacher instances;
            slot_day_index - {slot_idx: day_idx} mapping
-    Output: (teacher_assigned_slots, teacher_session_count, teacher_max_hours, teacher_day_slots)
+    Output: (teacher_assigned_slots, teacher_assigned_minutes, teacher_target_minutes,
+             teacher_day_slots, teacher_exact_mode)
     """
     teacher_assigned_slots = {}
-    teacher_session_count = {t.id: 0 for t in teachers}
+    teacher_assigned_minutes = {t.id: 0.0 for t in teachers}
     teacher_day_slots = {}
 
     for session_idx, slot_idx in enumerate(slot_by_session):
         teacher = sessions[session_idx].get("teacher")
         if teacher is None:
             continue
+        slot = slots[slot_idx]
+        duration_min = (slot["end"] - slot["start"]).total_seconds() / 60.0
         teacher_assigned_slots.setdefault(teacher.id, set()).add(slot_idx)
-        teacher_session_count[teacher.id] += 1
+        teacher_assigned_minutes[teacher.id] += duration_min
         day_idx = slot_day_index.get(slot_idx)
         if day_idx is not None:
             teacher_day_slots.setdefault(teacher.id, {}).setdefault(day_idx, []).append(
@@ -344,12 +347,16 @@ def _build_tc_occupation(*, sessions, slot_by_session, slots, teachers, slot_day
         for day_idx in teacher_day_slots[tid]:
             teacher_day_slots[tid][day_idx].sort(key=lambda si: slots[si]["start"])
 
-    teacher_max_hours = {t.id: t.max_weekly_hours for t in teachers}
+    teacher_target_minutes = {
+        t.id: t.max_weekly_hours * 60 + t.max_weekly_minutes for t in teachers
+    }
+    teacher_exact_mode = {t.id: t.weekly_hours_exact for t in teachers}
     return (
         teacher_assigned_slots,
-        teacher_session_count,
-        teacher_max_hours,
+        teacher_assigned_minutes,
+        teacher_target_minutes,
         teacher_day_slots,
+        teacher_exact_mode,
     )
 
 
@@ -374,9 +381,11 @@ def _pick_tc_teacher_gap_aware(
     teacher_assigned_slots,
     tc_assigned_slots,
     teacher_day_slots,
-    teacher_session_count,
-    teacher_max_hours,
+    teacher_assigned_minutes,
+    teacher_target_minutes,
+    teacher_exact_mode,
     window_slot_set,
+    window_duration_minutes,
     start_time,
     end_time,
     slots,
@@ -384,19 +393,23 @@ def _pick_tc_teacher_gap_aware(
 ):
     """Return the best eligible teacher for a TC window, or None.
 
-    Eligibility: no slot-index overlap with regular or TC sessions, and below max_weekly_hours.
-    Priority: teachers whose schedule has a gap at this window (sessions before AND after on the
-    same day) — assigned TC fills the hole rather than creating isolated free time.
-    Fallback: least-busy eligible teacher when no gap-filling candidates exist.
+    Eligibility: no slot-index overlap with regular or TC sessions, and adding this
+    window would not exceed the teacher's target in minutes.
+    Priority (highest first): EXACT teachers below their minute target, gap-filling
+    teachers (session before AND after on same day), any eligible teacher.
+    Fallback: least-assigned-minutes among the highest-priority eligible group.
     Input: teachers - ordered Teacher list; teacher_assigned_slots - {id: set of slot indices};
            tc_assigned_slots - {id: set of TC slot indices}; teacher_day_slots - gap index;
-           teacher_session_count, teacher_max_hours - capacity data;
+           teacher_assigned_minutes - {id: float minutes already assigned};
+           teacher_target_minutes - {id: int target minutes}; teacher_exact_mode - {id: bool};
            window_slot_set - frozenset of slot indices for this window;
+           window_duration_minutes - float duration of this window in minutes;
            start_time, end_time - window datetime bounds; slots, slot_day_index - slot data
     Output: Teacher instance or None
     """
     eligible = []
     gap_filling = []
+    exact_needy = []
 
     for t in teachers:
         busy = teacher_assigned_slots.get(t.id, set()) | tc_assigned_slots.get(
@@ -405,11 +418,16 @@ def _pick_tc_teacher_gap_aware(
         if busy & window_slot_set:
             continue
 
-        max_h = teacher_max_hours.get(t.id)
-        if max_h is not None and teacher_session_count.get(t.id, 0) >= max_h:
+        target = teacher_target_minutes.get(t.id)
+        current = teacher_assigned_minutes.get(t.id, 0.0)
+        if target is not None and current + window_duration_minutes > target:
             continue
 
         eligible.append(t)
+
+        if teacher_exact_mode.get(t.id) and target is not None and current < target:
+            exact_needy.append(t)
+            continue
 
         for slot_idx in window_slot_set:
             day_idx = slot_day_index.get(slot_idx)
@@ -424,8 +442,8 @@ def _pick_tc_teacher_gap_aware(
 
     if not eligible:
         return None
-    pool = gap_filling if gap_filling else eligible
-    return min(pool, key=lambda t: teacher_session_count.get(t.id, 0))
+    pool = exact_needy if exact_needy else (gap_filling if gap_filling else eligible)
+    return min(pool, key=lambda t: teacher_assigned_minutes.get(t.id, 0.0))
 
 
 def fill_tc_sessions(
@@ -433,24 +451,28 @@ def fill_tc_sessions(
 ):
     """Greedy TC fill: one pass over all non-recess time windows in chronological order.
 
-    For each window, assigns a free teacher as TC.  Gap-filling teachers (those with
-    sessions before AND after the window on the same day) are preferred to reduce
+    For each window, assigns a free teacher as TC.  EXACT-mode teachers that still need
+    minutes to reach their target are prioritised.  Gap-filling teachers (those with
+    sessions before AND after the window on the same day) are preferred next to reduce
     fragmented free time.  Eligibility: no slot-index overlap with regular or already-
-    assigned TC sessions, and within max_weekly_hours.  Skips windows with no eligible
-    teacher.
+    assigned TC sessions, and adding the window would not exceed the teacher's minute target.
+    Skips windows with no eligible teacher.
     Input: sessions - session dicts from CP-SAT; slot_by_session - CP-SAT result;
            slots - slot dicts; teachers - Teacher instances;
            tc_subject - Subject with type=TC; team, actor_email - Schedule fields
-    Output: list of unsaved Schedule instances
+    Output: tuple (tc_entries, unmet_exact) where tc_entries is a list of unsaved Schedule
+            instances and unmet_exact is a list of dicts for EXACT teachers that did not
+            reach their minute target after filling
     """
     from schedule.models import Schedule
 
     slot_day_index = build_slot_day_index(slots=slots)
     (
         teacher_assigned_slots,
-        teacher_session_count,
-        teacher_max_hours,
+        teacher_assigned_minutes,
+        teacher_target_minutes,
         teacher_day_slots,
+        teacher_exact_mode,
     ) = _build_tc_occupation(
         sessions=sessions,
         slot_by_session=slot_by_session,
@@ -465,14 +487,17 @@ def fill_tc_sessions(
 
     for (start_time, end_time), window_slot_indices in _tc_slot_groups(slots):
         window_slot_set = frozenset(window_slot_indices)
+        window_duration_minutes = (end_time - start_time).total_seconds() / 60.0
         free_teacher = _pick_tc_teacher_gap_aware(
             teachers=teachers,
             teacher_assigned_slots=teacher_assigned_slots,
             tc_assigned_slots=tc_assigned_slots,
             teacher_day_slots=teacher_day_slots,
-            teacher_session_count=teacher_session_count,
-            teacher_max_hours=teacher_max_hours,
+            teacher_assigned_minutes=teacher_assigned_minutes,
+            teacher_target_minutes=teacher_target_minutes,
+            teacher_exact_mode=teacher_exact_mode,
             window_slot_set=window_slot_set,
+            window_duration_minutes=window_duration_minutes,
             start_time=start_time,
             end_time=end_time,
             slots=slots,
@@ -500,7 +525,7 @@ def fill_tc_sessions(
         )
 
         tc_assigned_slots.setdefault(free_teacher.id, set()).update(window_slot_set)
-        teacher_session_count[free_teacher.id] += 1
+        teacher_assigned_minutes[free_teacher.id] += window_duration_minutes
         for slot_idx in window_slot_set:
             day_idx = slot_day_index.get(slot_idx)
             if day_idx is not None:
@@ -511,4 +536,16 @@ def fill_tc_sessions(
                     key=lambda si: slots[si]["start"]
                 )
 
-    return tc_entries
+    unmet_exact = [
+        {
+            "teacher": t,
+            "target_minutes": teacher_target_minutes[t.id],
+            "assigned_minutes": teacher_assigned_minutes.get(t.id, 0.0),
+        }
+        for t in teachers
+        if teacher_exact_mode.get(t.id)
+        and teacher_assigned_minutes.get(t.id, 0.0)
+        < teacher_target_minutes.get(t.id, 0)
+    ]
+
+    return tc_entries, unmet_exact

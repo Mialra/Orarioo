@@ -163,6 +163,17 @@
         '" supera su capacidad disponible.'
       );
     },
+    TEACHER_EXACT_HOURS_NOT_MET: function (entry) {
+      return entry && entry.message
+        ? entry.message
+        : "La carga horaria exacta del profesor no pudo ser satisfecha.";
+    },
+    INVALID_MINUTES_VALUE: function () {
+      return "Los minutos deben ser 0 ó 30.";
+    },
+    ZERO_WEEKLY_LOAD: function () {
+      return "La carga semanal total no puede ser cero.";
+    },
     NO_COMPATIBLE_CLASSROOM: function (entry) {
       const context = entry && entry.context ? entry.context : {};
       if (context.subject) {

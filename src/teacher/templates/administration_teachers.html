@@ -56,21 +56,46 @@
                                    maxlength="{{ string_max_length }}">
                             <div class="invalid-feedback" id="admin-teacher-surnames-error"></div>
                         </div>
-                        <div class="col-12 col-md-6">
-                            <div class="d-flex align-items-center gap-1 mb-1">
-                                <label class="form-label fw-semibold mb-0"
-                                       for="admin-teacher-max-weekly-hours">Máximo horas semanales</label>
-                                <span class="text-danger" aria-hidden="true">*</span>
+                        <div class="col-12">
+                            <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                                <div class="d-flex align-items-center gap-1">
+                                    <label class="form-label fw-semibold mb-0">Carga semanal</label>
+                                    <span class="text-danger" aria-hidden="true">*</span>
+                                </div>
+                                <div class="btn-group ms-auto"
+                                     role="group"
+                                     aria-label="Modo de carga semanal"
+                                     id="admin-teacher-hours-mode-group">
+                                    <button type="button"
+                                            class="btn btn-sm btn-primary"
+                                            id="admin-teacher-mode-max">Hasta un máximo</button>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-secondary"
+                                            id="admin-teacher-mode-exact">Exactamente</button>
+                                </div>
                             </div>
-                            <input class="form-control"
-                                   id="admin-teacher-max-weekly-hours"
-                                   type="number"
-                                   min="1"
-                                   step="1"
-                                   placeholder="Ej: 20"
-                                   required>
+                            <div class="d-flex gap-2 align-items-center">
+                                <input class="form-control"
+                                       id="admin-teacher-max-weekly-hours"
+                                       type="number"
+                                       min="0"
+                                       step="1"
+                                       placeholder="0"
+                                       style="max-width:90px"
+                                       required>
+                                <span class="text-body-secondary small">horas</span>
+                                <select class="form-select"
+                                        id="admin-teacher-max-weekly-minutes"
+                                        style="max-width:90px">
+                                    <option value="0">0</option>
+                                    <option value="30">30</option>
+                                </select>
+                                <span class="text-body-secondary small">minutos</span>
+                            </div>
+                            <div class="form-text mt-1" id="admin-teacher-weekly-load-hint"></div>
                             <div class="invalid-feedback" id="admin-teacher-max-weekly-hours-error"></div>
                         </div>
+                        <input type="hidden" id="admin-teacher-weekly-hours-exact" value="false">
                         <input type="hidden" id="admin-teacher-working-hours" value="0">
                         <div class="col-12">
                             <input type="hidden" id="admin-teacher-time-preferences" value="{}">

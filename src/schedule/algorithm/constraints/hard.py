@@ -181,7 +181,8 @@ def _accumulate_teacher_capacity(*, session, sessions_by_teacher):
         teacher.id,
         {
             "name": teacher.name,
-            "max_weekly_hours": teacher.max_weekly_hours,
+            "max_weekly_hours": teacher.max_weekly_hours
+            + teacher.max_weekly_minutes / 60.0,
             "assigned_hours": 0,
         },
     )

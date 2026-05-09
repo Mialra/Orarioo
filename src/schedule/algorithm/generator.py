@@ -241,7 +241,7 @@ class BasicScheduleGenerator:
         if include_tc:
             tc_subject = Subject.objects.filter(team=team, type=SubjectType.TC).first()
             if tc_subject is not None:
-                tc_schedules = fill_tc_sessions(
+                tc_schedules, unmet_exact = fill_tc_sessions(
                     sessions=sessions,
                     slot_by_session=slot_by_session,
                     slots=slots,
