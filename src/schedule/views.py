@@ -23,6 +23,7 @@ from group.models import Group
 from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
 from schedule.algorithm.evaluator import ScheduleEvaluator
 from schedule.algorithm.generator import ScheduleReplanner
+from schedule.algorithm.slots import parse_schedule_config_to_slot_windows
 from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule
 from schedule.serializers import ScheduleSerializer
@@ -41,7 +42,6 @@ from schedule.views_generate import (
     parse_generation_options,
     parse_positive_int,
 )
-from schedule.algorithm.slots import parse_schedule_config_to_slot_windows
 from schedule.views_move import (
     WEEKDAY_TO_DAY_NAME,
     build_affected_slot_descriptors,
@@ -52,10 +52,46 @@ from schedule.views_move import (
     resolve_slot_datetimes_for_source_week,
     validate_minimal_move_constraints,
 )
-from teacher.models import Teacher
+from subject.models import SubjectTimePreferenceState
+from teacher.models import Teacher, TeacherTimePreferenceState
 from user.models import User
 
 logger = logging.getLogger(__name__)
+
+
+def build_unavailability_index(schedules):
+    """Build a dict of UNAVAILABLE slot keys per teacher and subject for client-side pre-validation.
+    Input: schedules - list of Schedule instances with teacher and subject select_related
+    Output: dict {"teachers": {str(id): [slot_key, ...]}, "subjects": {str(id): [slot_key, ...]}}
+            Only teachers/subjects with at least one UNAVAILABLE slot appear in the result.
+    """
+    teacher_unavail = {}
+    subject_unavail = {}
+    seen_teachers = set()
+    seen_subjects = set()
+
+    for schedule in schedules or []:
+        teacher = getattr(schedule, "teacher", None)
+        if teacher is not None and schedule.teacher_id not in seen_teachers:
+            seen_teachers.add(schedule.teacher_id)
+            slots = [
+                k for k, v in (teacher.time_preferences or {}).items()
+                if v == TeacherTimePreferenceState.UNAVAILABLE
+            ]
+            if slots:
+                teacher_unavail[str(schedule.teacher_id)] = slots
+
+        subject = getattr(schedule, "subject", None)
+        if subject is not None and schedule.subject_id not in seen_subjects:
+            seen_subjects.add(schedule.subject_id)
+            slots = [
+                k for k, v in (subject.time_preferences or {}).items()
+                if v == SubjectTimePreferenceState.UNAVAILABLE
+            ]
+            if slots:
+                subject_unavail[str(schedule.subject_id)] = slots
+
+    return {"teachers": teacher_unavail, "subjects": subject_unavail}
 
 
 class ScheduleViewSet(TeamScopedAuditableModelViewSet):
@@ -402,6 +438,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "schedules": serialized.data,
                 "generated_count": len(serialized.data),
                 "teacher_workloads": build_teacher_workloads(schedules),
+                "unavailability": build_unavailability_index(schedules),
             },
             status=status.HTTP_201_CREATED,
         )
@@ -484,6 +521,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "count": len(serialized.data),
                 "results": serialized.data,
                 "teacher_workloads": build_teacher_workloads(schedules),
+                "unavailability": build_unavailability_index(schedules),
             },
             status=status.HTTP_200_OK,
         )

@@ -64,6 +64,7 @@
       teacherId: session.teacher,
       groupId: session.group,
       classroomId: session.classroom,
+      subjectId: session.subject,
       subjectName: displaySubjectName,
       teacherName: session.teacher_name || "-",
       groupName: session.group_name || "-",

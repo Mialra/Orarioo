@@ -32,6 +32,7 @@
     currentClassrooms: [],
     currentGroups: [],
     latestGeneratedSchedules: [],
+    generatedUnavailability: null,
     generatedDetailPage: 1,
     savedDetailPage: 1,
     detailPageSize: 20,
@@ -163,6 +164,9 @@
     getFilteredSessions: getFilteredSessions,
     populateFilters: populateWorkspaceFiltersFromSessions,
     getSessionSubjectType: getSessionSubjectType,
+    getUnavailability: function () {
+      return state.generatedUnavailability;
+    },
   });
 
   const savedWorkspace = window.ScheduleWorkspace.createScheduleWorkspace({
@@ -207,6 +211,10 @@
     getFilteredSessions: getFilteredSessions,
     populateFilters: populateWorkspaceFiltersFromSessions,
     getSessionSubjectType: getSessionSubjectType,
+    getUnavailability: function () {
+      const group = savedManager.getSelectedSavedGroup();
+      return (group && group.unavailability) || null;
+    },
   });
 
   // ── Workspace state helpers ────────────────────────────────────────────────
@@ -1362,6 +1370,7 @@
       return;
     }
     state.latestGeneratedSchedules = (result.data && result.data.schedules) || [];
+    state.generatedUnavailability = (result.data && result.data.unavailability) || null;
     state.generatedDetailPage = 1;
     state.generatedSaved = false;
     state.generatedSavedName = "";

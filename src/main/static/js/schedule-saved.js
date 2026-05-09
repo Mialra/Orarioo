@@ -119,6 +119,7 @@
         teacherWorkloadsByName: utils.buildTeacherWorkloadsByNameFromApi(
           result.data && result.data.teacher_workloads
         ),
+        unavailability: (result.data && result.data.unavailability) || null,
       };
     }
 
@@ -194,6 +195,7 @@
         }
         var sessions = savedDetail.sessions;
         selected.sessions = sessions;
+        selected.unavailability = savedDetail.unavailability || null;
         selected.sessionsLoaded = true;
         state.savedTeacherWorkloadsByName =
           savedDetail.teacherWorkloadsByName && Object.keys(savedDetail.teacherWorkloadsByName).length
