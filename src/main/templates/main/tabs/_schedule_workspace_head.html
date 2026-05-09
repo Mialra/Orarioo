@@ -7,10 +7,9 @@
             <div class="schedule-workspace-heading">
                 <div class="schedule-workspace-title-row">
                     {% if ws_dynamic_title %}
-                    <h3 id="{{ ws_prefix }}WorkspaceTitle"
-                        class="schedule-workspace-title">{{ ws_title }}</h3>
+                        <h3 id="{{ ws_prefix }}WorkspaceTitle" class="schedule-workspace-title">{{ ws_title }}</h3>
                     {% else %}
-                    <h3 class="schedule-workspace-title">{{ ws_title }}</h3>
+                        <h3 class="schedule-workspace-title">{{ ws_title }}</h3>
                     {% endif %}
                     <span id="{{ ws_prefix }}WorkspaceStateBadge"
                           class="schedule-pill {{ ws_badge_class }}">{{ ws_badge_text }}</span>
@@ -18,19 +17,19 @@
             </div>
         </div>
         {% if ws_show_save %}
-        <button type="button"
-                id="{{ ws_prefix }}WorkspaceSaveBtn"
-                class="btn schedule-toolbar-btn schedule-toolbar-btn-save">
-            <i data-lucide="save" class="btn-icon" aria-hidden="true"></i>
-            <span id="{{ ws_prefix }}WorkspaceSaveBtnLabel">Guardar</span>
-        </button>
+            <button type="button"
+                    id="{{ ws_prefix }}WorkspaceSaveBtn"
+                    class="btn schedule-toolbar-btn schedule-toolbar-btn-save">
+                <i data-lucide="save" class="btn-icon" aria-hidden="true"></i>
+                <span id="{{ ws_prefix }}WorkspaceSaveBtnLabel">Guardar</span>
+            </button>
         {% elif ws_show_back %}
-        <button type="button"
-                id="{{ ws_prefix }}WorkspaceBackBtn"
-                class="btn schedule-toolbar-btn schedule-toolbar-btn-back">
-            <i data-lucide="arrow-left" class="btn-icon" aria-hidden="true"></i>
-            Volver
-        </button>
+            <button type="button"
+                    id="{{ ws_prefix }}WorkspaceBackBtn"
+                    class="btn schedule-toolbar-btn schedule-toolbar-btn-back">
+                <i data-lucide="arrow-left" class="btn-icon" aria-hidden="true"></i>
+                Volver
+            </button>
         {% endif %}
     </div>
     <hr class="schedule-workspace-sep">
@@ -75,12 +74,12 @@
                 Exportar
             </button>
             {% if ws_show_regenerate %}
-            <button type="button"
-                    id="{{ ws_prefix }}WorkspaceRegenerateBtn"
-                    class="btn schedule-toolbar-btn schedule-toolbar-btn-regenerate">
-                <i data-lucide="sparkles" class="btn-icon" aria-hidden="true"></i>
-                Regenerar
-            </button>
+                <button type="button"
+                        id="{{ ws_prefix }}WorkspaceRegenerateBtn"
+                        class="btn schedule-toolbar-btn schedule-toolbar-btn-regenerate">
+                    <i data-lucide="sparkles" class="btn-icon" aria-hidden="true"></i>
+                    Regenerar
+                </button>
             {% endif %}
         </div>
     </div>
@@ -89,6 +88,6 @@
         <i data-lucide="move"
            class="schedule-workspace-hint-icon"
            aria-hidden="true"></i>
-        Arrastra y suelta una sesión para recolocarla dentro del horario. Si la sueltas sobre otra, se intercambian automáticamente.
+        Filtra por curso, profesor, aula o asignatura. Luego, arrastra y suelta una sesión para sustituirla por otra si se cumplen las restricciones.
     </p>
 </div>

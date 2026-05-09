@@ -215,6 +215,21 @@ def is_stage_window_allowed(*, schedule, start_dt, end_dt):
     return candidate_window in normalized_allowed
 
 
+_SLOT_KEY_DAY_TO_ES = {
+    "MON": "lunes",
+    "TUE": "martes",
+    "WED": "miércoles",
+    "THU": "jueves",
+    "FRI": "viernes",
+}
+
+
+def _format_slot_key_es(slot_key):
+    day_code, time = slot_key.split("_", 1)
+    day_es = _SLOT_KEY_DAY_TO_ES.get(day_code, day_code)
+    return f"{day_es} a las {time}"
+
+
 def validate_target_preferences(*, schedule, start_dt):
     """Validate that neither the subject nor the teacher is UNAVAILABLE at the target slot.
     Input: schedule - Schedule instance with subject and teacher;
@@ -231,14 +246,14 @@ def validate_target_preferences(*, schedule, start_dt):
         slot_preference_key=slot_key,
     )
     if subject_state == SubjectTimePreferenceState.UNAVAILABLE:
-        return f"Subject '{schedule.subject.name}' is unavailable at {slot_key}."
+        return f"La asignatura '{schedule.subject.name}' no está disponible el {_format_slot_key_es(slot_key)}."
 
     teacher_state = teacher_preference_state(
         session=session_ctx,
         slot_preference_key=slot_key,
     )
     if teacher_state == TeacherTimePreferenceState.UNAVAILABLE:
-        return f"Teacher '{schedule.teacher.name}' is unavailable at {slot_key}."
+        return f"El profesor '{schedule.teacher.name}' no está disponible el {_format_slot_key_es(slot_key)}."
     return None
 
 
@@ -370,17 +385,23 @@ def validate_group_daily_limits(
     return None
 
 
-def window_index_by_stage(group):
+def window_index_by_stage(group, slot_windows=None):
     """Build a mapping from (start_time, end_time) window to its position in the stage's window list.
-    Input: group - Group model instance with a 'stage' attribute
-    Output: dict {(time, time): int} index position within STAGE_SLOT_WINDOWS
+    Input: group - Group model instance with a 'stage' attribute;
+           slot_windows - optional dict {stage_code: [(start, end, is_recess), ...]}; falls back
+                          to STAGE_SLOT_WINDOWS when None
+    Output: tuple (dict {(time, time): int}, frozenset of recess indices)
     """
     stage_code = session_stage_code(session={"group": group, "subject": None})
-    allowed_windows = STAGE_SLOT_WINDOWS.get(stage_code, [])
-    return {
-        (normalize_clock(left), normalize_clock(right)): index
-        for index, (left, right, _) in enumerate(allowed_windows)
-    }
+    windows = slot_windows if slot_windows is not None else STAGE_SLOT_WINDOWS
+    allowed_windows = windows.get(stage_code, [])
+    w_index = {}
+    recess_indices = set()
+    for index, (left, right, is_recess) in enumerate(allowed_windows):
+        w_index[(normalize_clock(left), normalize_clock(right))] = index
+        if is_recess:
+            recess_indices.add(index)
+    return w_index, frozenset(recess_indices)
 
 
 def collect_group_day_window_indices(
@@ -420,15 +441,20 @@ def collect_group_day_window_indices(
     return by_day_indices
 
 
-def has_intraday_gap(occupied_indices):
+def has_intraday_gap(occupied_indices, recess_indices=frozenset()):
     """Return True if there is a gap between the first and last occupied window indices.
-    Input: occupied_indices - list of integer window position indices for a single day
-    Output: True if any index in the range [min, max] is missing, False otherwise
+    Input: occupied_indices - list of integer window position indices for a single day;
+           recess_indices - frozenset of indices that represent recess breaks (never occupied)
+    Output: True if any non-recess index in the range [min, max] is missing, False otherwise
     """
     first_idx = min(occupied_indices)
     last_idx = max(occupied_indices)
     occupied_set = set(occupied_indices)
-    return any(index not in occupied_set for index in range(first_idx, last_idx + 1))
+    return any(
+        index not in occupied_set
+        for index in range(first_idx, last_idx + 1)
+        if index not in recess_indices
+    )
 
 
 def group_schedules_by_id(*, scope_schedules, changed_group_ids):
@@ -449,11 +475,13 @@ def validate_group_intraday_gaps(
     scope_schedules,
     hypothetical_times,
     changed_group_ids,
+    slot_windows=None,
 ):
     """Check that no group would have intraday gaps in its schedule after the proposed change.
     Input: scope_schedules - list of Schedule instances;
            hypothetical_times - dict {id: (start, end)};
-           changed_group_ids - set of group ids affected by the change
+           changed_group_ids - set of group ids affected by the change;
+           slot_windows - optional team-specific stage windows; falls back to STAGE_SLOT_WINDOWS
     Output: None if no gaps detected, or Response with HTTP 400 on violation
     """
     schedules_by_group = group_schedules_by_id(
@@ -466,7 +494,7 @@ def validate_group_intraday_gaps(
             continue
 
         reference_group = group_schedules[0].group
-        w_index = window_index_by_stage(reference_group)
+        w_index, recess_indices = window_index_by_stage(reference_group, slot_windows)
         if not w_index:
             continue
 
@@ -479,12 +507,11 @@ def validate_group_intraday_gaps(
             continue
 
         for occupied_indices in by_day_indices.values():
-            if has_intraday_gap(occupied_indices):
+            if has_intraday_gap(occupied_indices, recess_indices):
                 return Response(
                     {
                         "detail": (
-                            f"Group '{reference_group.name}' would have intraday "
-                            "gaps with that move."
+                            f"El grupo '{reference_group.name}' tendría huecos en el horario con ese cambio."
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -498,11 +525,13 @@ def validate_minimal_move_constraints(
     scope_schedules,
     assignments,
     changed_ids,
+    slot_windows=None,
 ):
     """Run all lightweight move validations (stage window, preferences, overlaps, limits, gaps).
     Input: scope_schedules - list of Schedule instances in scope;
            assignments - dict {id: (start_dt, end_dt)} of proposed changes;
-           changed_ids - set of schedule ids being moved/swapped
+           changed_ids - set of schedule ids being moved/swapped;
+           slot_windows - optional team-specific stage windows; falls back to STAGE_SLOT_WINDOWS
     Output: None if all validations pass, or Response with HTTP 400 on the first failure
     """
     hypothetical_times = build_hypothetical_times(
@@ -572,6 +601,7 @@ def validate_minimal_move_constraints(
         scope_schedules=scope_schedules,
         hypothetical_times=hypothetical_times,
         changed_group_ids=changed_group_ids,
+        slot_windows=slot_windows,
     )
     if gap_error is not None:
         return gap_error

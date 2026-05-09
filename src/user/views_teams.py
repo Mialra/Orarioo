@@ -15,11 +15,7 @@ from auditableEntity.audit import (
 )
 from auditableEntity.models import AuditActionType
 from common.errors.exceptions import ResourceConflictError, ValidationAppError
-from common.stages import (
-    DEFAULT_STAGE_COLORS,
-    EducationalStage,
-    canonical_group_stage,
-)
+from common.stages import DEFAULT_STAGE_COLORS, EducationalStage, canonical_group_stage
 from common.tenancy import get_active_team
 from group.models import Group
 from schedule.algorithm.slots import (

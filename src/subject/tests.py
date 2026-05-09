@@ -2,10 +2,10 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from common.stages import EducationalStage
 from common.test_utils import AuthenticatedAdminAPIMixin
 from group.models import EducationalStage as GroupEducationalStage
 from group.models import Group
-from common.stages import EducationalStage
 from subject.models import Subject, SubjectType
 from teacher.models import Teacher
 

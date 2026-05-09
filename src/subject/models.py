@@ -6,7 +6,10 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from auditableEntity.models import AuditableEntity, TeamScopedModel
-from common.stages import EducationalStage, canonical_group_stage  # noqa: F401 – EducationalStage kept for backward compat
+from common.stages import (  # noqa: F401 – EducationalStage kept for backward compat
+    EducationalStage,
+    canonical_group_stage,
+)
 from namedEntity.models import team_scoped_case_insensitive_name_constraint
 
 
@@ -76,7 +79,9 @@ class Subject(TeamScopedModel, AuditableEntity):
             )
 
     def get_stage_display(self):
-        group_stage = canonical_group_stage(getattr(self.group, "stage", None), default=None)
+        group_stage = canonical_group_stage(
+            getattr(self.group, "stage", None), default=None
+        )
         config = getattr(getattr(self, "team", None), "schedule_config", None) or {}
         label = (config.get(group_stage) or {}).get("label")
         return label or group_stage or ""

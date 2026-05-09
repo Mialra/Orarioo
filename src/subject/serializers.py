@@ -123,7 +123,9 @@ class SubjectSerializer(
 
     def get_stage_color(self, obj):
         """Return the configured color for the subject's educational stage (derived from group)."""
-        stage_code = canonical_group_stage(getattr(obj.group, "stage", None), default=None)
+        stage_code = canonical_group_stage(
+            getattr(obj.group, "stage", None), default=None
+        )
         config = getattr(getattr(obj, "team", None), "schedule_config", None) or {}
         stage_cfg = config.get(stage_code) or {}
         return stage_cfg.get("color") or DEFAULT_STAGE_COLORS.get(stage_code, "blue")

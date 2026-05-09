@@ -41,6 +41,7 @@ from schedule.views_generate import (
     parse_generation_options,
     parse_positive_int,
 )
+from schedule.algorithm.slots import parse_schedule_config_to_slot_windows
 from schedule.views_move import (
     WEEKDAY_TO_DAY_NAME,
     build_affected_slot_descriptors,
@@ -1189,6 +1190,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             scope_schedules=scope_schedules,
             assignments=assignments,
             changed_ids=changed_ids,
+            slot_windows=parse_schedule_config_to_slot_windows(
+                getattr(active_team, "schedule_config", None)
+            ),
         )
         if validation_error is not None:
             return validation_error
