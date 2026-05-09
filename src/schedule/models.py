@@ -5,6 +5,7 @@ from django.db import models
 from django.db.models import F, Q
 
 from auditableEntity.models import AuditableEntity, TeamScopedModel
+from subject.models import SubjectType
 
 
 class Schedule(TeamScopedModel, AuditableEntity):
@@ -65,6 +66,17 @@ class Schedule(TeamScopedModel, AuditableEntity):
             raise ValidationError(
                 {"end_time": "end_time must be greater than start_time."}
             )
+
+        is_tc = self.subject_id is not None and self.subject.type == SubjectType.TC
+        if not is_tc:
+            if not self.classroom_id:
+                raise ValidationError(
+                    {"classroom": "classroom is required for non-TC sessions."}
+                )
+            if not self.group_id:
+                raise ValidationError(
+                    {"group": "group is required for non-TC sessions."}
+                )
 
     def save(self, *args, **kwargs):
         """Run full_clean before saving to enforce model-level validations.

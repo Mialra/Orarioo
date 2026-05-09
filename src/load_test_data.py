@@ -700,16 +700,6 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                         prefer_no=pri_last,
                     ),
                 },
-                {
-                    "name": f"Tutoría {grade}",
-                    "weekly_hours": 1,
-                    "duration": 0.75,
-                    "stage": EducationalStage.PRIMARY,
-                    "teacher_key": tutor_key,
-                    "group_name": grade,
-                    "type": SubjectType.TC,
-                    # Sin preferencias: TC distribuida por el optimizador
-                },
             ]
         )
 
@@ -817,16 +807,6 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "time_preferences": build_subject_time_preferences(
                         prefer_yes=pri_afternoon,
                     ),
-                },
-                {
-                    "name": f"Tutoría {grade}",
-                    "weekly_hours": 1,
-                    "duration": 0.75,
-                    "stage": EducationalStage.PRIMARY,
-                    "teacher_key": tutor_key,
-                    "group_name": grade,
-                    "type": SubjectType.TC,
-                    # Sin preferencias: TC distribuida por el optimizador
                 },
             ]
         )
@@ -936,19 +916,6 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     ),
                 },
                 {
-                    "name": f"Tutoría {grade}",
-                    "weekly_hours": 1,
-                    "duration": 0.75,
-                    "stage": EducationalStage.SECONDARY,
-                    "teacher_key": "orientacion",
-                    "group_name": grade,
-                    "type": SubjectType.TC,
-                    # No primera hora ESO
-                    "time_preferences": build_subject_time_preferences(
-                        prefer_no=slot_keys(DAY_CODES, ["08:00"]),
-                    ),
-                },
-                {
                     "name": f"Religión/Valores {grade}",
                     "weekly_hours": 1,
                     "duration": 0.75,
@@ -957,20 +924,6 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "group_name": grade,
                     "time_preferences": build_subject_time_preferences(
                         prefer_no=sec_last,
-                    ),
-                },
-                {
-                    "name": f"Proyecto Interdisciplinar {grade}",
-                    "weekly_hours": 3,
-                    "duration": 1.0,
-                    "stage": EducationalStage.SECONDARY,
-                    "teacher_key": "orientacion",
-                    "group_name": grade,
-                    "type": SubjectType.TC,
-                    # Post-recreo, no primera hora
-                    "time_preferences": build_subject_time_preferences(
-                        prefer_yes=sec_post,
-                        prefer_no=slot_keys(DAY_CODES, ["08:00"]),
                     ),
                 },
             ]
