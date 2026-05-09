@@ -953,25 +953,25 @@ def create_subjects(teachers, groups, team):  # noqa: C901
             ),
             None,
         )
-        if default_room:
-            subject.allowed_classrooms.add(default_room)
-
         lower_name = subject.name.lower()
-        shared_targets = []
+        mandatory_room = None
         if "educación física" in lower_name or "psicomotricidad" in lower_name:
-            shared_targets.append("Gimnasio")
-        if "tecnología" in lower_name:
-            shared_targets.append("Aula de Tecnología")
-        if "música" in lower_name:
-            shared_targets.append("Aula de Música")
-        if "plástica" in lower_name or "artística" in lower_name:
-            shared_targets.append("Aula de Plástica")
-        if "biología" in lower_name or "física y química" in lower_name:
-            shared_targets.append("Laboratorio")
+            mandatory_room = Classroom.objects.filter(team=team, name="Gimnasio").first()
+        elif "tecnología" in lower_name:
+            mandatory_room = Classroom.objects.filter(team=team, name="Aula de Tecnología").first()
+        elif "música" in lower_name:
+            mandatory_room = Classroom.objects.filter(team=team, name="Aula de Música").first()
+        elif "plástica" in lower_name or "artística" in lower_name:
+            mandatory_room = Classroom.objects.filter(team=team, name="Aula de Plástica").first()
+        elif "biología" in lower_name or "física y química" in lower_name:
+            mandatory_room = Classroom.objects.filter(team=team, name="Laboratorio").first()
 
-        if shared_targets:
-            extra_rooms = Classroom.objects.filter(team=team, name__in=shared_targets)
-            subject.allowed_classrooms.add(*extra_rooms)
+        if mandatory_room is None:
+            mandatory_room = default_room
+
+        if mandatory_room:
+            subject.mandatory_classroom = mandatory_room
+            subject.save(update_fields=["mandatory_classroom"])
 
         subjects.append(subject)
         print(
@@ -1047,8 +1047,7 @@ def create_admin_saved_timetable(*, users, team):
         start_time = slot["start"]
         end_time = slot["end"]
 
-        allowed_rooms = list(subject.allowed_classrooms.all())
-        classroom = allowed_rooms[0] if allowed_rooms else classrooms[0]
+        classroom = subject.mandatory_classroom or classrooms[0]
 
         schedule = Schedule.objects.create(
             name=saved_name,

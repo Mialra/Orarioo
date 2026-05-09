@@ -84,7 +84,10 @@
                             <div class="invalid-feedback" id="admin-subject-teacher-error"></div>
                         </div>
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-subject-group">Curso</label>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="admin-subject-group">Curso</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
                             <select class="form-select orarioo-custom-select"
                                     id="admin-subject-group"
                                     required>
@@ -93,11 +96,16 @@
                             <div class="invalid-feedback" id="admin-subject-group-error"></div>
                         </div>
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-subject-allowed-classrooms">Aulas permitidas</label>
-                            <div id="admin-subject-allowed-classrooms"
-                                 class="admin-checkbox-list"
-                                 role="group"
-                                 aria-label="Aulas permitidas"></div>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="admin-subject-mandatory-classroom">Aula obligatoria</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
+                            <select class="form-select orarioo-custom-select"
+                                    id="admin-subject-mandatory-classroom"
+                                    required>
+                                <option value="">Selecciona aula</option>
+                            </select>
+                            <div class="invalid-feedback" id="admin-subject-mandatory-classroom-error"></div>
                         </div>
                         <div class="col-12 mt-1">
                             <input type="hidden" id="admin-subject-time-preferences" value="{}">

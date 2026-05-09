@@ -150,14 +150,14 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             sorted([self.user.get_full_name(), self.team_user.get_full_name()]),
         )
 
-    def test_subject_allowed_classrooms_m2m_change_is_audited(self):
-        second_classroom = Classroom.objects.create(name="Lab 2", team=self.team)
+    def test_subject_mandatory_classroom_change_is_audited(self):
+        classroom = Classroom.objects.create(name="Lab 2", team=self.team)
         AuditEntry.objects.all().delete()
 
         response = self.client.patch(
             reverse("subject-detail", args=[self.subject.id]),
             {
-                "allowed_classrooms": [second_classroom.id],
+                "mandatory_classroom": classroom.id,
             },
             format="json",
         )
@@ -165,8 +165,8 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         entry = AuditEntry.objects.filter(entity_type="subject").latest("id")
         self.assertEqual(entry.entity_id, self.subject.id)
-        self.assertEqual(entry.changed_fields[0]["campo"], "Aulas permitidas")
-        self.assertEqual(entry.changed_fields[0]["valor_nuevo"], ["Lab 2"])
+        campo_names = [f["campo"] for f in entry.changed_fields]
+        self.assertIn("Aula obligatoria", campo_names)
 
     def test_update_teacher_stores_previous_and_new_values(self):
         teacher = Teacher.objects.create(

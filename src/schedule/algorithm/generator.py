@@ -122,8 +122,7 @@ class BasicScheduleGenerator:
         teacher = teachers[0] if teachers else None
         subjects = list(
             Subject.objects.filter(team=team)
-            .select_related("teacher", "group")
-            .prefetch_related("allowed_classrooms")
+            .select_related("teacher", "group", "mandatory_classroom")
             .order_by("id")
         )
         fallback_classroom = _get_or_create_classroom(actor_email, team)
@@ -279,7 +278,7 @@ class BasicScheduleGenerator:
     @staticmethod
     def _build_sessions(*, subjects, fallback_teacher, include_tc=True):
         """Build the list of session dicts to be scheduled from the subject list.
-        Input: subjects - list of Subject instances (with related teacher, group, allowed_classrooms);
+        Input: subjects - list of Subject instances (with related teacher, group, mandatory_classroom);
                fallback_teacher - Teacher instance used when subjects list is empty;
                include_tc - if False, TC-type subjects are excluded
         Output: list of session dicts; single fallback session if subjects is empty
@@ -308,8 +307,10 @@ class BasicScheduleGenerator:
                         "teacher_id": subject.teacher_id,
                         "group": subject.group,
                         "subject": subject,
-                        "allowed_classroom_ids": set(
-                            subject.allowed_classrooms.values_list("id", flat=True)
+                        "allowed_classroom_ids": (
+                            {subject.mandatory_classroom_id}
+                            if subject.mandatory_classroom_id
+                            else set()
                         ),
                         "name": subject.name,
                     }
@@ -495,7 +496,7 @@ class ScheduleReplanner:
                 team=team,
             )
             .select_related("teacher", "classroom", "group", "subject")
-            .prefetch_related("subject__allowed_classrooms")
+            .select_related("subject__mandatory_classroom")
             .order_by("start_time", "id")
         )
 
@@ -520,12 +521,8 @@ class ScheduleReplanner:
                     "group": schedule.group,
                     "subject": schedule.subject,
                     "allowed_classroom_ids": (
-                        set(
-                            schedule.subject.allowed_classrooms.values_list(
-                                "id", flat=True
-                            )
-                        )
-                        if schedule.subject
+                        {schedule.subject.mandatory_classroom_id}
+                        if schedule.subject and schedule.subject.mandatory_classroom_id
                         else set()
                     ),
                     "name": getattr(schedule.subject, "name", schedule.name),

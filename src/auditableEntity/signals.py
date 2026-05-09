@@ -30,12 +30,6 @@ SIGNALS_REGISTERED = False
 
 M2M_AUDITED_FIELDS = (
     ("schedule", "Schedule", "users", "audit_schedule_users_m2m"),
-    (
-        "subject",
-        "Subject",
-        "allowed_classrooms",
-        "audit_subject_allowed_classrooms_m2m",
-    ),
 )
 
 

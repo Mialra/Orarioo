@@ -52,10 +52,12 @@ class Subject(TeamScopedModel, AuditableEntity):
         on_delete=models.CASCADE,
         related_name="subjects",
     )
-    allowed_classrooms = models.ManyToManyField(
+    mandatory_classroom = models.ForeignKey(
         "classroom.Classroom",
+        null=True,
         blank=True,
-        related_name="allowed_subjects",
+        on_delete=models.SET_NULL,
+        related_name="mandatory_subjects",
     )
 
     class Meta:

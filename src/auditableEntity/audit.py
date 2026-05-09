@@ -92,7 +92,7 @@ FIELD_LABELS = {
     "type": "Tipo",
     "teacher": "Profesor",
     "group": "Curso",
-    "allowed_classrooms": "Aulas permitidas",
+    "mandatory_classroom": "Aula obligatoria",
     "observations": "Observaciones",
     "start_time": "Hora de inicio",
     "end_time": "Hora de fin",

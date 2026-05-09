@@ -1572,7 +1572,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         }
         self.assertEqual(assigned_keys, {"MON_11:30", "MON_13:00"})
 
-    def test_generate_assigns_only_subject_allowed_classrooms(self):
+    def test_generate_assigns_only_subject_mandatory_classroom(self):
         self.classroom.is_shared = True
         self.classroom.save(update_fields=["is_shared"])
         assigned = Classroom.objects.create(
@@ -1580,7 +1580,8 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             is_shared=True,
             team=self.team,
         )
-        self.subject.allowed_classrooms.set([assigned])
+        self.subject.mandatory_classroom = assigned
+        self.subject.save(update_fields=["mandatory_classroom"])
 
         response = self.generate_schedule()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1592,7 +1593,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         self.assertEqual(generated_classroom_ids, {assigned.id})
 
-    def test_generate_prefers_shared_when_allowed_contains_mixed_rooms(self):
+    def test_generate_uses_mandatory_classroom_when_set(self):
         self.classroom.name = "Aula 1A"
         self.classroom.is_shared = False
         self.classroom.save(update_fields=["name", "is_shared"])
@@ -1601,7 +1602,8 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             is_shared=True,
             team=self.team,
         )
-        self.subject.allowed_classrooms.set([self.classroom, music_room])
+        self.subject.mandatory_classroom = music_room
+        self.subject.save(update_fields=["mandatory_classroom"])
 
         response = self.generate_schedule()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1655,8 +1657,10 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             teacher=teacher_2,
             group=group_2,
         )
-        self.subject.allowed_classrooms.set([self.classroom])
-        other_subject.allowed_classrooms.set([self.classroom])
+        self.subject.mandatory_classroom = self.classroom
+        self.subject.save(update_fields=["mandatory_classroom"])
+        other_subject.mandatory_classroom = self.classroom
+        other_subject.save(update_fields=["mandatory_classroom"])
 
         response = self.generate_schedule()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1788,7 +1792,8 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
     def test_generate_returns_classroom_bottleneck_diagnostic(self):
         self.subject.weekly_hours = 1
         self.subject.save(update_fields=["weekly_hours"])
-        self.subject.allowed_classrooms.set([self.classroom])
+        self.subject.mandatory_classroom = self.classroom
+        self.subject.save(update_fields=["mandatory_classroom"])
 
         other_teacher = Teacher.objects.create(
             team=self.team,
@@ -1812,7 +1817,8 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             teacher=other_teacher,
             group=other_group,
         )
-        other_subject.allowed_classrooms.set([self.classroom])
+        other_subject.mandatory_classroom = self.classroom
+        other_subject.save(update_fields=["mandatory_classroom"])
 
         slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
         self.teacher.time_preferences = {
@@ -2336,7 +2342,8 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             teacher=self.teacher,
             group=self.group,
         )
-        self.subject.allowed_classrooms.set([self.classroom])
+        self.subject.mandatory_classroom = self.classroom
+        self.subject.save(update_fields=["mandatory_classroom"])
 
     def test_build_windows_from_stage_config_keeps_primary_half_slot_split_by_break(
         self,
@@ -2500,7 +2507,8 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             teacher=self.teacher,
             group=other_group,
         )
-        other_subject.allowed_classrooms.set([self.classroom])
+        other_subject.mandatory_classroom = self.classroom
+        other_subject.save(update_fields=["mandatory_classroom"])
 
         sessions = [
             {

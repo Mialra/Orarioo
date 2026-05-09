@@ -34,7 +34,7 @@
     stageInput: document.getElementById("admin-subject-stage"),
     teacherInput: document.getElementById("admin-subject-teacher"),
     groupInput: document.getElementById("admin-subject-group"),
-    allowedClassroomsInput: document.getElementById("admin-subject-allowed-classrooms"),
+    mandatoryClassroomInput: document.getElementById("admin-subject-mandatory-classroom"),
     timePreferencesInput: document.getElementById("admin-subject-time-preferences"),
     preferenceBrushInput: document.getElementById("admin-subject-preference-brush"),
     preferenceClearButton: document.getElementById("admin-subject-preference-clear-btn"),
@@ -53,6 +53,7 @@
     stageError: document.getElementById("admin-subject-stage-error"),
     teacherError: document.getElementById("admin-subject-teacher-error"),
     groupError: document.getElementById("admin-subject-group-error"),
+    mandatoryClassroomError: document.getElementById("admin-subject-mandatory-classroom-error"),
     timePreferencesError: document.getElementById("admin-subject-time-preferences-error"),
   };
 
@@ -95,7 +96,7 @@
    * Refreshes all custom select inputs in the subject form.
    */
   function refreshSubjectSelects() {
-    [elements.stageInput, elements.teacherInput, elements.groupInput].forEach(refreshCustomSelect);
+    [elements.stageInput, elements.teacherInput, elements.groupInput, elements.mandatoryClassroomInput].forEach(refreshCustomSelect);
   }
 
   /**
@@ -264,85 +265,6 @@
   }
 
   /**
-   * Populates the allowed-classrooms checkbox list, preserving current checked state.
-   * Input: selectElement - container DOM element for the checkbox list
-   *        items - array of classroom objects with id and name properties
-   */
-  function fillAllowedClassrooms(selectElement, items) {
-    if (!selectElement) {
-      return;
-    }
-
-    const selected = new Set(
-      Array.from(selectElement.querySelectorAll('input[type="checkbox"]:checked')).map(function (input) {
-        return String(input.value);
-      }),
-    );
-
-    selectElement.innerHTML = items
-      .map(function (item) {
-        const id = "admin-subject-allowed-classroom-" + item.id;
-        const checked = selected.has(String(item.id)) ? " checked" : "";
-        return (
-          '<div class="form-check mb-1">' +
-          '<input class="form-check-input" type="checkbox" id="' +
-          id +
-          '" value="' +
-          item.id +
-          '"' +
-          checked +
-          ">" +
-          '<label class="form-check-label" for="' +
-          id +
-          '">' +
-          item.name +
-          "</label>" +
-          "</div>"
-        );
-      })
-      .join("");
-  }
-
-  /**
-   * Sets the checked state of checkboxes in a container to match the given values.
-   * Input: selectElement - container DOM element with checkbox inputs
-   *        values - array of values to mark as checked
-   */
-  function setMultiSelectValues(selectElement, values) {
-    if (!selectElement) {
-      return;
-    }
-    const selected = new Set(
-      (values || []).map(function (value) {
-        return String(value);
-      }),
-    );
-
-    Array.from(selectElement.querySelectorAll('input[type="checkbox"]')).forEach(function (input) {
-      input.checked = selected.has(String(input.value));
-    });
-  }
-
-  /**
-   * Returns the IDs of all checked classrooms in the allowed-classrooms container.
-   * Input: selectElement - container DOM element with checkbox inputs
-   * Output: array of positive integers representing selected classroom IDs
-   */
-  function getSelectedAllowedClassrooms(selectElement) {
-    if (!selectElement) {
-      return [];
-    }
-
-    return Array.from(selectElement.querySelectorAll('input[type="checkbox"]:checked'))
-      .map(function (input) {
-        return Number(input.value);
-      })
-      .filter(function (value) {
-        return Number.isFinite(value) && value > 0;
-      });
-  }
-
-  /**
    * Loads teachers, groups, and classrooms from the API and populates the form selects.
    * Output: populates relationState and form select/checkbox inputs; resolves when all requests complete
    */
@@ -382,7 +304,7 @@
 
         fillSelect(elements.teacherInput, relationState.teachers, "Selecciona profesor");
         fillSelect(elements.groupInput, relationState.groups, "Selecciona curso");
-        fillAllowedClassrooms(elements.allowedClassroomsInput, relationState.classrooms);
+        fillSelect(elements.mandatoryClassroomInput, relationState.classrooms, "Selecciona aula");
 
         relationState.loaded = teachersResponse.ok && groupsResponse.ok && classroomsResponse.ok;
         return relationState;
@@ -404,7 +326,15 @@
 
   if (elements.formModal) {
     elements.formModal.addEventListener("show.bs.modal", function () {
-      loadRelationData();
+      var result = loadRelationData();
+      var repopulate = function () {
+        fillSelect(elements.mandatoryClassroomInput, relationState.classrooms, "Selecciona aula");
+      };
+      if (result && typeof result.then === "function") {
+        result.then(repopulate);
+      } else {
+        repopulate();
+      }
     });
   }
 
@@ -506,6 +436,12 @@
           rules: [fv.requiredPositiveInt(function () { return elements.groupInput; })],
         },
         {
+          name: "mandatory_classroom",
+          input: elements.mandatoryClassroomInput,
+          feedback: elements.mandatoryClassroomError,
+          rules: [fv.requiredPositiveInt(function () { return elements.mandatoryClassroomInput; })],
+        },
+        {
           name: "time_preferences",
           input: elements.timePreferencesInput,
           feedback: elements.timePreferencesError,
@@ -520,6 +456,7 @@
         { input: elements.stageInput, feedback: elements.stageError, event: "change" },
         { input: elements.teacherInput, feedback: elements.teacherError, event: "change" },
         { input: elements.groupInput, feedback: elements.groupError, event: "change" },
+        { input: elements.mandatoryClassroomInput, feedback: elements.mandatoryClassroomError, event: "change" },
         { input: elements.timePreferencesInput, feedback: elements.timePreferencesError, event: "input" },
       ],
       resetValues: function () {
@@ -532,7 +469,7 @@
         }
         elements.teacherInput.value = "";
         elements.groupInput.value = "";
-        setMultiSelectValues(elements.allowedClassroomsInput, []);
+        elements.mandatoryClassroomInput.value = "";
         prefManager.reset({});
         refreshSubjectSelects();
       },
@@ -549,7 +486,7 @@
         elements.stageInput.value = normalizeStage(item.stage);
         elements.teacherInput.value = item.teacher ? String(item.teacher) : "";
         elements.groupInput.value = item.group ? String(item.group) : "";
-        setMultiSelectValues(elements.allowedClassroomsInput, item.allowed_classrooms || []);
+        elements.mandatoryClassroomInput.value = item.mandatory_classroom ? String(item.mandatory_classroom) : "";
         prefManager.reset(item.time_preferences || {});
         refreshSubjectSelects();
       },
@@ -562,7 +499,7 @@
           stage: normalizeStage(elements.stageInput.value),
           teacher: Number(elements.teacherInput.value),
           group: Number(elements.groupInput.value),
-          allowed_classrooms: getSelectedAllowedClassrooms(elements.allowedClassroomsInput),
+          mandatory_classroom: Number(elements.mandatoryClassroomInput.value) || null,
         };
       },
     },

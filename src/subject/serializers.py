@@ -34,8 +34,8 @@ SUBJECT_SERIALIZER_FIELDS = with_audit_fields(
     "teacher_name",
     "group",
     "group_name",
-    "allowed_classrooms",
-    "allowed_classroom_names",
+    "mandatory_classroom",
+    "mandatory_classroom_name",
 )
 
 
@@ -51,11 +51,11 @@ class SubjectSerializer(
     team_scoped_field_models = {
         "teacher": Teacher,
         "group": Group,
-        "allowed_classrooms": Classroom,
+        "mandatory_classroom": Classroom,
     }
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
-    allowed_classroom_names = serializers.SerializerMethodField(read_only=True)
+    mandatory_classroom_name = serializers.CharField(source="mandatory_classroom.name", read_only=True, default=None)
     stage_color = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -66,7 +66,7 @@ class SubjectSerializer(
             "duration",
             "teacher_name",
             "group_name",
-            "allowed_classroom_names",
+            "mandatory_classroom_name",
             "stage_color",
         ]
 
@@ -125,13 +125,6 @@ class SubjectSerializer(
             value,
             valid_states={state.value for state in SubjectTimePreferenceState},
         )
-
-    def get_allowed_classroom_names(self, obj):
-        """Return the list of names of classrooms allowed for this subject.
-        Input: obj - Subject instance
-        Output: list of str classroom names
-        """
-        return list(obj.allowed_classrooms.values_list("name", flat=True))
 
     def get_stage_color(self, obj):
         """Return the configured color for the subject's educational stage."""
