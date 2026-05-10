@@ -395,5 +395,3 @@ def _eval_teacher_time_preference_score(*, slot_by_session, sessions, slots):
         elif state == TeacherTimePreferenceState.PREFER_NO:
             total += TEACHER_PREFER_NO_WEIGHT
     return total
-
-

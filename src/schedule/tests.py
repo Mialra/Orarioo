@@ -15,6 +15,7 @@ from schedule.algorithm import assignment as schedule_assignment
 from schedule.algorithm.diagnostics import collect_generation_diagnostics
 from schedule.algorithm.generator import BasicScheduleGenerator
 from schedule.algorithm.slots import (
+    STAGE_PRIMARY,
     build_slot_preference_index,
     build_weekly_slots,
     build_windows_from_stage_config,
@@ -1870,6 +1871,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "Secondary stage should not report 08:00 as missing",
         )
 
+
 class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
     def setUp(self):
         self.authenticate_admin(email_prefix="schedule-slot-config")
@@ -2088,7 +2090,7 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
                 "end": timezone.make_aware(
                     datetime.combine(today, datetime.min.time()).replace(hour=12)
                 ),
-                "stage": EducationalStage.PRIMARY,
+                "stage": STAGE_PRIMARY,
                 "day_code": "MON",
                 "is_recess": False,
             },
@@ -2101,7 +2103,7 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
                         hour=11, minute=30
                     )
                 ),
-                "stage": EducationalStage.PRIMARY,
+                "stage": STAGE_PRIMARY,
                 "day_code": "MON",
                 "is_recess": False,
             },
@@ -2112,7 +2114,7 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
                 "end": timezone.make_aware(
                     datetime.combine(today, datetime.min.time()).replace(hour=13)
                 ),
-                "stage": EducationalStage.PRIMARY,
+                "stage": STAGE_PRIMARY,
                 "day_code": "MON",
                 "is_recess": False,
             },
@@ -2124,7 +2126,7 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
                 classrooms=[self.classroom],
             )
         )
-        slot_by_session, _classroom_by_session, _ = (
+        slot_by_session, _classroom_by_session, _, _ = (
             schedule_assignment._cp_sat_session_assignment(
                 sessions=sessions,
                 slots=slots,

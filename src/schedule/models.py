@@ -5,6 +5,8 @@ from django.db import models
 from django.db.models import F, Q
 
 from auditableEntity.models import AuditableEntity, TeamScopedModel
+
+
 class Schedule(TeamScopedModel, AuditableEntity):
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
@@ -65,13 +67,9 @@ class Schedule(TeamScopedModel, AuditableEntity):
             )
 
         if not self.classroom_id:
-            raise ValidationError(
-                {"classroom": "classroom is required."}
-            )
+            raise ValidationError({"classroom": "classroom is required."})
         if not self.group_id:
-            raise ValidationError(
-                {"group": "group is required."}
-            )
+            raise ValidationError({"group": "group is required."})
 
     def save(self, *args, **kwargs):
         """Run full_clean before saving to enforce model-level validations.

@@ -15,7 +15,6 @@ from group.models import EducationalStage as GroupEducationalStage
 from group.models import Group
 from namedEntity.models import NamedEntity
 from schedule.models import Schedule
-from subject.models import EducationalStage as SubjectEducationalStage
 from subject.models import Subject, SubjectType
 from teacher.models import Teacher
 from user.models import CollaborationTeam
@@ -67,7 +66,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Audit Subject",
             weekly_hours=2,
             duration=1.0,
-            stage=SubjectEducationalStage.PRIMARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -373,6 +371,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
                 "tipo_accion": "creación",
                 "usuario_id": self.user.id,
                 "fecha_desde": now.date().isoformat(),
+                "columns": "Fecha",
             },
         )
 

@@ -312,5 +312,3 @@ def _build_slots_by_day(*, slots, slot_day_index):
     for day_idx in slots_by_day:
         slots_by_day[day_idx].sort(key=lambda idx: slot_time_bounds(slot=slots[idx])[0])
     return slots_by_day
-
-

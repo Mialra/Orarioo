@@ -819,6 +819,8 @@ class CollaborationTeamApiTests(APITestCase):
         self.assertFalse(self.team.members.filter(id=self.member.id).exists())
 
     def test_leave_team_removes_membership(self):
+        second_team = CollaborationTeam.objects.create(name="Equipo Segundo")
+        second_team.members.add(self.member)
         self.client.force_authenticate(user=self.member)
         response = self.client.post(
             reverse("leave-collaboration-team"),
