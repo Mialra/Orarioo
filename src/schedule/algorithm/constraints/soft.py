@@ -9,20 +9,13 @@ from schedule.algorithm.constraints.hard import (
     teacher_preference_state,
 )
 from schedule.algorithm.slots import (
-    build_real_time_intervals,
     build_slot_day_index,
     build_slot_preference_index,
-    build_stage_allowed_slot_index,
-    session_stage_code,
     slot_time_bounds,
 )
 from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 
-TC_REAL_INTERVAL_COVERAGE_WEIGHT = 24
-TC_REAL_INTERVAL_OVERLOAD_PENALTY_WEIGHT = 8
-TC_TEACHER_DAY_SPREAD_WEIGHT = 2
-TC_TEACHER_CONSECUTIVE_PENALTY_WEIGHT = 6
 PREFER_YES_WEIGHT = 2
 PREFER_NO_WEIGHT = -2
 TEACHER_PREFER_YES_WEIGHT = 2
@@ -44,10 +37,6 @@ def apply_soft_constraints(
     opts = generation_options or {}
     objective_terms = []
 
-    if opts.get("enable_tc_distribution", True):
-        objective_terms.extend(
-            _tc_distribution_terms(model=model, x=x, sessions=sessions, slots=slots)
-        )
     if opts.get("enable_subject_time_preferences", True):
         objective_terms.extend(
             _subject_time_preference_terms(x=x, sessions=sessions, slots=slots)
@@ -71,222 +60,6 @@ def apply_soft_constraints(
 
     if objective_terms:
         model.Maximize(sum(objective_terms))
-
-
-def _tc_distribution_terms(*, model, x, sessions, slots):
-    """Build objective terms that optimise TC session coverage and spread.
-    Input: model - CP-SAT CpModel; x - slot decision variables;
-           sessions - list of session dicts; slots - list of slot dicts
-    Output: list of weighted CP-SAT expressions; empty list if no TC sessions exist
-    """
-    tc_session_indices = _tc_session_indices(sessions=sessions)
-    if not tc_session_indices:
-        return []
-
-    tc_candidate_slots = _tc_candidate_slot_indices(
-        sessions=sessions,
-        slots=slots,
-        tc_session_indices=tc_session_indices,
-    )
-    if not tc_candidate_slots:
-        return []
-
-    weighted_terms = _tc_real_interval_coverage_terms(
-        model=model,
-        x=x,
-        sessions=sessions,
-        slots=slots,
-        tc_session_indices=tc_session_indices,
-        tc_candidate_slots=tc_candidate_slots,
-    )
-    weighted_terms.extend(
-        _tc_teacher_day_spread_terms(
-            model=model,
-            x=x,
-            sessions=sessions,
-            slots=slots,
-            tc_session_indices=tc_session_indices,
-        )
-    )
-    weighted_terms.extend(
-        _tc_teacher_consecutive_penalty_terms(
-            model=model,
-            x=x,
-            sessions=sessions,
-            slots=slots,
-            tc_session_indices=tc_session_indices,
-        )
-    )
-
-    return weighted_terms
-
-
-def _tc_real_interval_coverage_terms(
-    *, model, x, sessions, slots, tc_session_indices, tc_candidate_slots
-):
-    """Reward covering distinct real-time intervals before stacking TC sessions.
-    Input: model - CP-SAT CpModel; x - slot decision variables;
-           sessions, slots - standard inputs; tc_session_indices - list of TC session indices;
-           tc_candidate_slots - list of candidate slot indices for TC
-    Output: list of weighted CP-SAT expressions
-    """
-    candidate_intervals = _tc_candidate_real_intervals(
-        slots=slots,
-        candidate_slot_indices=tc_candidate_slots,
-    )
-    if not candidate_intervals:
-        return []
-
-    weighted_terms = []
-    for interval in candidate_intervals:
-        interval_expr = sum(
-            x[(s_idx, p_idx)]
-            for s_idx in tc_session_indices
-            for p_idx in interval["slot_indices"]
-        )
-        label = (
-            f"d{interval['day_idx']}_{interval['start']:%H%M}_{interval['end']:%H%M}"
-        )
-        has_tc_in_interval = model.NewBoolVar(f"tc_real_covered_{label}")
-        overflow = model.NewIntVar(
-            0,
-            len(tc_session_indices),
-            f"tc_real_overflow_{label}",
-        )
-
-        _bind_has_any(
-            model=model,
-            expr=interval_expr,
-            bool_var=has_tc_in_interval,
-        )
-        model.Add(overflow == interval_expr - has_tc_in_interval)
-
-        weighted_terms.append(TC_REAL_INTERVAL_COVERAGE_WEIGHT * has_tc_in_interval)
-        weighted_terms.append(-TC_REAL_INTERVAL_OVERLOAD_PENALTY_WEIGHT * overflow)
-
-    return weighted_terms
-
-
-def _tc_teacher_day_spread_terms(*, model, x, sessions, slots, tc_session_indices):
-    """Reward distributing each teacher's TC sessions across different weekdays.
-    Input: model - CP-SAT CpModel; x - slot decision variables;
-           sessions, slots - standard inputs; tc_session_indices - list of TC session indices
-    Output: list of weighted CP-SAT BoolVar expressions
-    """
-    slots_by_day = _build_slots_by_day(slots=slots)
-    tc_by_teacher = _tc_sessions_by_teacher(
-        sessions=sessions,
-        tc_session_indices=tc_session_indices,
-    )
-
-    weighted_terms = []
-    for teacher_id, teacher_tc_sessions in tc_by_teacher.items():
-        if len(teacher_tc_sessions) < 2:
-            continue
-
-        for day_idx, day_slots in slots_by_day.items():
-            tc_on_day_expr = sum(
-                x[(s_idx, p_idx)]
-                for s_idx in teacher_tc_sessions
-                for p_idx in day_slots
-            )
-            has_tc_day = model.NewBoolVar(f"tc_t{teacher_id}_d{day_idx}_has")
-            _bind_has_any(model=model, expr=tc_on_day_expr, bool_var=has_tc_day)
-            weighted_terms.append(TC_TEACHER_DAY_SPREAD_WEIGHT * has_tc_day)
-
-    return weighted_terms
-
-
-def _tc_teacher_consecutive_penalty_terms(
-    *, model, x, sessions, slots, tc_session_indices
-):
-    """Penalise consecutive TC sessions for the same teacher on the same day.
-    Input: model - CP-SAT CpModel; x - slot decision variables;
-           sessions, slots - standard inputs; tc_session_indices - list of TC session indices
-    Output: list of negative weighted CP-SAT BoolVar expressions (penalties)
-    """
-    slots_by_day = _build_slots_by_day(slots=slots)
-    tc_by_teacher = _tc_sessions_by_teacher(
-        sessions=sessions,
-        tc_session_indices=tc_session_indices,
-    )
-
-    weighted_terms = []
-    for teacher_id, teacher_tc_sessions in tc_by_teacher.items():
-        for day_idx, day_slots in slots_by_day.items():
-            if len(day_slots) < 2:
-                continue
-
-            has_tc_by_slot = {}
-            for p_idx in day_slots:
-                tc_in_slot_for_teacher = sum(
-                    x[(s_idx, p_idx)] for s_idx in teacher_tc_sessions
-                )
-                has_tc = model.NewBoolVar(f"tc_t{teacher_id}_d{day_idx}_p{p_idx}_has")
-                _bind_has_any(
-                    model=model,
-                    expr=tc_in_slot_for_teacher,
-                    bool_var=has_tc,
-                )
-                has_tc_by_slot[p_idx] = has_tc
-
-            for left_slot, right_slot in zip(day_slots, day_slots[1:]):
-                is_consecutive_tc = model.NewBoolVar(
-                    f"tc_t{teacher_id}_d{day_idx}_{left_slot}_{right_slot}_cons"
-                )
-                model.AddBoolAnd(
-                    [has_tc_by_slot[left_slot], has_tc_by_slot[right_slot]]
-                ).OnlyEnforceIf(is_consecutive_tc)
-                model.AddBoolOr(
-                    [
-                        has_tc_by_slot[left_slot].Not(),
-                        has_tc_by_slot[right_slot].Not(),
-                    ]
-                ).OnlyEnforceIf(is_consecutive_tc.Not())
-                weighted_terms.append(
-                    -TC_TEACHER_CONSECUTIVE_PENALTY_WEIGHT * is_consecutive_tc
-                )
-
-    return weighted_terms
-
-
-def _tc_candidate_slot_indices(*, sessions, slots, tc_session_indices):
-    """Return the sorted list of slot indices that TC sessions are allowed to use.
-    Input: sessions - list of session dicts; slots - list of slot dicts;
-           tc_session_indices - list of TC session indices
-    Output: sorted list of slot indices available to TC sessions (after stage and preference filtering)
-    """
-    allowed_slots_by_stage = build_stage_allowed_slot_index(slots=slots)
-    slot_preference_by_idx = build_slot_preference_index(slots=slots)
-
-    candidate_slots = set()
-    for s_idx in tc_session_indices:
-        session = sessions[s_idx]
-        stage_code = session_stage_code(session=session)
-        stage_allowed = allowed_slots_by_stage.get(stage_code, set())
-
-        for p_idx in stage_allowed:
-            preference_key = slot_preference_by_idx.get(p_idx)
-            if preference_key is None:
-                continue
-
-            subject_state = session_preference_state(
-                session=session,
-                slot_preference_key=preference_key,
-            )
-            if subject_state == SubjectTimePreferenceState.UNAVAILABLE:
-                continue
-
-            teacher_state = teacher_preference_state(
-                session=session,
-                slot_preference_key=preference_key,
-            )
-            if teacher_state == TeacherTimePreferenceState.UNAVAILABLE:
-                continue
-
-            candidate_slots.add(p_idx)
-
-    return sorted(candidate_slots)
 
 
 def _subject_time_preference_terms(*, x, sessions, slots):
@@ -458,44 +231,6 @@ def _teacher_gap_minimization_terms(*, model, x, sessions, slots):
     return weighted_terms
 
 
-def _tc_session_indices(*, sessions):
-    """Return the indices of sessions whose subject type is TC.
-    Input: sessions - list of session dicts
-    Output: list of integer session indices
-    """
-    tc_indices = []
-    for s_idx, session in enumerate(sessions):
-        subject = session.get("subject")
-        if getattr(subject, "type", None) == "TC":
-            tc_indices.append(s_idx)
-    return tc_indices
-
-
-def _tc_sessions_by_teacher(*, sessions, tc_session_indices):
-    """Group TC session indices by teacher id.
-    Input: sessions - list of session dicts; tc_session_indices - list of TC session indices
-    Output: dict {teacher_id: [session_idx, ...]}
-    """
-    sessions_by_teacher = {}
-    for s_idx in tc_session_indices:
-        teacher_id = sessions[s_idx].get("teacher_id")
-        if teacher_id is None:
-            continue
-        sessions_by_teacher.setdefault(teacher_id, []).append(s_idx)
-    return sessions_by_teacher
-
-
-def _tc_candidate_real_intervals(*, slots, candidate_slot_indices):
-    """Return the real-time intervals covering the given TC candidate slot indices.
-    Input: slots - full list of slot dicts; candidate_slot_indices - list of slot indices
-    Output: list of interval dicts from build_real_time_intervals
-    """
-    return build_real_time_intervals(
-        slots=slots,
-        slot_indices=candidate_slot_indices,
-    )
-
-
 def _build_slots_by_day(*, slots):
     """Group slot indices by day index, sorted by start time within each day.
     Input: slots - list of slot dicts
@@ -537,13 +272,6 @@ def evaluate_soft_score(*, slot_by_session, sessions, slots, generation_options=
     opts = generation_options or {}
     total = 0
     breakdown = {}
-
-    if opts.get("enable_tc_distribution", True):
-        score = _eval_tc_distribution_score(
-            slot_by_session=slot_by_session, sessions=sessions, slots=slots
-        )
-        breakdown["tc_distribution"] = score
-        total += score
 
     if opts.get("enable_subject_time_preferences", True):
         score = _eval_subject_time_preference_score(
@@ -669,86 +397,3 @@ def _eval_teacher_time_preference_score(*, slot_by_session, sessions, slots):
     return total
 
 
-def _eval_tc_distribution_score(*, slot_by_session, sessions, slots):
-    """Compute the TC distribution score for a concrete assignment.
-    Mirrors _tc_distribution_terms: coverage reward, overload penalty, spread, consecutive penalty.
-    """
-    tc_session_indices = [
-        s_idx
-        for s_idx, session in enumerate(sessions)
-        if getattr(session.get("subject"), "type", None) == "TC"
-    ]
-    if not tc_session_indices:
-        return 0
-
-    total = _eval_tc_interval_coverage(
-        slot_by_session=slot_by_session,
-        slots=slots,
-        tc_session_indices=tc_session_indices,
-    )
-    total += _eval_tc_teacher_spread_and_consecutive(
-        slot_by_session=slot_by_session,
-        sessions=sessions,
-        slots=slots,
-        tc_session_indices=tc_session_indices,
-    )
-    return total
-
-
-def _eval_tc_interval_coverage(*, slot_by_session, slots, tc_session_indices):
-    """Reward unique real-time interval coverage and penalise overload for TC sessions."""
-    real_time_intervals = build_real_time_intervals(slots=slots)
-    total = 0
-    for interval in real_time_intervals:
-        interval_slots = set(interval["slot_indices"])
-        tc_count = sum(
-            1
-            for s_idx in tc_session_indices
-            if slot_by_session[s_idx] in interval_slots
-        )
-        if tc_count > 0:
-            total += TC_REAL_INTERVAL_COVERAGE_WEIGHT
-            total -= TC_REAL_INTERVAL_OVERLOAD_PENALTY_WEIGHT * (tc_count - 1)
-    return total
-
-
-def _eval_tc_teacher_spread_and_consecutive(
-    *, slot_by_session, sessions, slots, tc_session_indices
-):
-    """Reward day spread and penalise consecutive TC sessions per teacher."""
-    slots_by_day = _build_slots_by_day(slots=slots)
-    tc_by_teacher = _tc_sessions_by_teacher(
-        sessions=sessions, tc_session_indices=tc_session_indices
-    )
-    total = 0
-    for _teacher_id, teacher_tc_sessions in tc_by_teacher.items():
-        if len(teacher_tc_sessions) < 2:
-            continue
-        for day_slot_list in slots_by_day.values():
-            total += _eval_tc_teacher_day(
-                slot_by_session=slot_by_session,
-                teacher_tc_sessions=teacher_tc_sessions,
-                day_slot_list=day_slot_list,
-            )
-    return total
-
-
-def _eval_tc_teacher_day(*, slot_by_session, teacher_tc_sessions, day_slot_list):
-    """Compute spread bonus and consecutive penalty for one teacher on one day."""
-    day_slots_set = set(day_slot_list)
-    has_tc = any(
-        slot_by_session[s_idx] in day_slots_set for s_idx in teacher_tc_sessions
-    )
-    total = TC_TEACHER_DAY_SPREAD_WEIGHT if has_tc else 0
-
-    if len(day_slot_list) < 2:
-        return total
-
-    has_tc_in_slot = {
-        p: any(slot_by_session[s_idx] == p for s_idx in teacher_tc_sessions)
-        for p in day_slot_list
-    }
-    for left_slot, right_slot in zip(day_slot_list, day_slot_list[1:]):
-        if has_tc_in_slot[left_slot] and has_tc_in_slot[right_slot]:
-            total -= TC_TEACHER_CONSECUTIVE_PENALTY_WEIGHT
-    return total

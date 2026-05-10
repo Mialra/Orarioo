@@ -12,7 +12,7 @@ from schedule.algorithm.slots import (
     build_stage_allowed_slot_index,
     session_stage_code,
 )
-from subject.models import SubjectTimePreferenceState, SubjectType
+from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 
 CONFIGURATION_RANK = 10
@@ -455,109 +455,9 @@ def _check_teacher_capacities(sessions_by_teacher, sessions, recess_extra=None):
     return diagnostics
 
 
-def _check_tc_capacity(tc_session_indices, slots, generation_options):
-    if not tc_session_indices or not bool(generation_options.get("include_tc", True)):
-        return []
-    try:
-        tc_capacity = int(generation_options.get("tc_capacity", 1) or 1)
-    except (TypeError, ValueError):
-        tc_capacity = 1
-    tc_capacity = max(1, tc_capacity)
-    usable_slots = sum(1 for slot in slots if not slot.get("is_recess"))
-    max_tc_sessions = usable_slots * tc_capacity
-    if len(tc_session_indices) <= max_tc_sessions:
-        return []
-    return [
-        build_diagnostic(
-            "TC_SLOT_CAPACITY_EXCEEDED",
-            f"TC sessions exceed simultaneous capacity: {len(tc_session_indices)} sessions for a maximum of {max_tc_sessions}.",
-            context={
-                "required_sessions": len(tc_session_indices),
-                "capacity": max_tc_sessions,
-                "tc_capacity": tc_capacity,
-            },
-            suggestions=[
-                "Aumenta la capacidad simultánea de TC o reduce el número de sesiones TC.",
-            ],
-            scope="schedule",
-            rank=CAPACITY_RANK,
-        )
-    ]
-
-
-def build_teacher_exact_hours_not_met_diagnostic(
-    *, teacher_name, target_minutes, assigned_minutes
-):
-    """Build a diagnostic for a teacher whose exact workload target could not be met.
-    Input: teacher_name - str; target_minutes - int target in minutes;
-           assigned_minutes - int actually assigned in minutes
-    Output: structured diagnostic dict
-    """
-    target_h, target_m = divmod(int(target_minutes), 60)
-    assigned_h, assigned_m = divmod(int(assigned_minutes), 60)
-    target_str = f"{target_h}h {target_m}min" if target_m else f"{target_h}h"
-    assigned_str = f"{assigned_h}h {assigned_m}min" if assigned_m else f"{assigned_h}h"
-    return build_diagnostic(
-        "TEACHER_EXACT_HOURS_NOT_MET",
-        (
-            f"El profesor '{teacher_name}' necesita exactamente {target_str} de carga semanal "
-            f"pero solo se pudieron asignar {assigned_str}. "
-            "No hay suficientes franjas de TC disponibles para cubrir la carga exacta."
-        ),
-        context={
-            "teacher_name": teacher_name,
-            "target_minutes": int(target_minutes),
-            "assigned_minutes": int(assigned_minutes),
-            "target_hours": target_h,
-            "target_extra_minutes": target_m,
-            "assigned_hours": assigned_h,
-            "assigned_extra_minutes": assigned_m,
-        },
-        severity="error",
-        scope="teacher",
-        rank=CAPACITY_RANK,
-        suggestions=[
-            "Añade más franjas horarias disponibles en la configuración del horario.",
-            "Revisa las preferencias horarias del profesor para permitir más franjas de TC.",
-            "Cambia al profesor al modo 'máximo' si no se puede garantizar la carga exacta.",
-        ],
-    )
-
-
-def _check_exact_hours_feasibility(sessions_by_teacher, sessions, generation_options):
-    """Pre-solve check: flag exact-mode teachers that can't reach their target with TC disabled.
-    When include_tc=False the only way to meet an exact target is through regular sessions —
-    if their sum doesn't match the target we know it's impossible before solving.
-    """
-    if bool(generation_options.get("include_tc", True)):
-        return []
-    diagnostics = []
-    for session_indices in sessions_by_teacher.values():
-        teacher = sessions[session_indices[0]].get("teacher")
-        if not getattr(teacher, "weekly_hours_exact", False):
-            continue
-        target = (getattr(teacher, "max_weekly_hours", 0) or 0) * 60 + (
-            getattr(teacher, "max_weekly_minutes", 0) or 0
-        )
-        regular = sum(
-            int(getattr(sessions[idx].get("subject"), "duration", 1.0) * 60)
-            for idx in session_indices
-        )
-        if regular != target:
-            diagnostics.append(
-                build_teacher_exact_hours_not_met_diagnostic(
-                    teacher_name=teacher.name,
-                    target_minutes=target,
-                    assigned_minutes=regular,
-                )
-            )
-    return diagnostics
-
-
 def _collect_capacity_diagnostics(*, sessions, slots, generation_options):
     sessions_by_group = defaultdict(list)
     sessions_by_teacher = defaultdict(list)
-    tc_session_indices = []
 
     for session_idx, session in enumerate(sessions):
         group = session.get("group")
@@ -566,8 +466,6 @@ def _collect_capacity_diagnostics(*, sessions, slots, generation_options):
         teacher = session.get("teacher")
         if getattr(teacher, "id", None) is not None:
             sessions_by_teacher[teacher.id].append(session_idx)
-        if getattr(session.get("subject"), "type", None) == SubjectType.TC:
-            tc_session_indices.append(session_idx)
 
     recess_extra = _recess_supervision_extra_hours(
         sessions=sessions,
@@ -579,14 +477,6 @@ def _collect_capacity_diagnostics(*, sessions, slots, generation_options):
         _check_teacher_capacities(
             sessions_by_teacher, sessions, recess_extra=recess_extra
         )
-    )
-    diagnostics.extend(
-        _check_exact_hours_feasibility(
-            sessions_by_teacher, sessions, generation_options
-        )
-    )
-    diagnostics.extend(
-        _check_tc_capacity(tc_session_indices, slots, generation_options)
     )
     return diagnostics
 

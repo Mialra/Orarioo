@@ -20,7 +20,6 @@ from schedule.algorithm.diagnostics import (
     raise_schedule_generation_diagnostics,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
-from schedule.algorithm.postprocessing import fill_tc_sessions
 from schedule.algorithm.slots import (
     build_weekly_slots,
     parse_schedule_config_to_slot_windows,
@@ -29,7 +28,7 @@ from schedule.algorithm.slots import (
 )
 from schedule.constants import AUTO_GENERATED_OBSERVATION
 from schedule.models import Schedule
-from subject.models import Subject, SubjectType
+from subject.models import Subject
 from teacher.models import Teacher
 
 # ---------------------------------------------------------------------------
@@ -108,7 +107,7 @@ class BasicScheduleGenerator:
                user - Django User instance (owner of the generated schedules);
                team - Team model instance;
                random_seed - optional integer seed for reproducibility;
-               generation_options - dict with generation parameters (include_tc, tc_capacity, etc.)
+               generation_options - dict with generation parameters
         Output: list of created Schedule instances; empty list if no sessions to schedule
         """
         generation_options = generation_options or {}
@@ -151,11 +150,9 @@ class BasicScheduleGenerator:
                     code=diagnostics[0]["code"],
                 )
 
-        include_tc = bool(generation_options.get("include_tc", True))
         sessions = cls._build_sessions(
             subjects=subjects,
             fallback_teacher=teacher,
-            include_tc=False,
         )
         if not sessions:
             raise_schedule_generation_diagnostics(
@@ -237,24 +234,6 @@ class BasicScheduleGenerator:
             user=user,
         )
 
-        if include_tc:
-            tc_subject = Subject.objects.filter(team=team, type=SubjectType.TC).first()
-            if tc_subject is not None:
-                tc_schedules, unmet_exact = fill_tc_sessions(
-                    sessions=sessions,
-                    slot_by_session=slot_by_session,
-                    slots=slots,
-                    teachers=teachers,
-                    tc_subject=tc_subject,
-                    team=team,
-                    actor_email=actor_email,
-                )
-                tc_created = cls._bulk_create_generated_schedules(
-                    schedules=tc_schedules,
-                    user=user,
-                )
-                created = created + tc_created
-
         cls._create_generation_audit_entry(
             schedules=created,
             team=team,
@@ -276,29 +255,17 @@ class BasicScheduleGenerator:
             ).delete()
 
     @staticmethod
-    def _build_sessions(*, subjects, fallback_teacher, include_tc=True):
+    def _build_sessions(*, subjects, fallback_teacher):
         """Build the list of session dicts to be scheduled from the subject list.
         Input: subjects - list of Subject instances (with related teacher, group, mandatory_classroom);
-               fallback_teacher - Teacher instance used when subjects list is empty;
-               include_tc - if False, TC-type subjects are excluded
-        Output: list of session dicts; single fallback session if subjects is empty
+               fallback_teacher - Teacher instance used when subjects list is empty
+        Output: list of session dicts; empty list if subjects is empty
         """
-        sessions = []
         if not subjects:
             return []
 
-        eligible_subjects = list(subjects)
-        if not include_tc:
-            eligible_subjects = [
-                subject
-                for subject in eligible_subjects
-                if getattr(subject, "type", None) != SubjectType.TC
-            ]
-
-        if not eligible_subjects:
-            return []
-
-        for subject in eligible_subjects:
+        sessions = []
+        for subject in subjects:
             session_count = max(1, int(subject.weekly_hours))
             for _ in range(session_count):
                 sessions.append(

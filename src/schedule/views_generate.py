@@ -104,11 +104,9 @@ def parse_base_generation_bool_options(payload, options):
     Output: None on success, or Response with HTTP 400 on validation failure
     """
     for field_name in [
-        "include_tc",
         "enable_no_intraday_gaps",
         "enable_subject_unavailable_times",
         "enable_teacher_unavailable_times",
-        "enable_tc_distribution",
         "enable_subject_time_preferences",
         "enable_teacher_time_preferences",
         "enable_subject_day_spread",
@@ -123,19 +121,15 @@ def parse_base_generation_bool_options(payload, options):
 
 
 def parse_base_generation_int_options(payload, options):
-    """Parse integer generation options (recess supervisors, tc_capacity) from the payload.
+    """Parse integer generation options from the payload.
     Input: payload - request data dict; options - mutable options dict to update
     Output: None on success, or Response with HTTP 400 on validation failure
     """
     int_fields = {
         "recess_supervisors_preschool": (0, 20),
         "recess_supervisors_primary": (0, 20),
+        "timeout_minutes": (1, 1440),
     }
-
-    if options.get("include_tc", True):
-        int_fields["tc_capacity"] = (1, 10)
-
-    int_fields["timeout_minutes"] = (1, 1440)
 
     for field_name, bounds in int_fields.items():
         parsed, error_response = parse_generation_int(
@@ -154,12 +148,9 @@ def parse_base_generation_int_options(payload, options):
 DEFAULT_GENERATION_OPTIONS = {
     "recess_supervisors_preschool": 0,
     "recess_supervisors_primary": 0,
-    "include_tc": True,
-    "tc_capacity": 1,
     "enable_no_intraday_gaps": True,
     "enable_subject_unavailable_times": True,
     "enable_teacher_unavailable_times": True,
-    "enable_tc_distribution": True,
     "enable_subject_time_preferences": True,
     "enable_teacher_time_preferences": True,
     "enable_subject_day_spread": True,

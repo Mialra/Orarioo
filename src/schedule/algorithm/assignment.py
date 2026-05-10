@@ -17,7 +17,6 @@ from schedule.algorithm.constraints import (
     add_recess_slot_hard_constraints,
     add_stage_slot_hard_constraints,
     add_subject_time_hard_constraints,
-    add_tc_slot_capacity_constraints,
     add_teacher_time_hard_constraints,
     apply_soft_constraints,
 )
@@ -165,14 +164,6 @@ def _cp_sat_session_assignment(
         sessions=sessions,
         slots=slots,
     )
-    add_tc_slot_capacity_constraints(
-        model=model,
-        x=x,
-        sessions=sessions,
-        slots=slots,
-        generation_options=generation_options,
-    )
-
     _add_resource_interval_non_overlap_constraints(
         model=model,
         x=x,

@@ -396,8 +396,7 @@ def _describe_schedule(schedule):
     return schedule.subject.name if schedule.subject else "-"
 
 
-# Stage-to-TC-break mapping used by the timetable PDF builder.
-STAGE_TC_BREAK_SLOTS = {
+STAGE_BREAK_SLOTS = {
     "preschool": [("10:30", "11:00"), ("13:30", "14:00")],
     "primary": [("11:30", "12:00")],
     "secondary": [("11:00", "11:30")],
@@ -441,7 +440,7 @@ def collect_slots_and_content(schedules):
         normalized_stage = normalize_stage(
             getattr(schedule.group, "stage", "") if schedule.group else ""
         )
-        if normalized_stage in STAGE_TC_BREAK_SLOTS:
+        if normalized_stage in STAGE_BREAK_SLOTS:
             day_stage_map.setdefault(day_name, set()).add(normalized_stage)
 
     return slot_keys, cell_content, day_stage_map
@@ -456,7 +455,7 @@ def inject_recess_breaks(slot_keys, cell_content, day_stage_map):
     """
     for day_name, stages in day_stage_map.items():
         for stage in stages:
-            for recess_slot in STAGE_TC_BREAK_SLOTS.get(stage, []):
+            for recess_slot in STAGE_BREAK_SLOTS.get(stage, []):
                 if recess_slot not in slot_keys:
                     slot_keys.append(recess_slot)
                 cell_content.setdefault((day_name, recess_slot), []).append("Recreo")
@@ -470,7 +469,7 @@ def _inject_group_recess_rows(rows, group_stage, group_name):
     Output: new sorted list including recess rows
     """
     normalized = normalize_stage(group_stage)
-    breaks = STAGE_TC_BREAK_SLOTS.get(normalized, [])
+    breaks = STAGE_BREAK_SLOTS.get(normalized, [])
     if not breaks:
         return rows
     existing_days = {row["day"] for row in rows if row["day"]}
@@ -490,22 +489,6 @@ def _inject_group_recess_rows(rows, group_stage, group_name):
     combined = rows + recess_rows
     combined.sort(key=lambda r: (_DAY_ORDER.get(r["day"], 99), r["start"]))
     return combined
-
-
-def inject_tc_breaks(slot_keys, cell_content, day_stage_map):
-    """Insert TC break slots into the timetable data for teacher schedule views.
-    Input: slot_keys - mutable list of (start, end) slot tuples;
-           cell_content - mutable dict {(day, slot): [content, ...]};
-           day_stage_map - dict {day_name: set(stage_code)}
-    Output: None; side-effect: mutates slot_keys and cell_content in place
-    """
-    for day_name, stages in day_stage_map.items():
-        for stage in stages:
-            for tc_slot in STAGE_TC_BREAK_SLOTS[stage]:
-                if tc_slot not in slot_keys:
-                    slot_keys.append(tc_slot)
-                key = (day_name, tc_slot)
-                cell_content.setdefault(key, []).append("Trabajo de Centro")
 
 
 def build_timetable_rows(slot_keys, cell_content):
@@ -532,9 +515,7 @@ def build_timetable_table_data(schedules, entity_type):
     """
     slot_keys, cell_content, day_stage_map = collect_slots_and_content(schedules)
 
-    if entity_type == "teacher":
-        inject_tc_breaks(slot_keys, cell_content, day_stage_map)
-    elif entity_type == "group":
+    if entity_type == "group":
         inject_recess_breaks(slot_keys, cell_content, day_stage_map)
 
     slot_keys.sort()

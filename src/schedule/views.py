@@ -75,7 +75,8 @@ def build_unavailability_index(schedules):
         if teacher is not None and schedule.teacher_id not in seen_teachers:
             seen_teachers.add(schedule.teacher_id)
             slots = [
-                k for k, v in (teacher.time_preferences or {}).items()
+                k
+                for k, v in (teacher.time_preferences or {}).items()
                 if v == TeacherTimePreferenceState.UNAVAILABLE
             ]
             if slots:
@@ -85,7 +86,8 @@ def build_unavailability_index(schedules):
         if subject is not None and schedule.subject_id not in seen_subjects:
             seen_subjects.add(schedule.subject_id)
             slots = [
-                k for k, v in (subject.time_preferences or {}).items()
+                k
+                for k, v in (subject.time_preferences or {}).items()
                 if v == SubjectTimePreferenceState.UNAVAILABLE
             ]
             if slots:

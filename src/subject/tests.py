@@ -78,7 +78,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "History Updated",
             "weekly_hours": 4,
             "preferred_time_slot": "Afternoon",
-            "type": SubjectType.TC,
+            "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
         }
@@ -91,7 +91,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         subject.refresh_from_db()
         self.assertEqual(subject.name, "History Updated")
         self.assertEqual(subject.weekly_hours, 4)
-        self.assertEqual(subject.type, SubjectType.TC)
+        self.assertEqual(subject.type, SubjectType.NORMAL)
 
     def test_delete_subject(self):
         subject = Subject.objects.create(
@@ -273,7 +273,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Tutoria",
             weekly_hours=1,
             duration=1.0,
-            type=SubjectType.TC,
+            type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
             team=self.team,
@@ -284,5 +284,5 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["name"], "Tutoria")
-        self.assertEqual(response.data[0]["type"], SubjectType.TC)
+        self.assertEqual(response.data[0]["type"], SubjectType.NORMAL)
         self.assertEqual(set(response.data[0].keys()), {"id", "name", "type"})

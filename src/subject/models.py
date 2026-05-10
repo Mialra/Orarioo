@@ -17,7 +17,6 @@ class SubjectType(models.TextChoices):
     """Type of subject."""
 
     NORMAL = "NORMAL", "Normal"
-    TC = "TC", "TC"
 
 
 class SubjectTimePreferenceState(models.TextChoices):

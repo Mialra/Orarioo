@@ -9,7 +9,7 @@ from common.validators import normalize_optional_text, raise_validation_error
 from group.models import Group
 from namedEntity.serializers import NamedEntityNameValidationMixin
 from schedule.models import Schedule
-from subject.models import Subject, SubjectType
+from subject.models import Subject
 from teacher.models import Teacher
 from user.models import User
 
@@ -131,27 +131,24 @@ class ScheduleSerializer(
                 context={"field": "users"},
             )
 
-        subject = attrs.get("subject", self.instance.subject if self.instance else None)
-        is_tc = subject is not None and subject.type == SubjectType.TC
-        if not is_tc:
-            classroom = attrs.get(
-                "classroom", self.instance.classroom if self.instance else None
+        classroom = attrs.get(
+            "classroom", self.instance.classroom if self.instance else None
+        )
+        group = attrs.get("group", self.instance.group if self.instance else None)
+        if classroom is None:
+            raise_validation_error(
+                "classroom",
+                "REQUIRED_FIELD",
+                "This field is required.",
+                context={"field": "classroom"},
             )
-            group = attrs.get("group", self.instance.group if self.instance else None)
-            if classroom is None:
-                raise_validation_error(
-                    "classroom",
-                    "REQUIRED_FIELD",
-                    "This field is required for non-TC sessions.",
-                    context={"field": "classroom"},
-                )
-            if group is None:
-                raise_validation_error(
-                    "group",
-                    "REQUIRED_FIELD",
-                    "This field is required for non-TC sessions.",
-                    context={"field": "group"},
-                )
+        if group is None:
+            raise_validation_error(
+                "group",
+                "REQUIRED_FIELD",
+                "This field is required.",
+                context={"field": "group"},
+            )
 
         attrs["observations"] = normalize_optional_text(
             attrs.get(

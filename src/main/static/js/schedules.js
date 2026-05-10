@@ -10,7 +10,6 @@
     return;
   }
 
-  const WORK_CENTER_SUBJECT = "Trabajo de Centro";
   const errorHandler = window.OrariooErrorHandler || {};
 
   const generatedFilterIds = {
@@ -78,13 +77,10 @@
   // ── Sub-module imports ─────────────────────────────────────────────────────
   const {
     normalizeForCompare,
-    isWorkCenterSubjectValue,
-    getSubjectTypeValue,
     toIsoDateDisplay,
     toDateMillis,
     buildTeacherWorkloadsByNameFromApi,
     buildTeacherWorkloadsByNameFromSessions,
-    hasWorkCenterSubjects,
     getCollectionCount,
     buildSummaryPath,
   } = window.ScheduleUtils;
@@ -163,7 +159,6 @@
     apiJson: apiJson,
     getFilteredSessions: getFilteredSessions,
     populateFilters: populateWorkspaceFiltersFromSessions,
-    getSessionSubjectType: getSessionSubjectType,
     getUnavailability: function () {
       return state.generatedUnavailability;
     },
@@ -210,7 +205,6 @@
     apiJson: apiJson,
     getFilteredSessions: getFilteredSessions,
     populateFilters: populateWorkspaceFiltersFromSessions,
-    getSessionSubjectType: getSessionSubjectType,
     getUnavailability: function () {
       const group = savedManager.getSelectedSavedGroup();
       return (group && group.unavailability) || null;
@@ -616,15 +610,6 @@
 
   // ── Subject / session type helpers ────────────────────────────────────────
 
-  /**
-   * Resolves the subject type code directly from the session payload.
-   * Input: session - raw session object with optional subject_type field
-   * Output: uppercase subject type string (e.g., "TC") or empty string
-   */
-  function getSessionSubjectType(session) {
-    return getSubjectTypeValue(session);
-  }
-
   // ── Filter helpers ─────────────────────────────────────────────────────────
 
   /**
@@ -726,9 +711,6 @@
           .filter(Boolean),
       ),
     );
-    if (hasWorkCenterSubjects(sessions) && subjectNames.indexOf(WORK_CENTER_SUBJECT) < 0) {
-      subjectNames.push(WORK_CENTER_SUBJECT);
-    }
     setSelectOptions(filterIds.courseId, courseNames, "Todos los cursos");
     setSelectOptions(filterIds.teacherId, teacherNames, "Todos los profesores", teacherLabelsByName);
     setSelectOptions(filterIds.classroomId, classroomNames, "Todas las aulas");
@@ -758,9 +740,6 @@
       }
       if (!selectedSubject) {
         return true;
-      }
-      if (isWorkCenterSubjectValue(selectedSubject)) {
-        return getSessionSubjectType(session) === "TC";
       }
       return normalizeForCompare(session.subject_name) === normalizeForCompare(selectedSubject);
     });
@@ -1011,8 +990,6 @@
     const selectedSubject = getFilterValue(generatedFilterIds.subjectId);
     const filtered = getFilteredSessions(state.latestGeneratedSchedules, generatedFilterIds);
     const detail = renderScheduleBoard(filtered, "generatedWorkspaceOutput", {
-      forceWorkCenterSubjectLabel: isWorkCenterSubjectValue(selectedSubject),
-      getSessionSubjectType: getSessionSubjectType,
       detailTitle: "Detalle de sesiones generadas",
       detailPage: state.generatedDetailPage,
       detailPageSize: state.detailPageSize,
@@ -1041,8 +1018,6 @@
     const sourceSessions = Array.isArray(selectedGroup.sessions) ? selectedGroup.sessions : [];
     const filtered = getFilteredSessions(sourceSessions, savedFilterIds);
     const detail = renderScheduleBoard(filtered, "savedWorkspaceOutput", {
-      forceWorkCenterSubjectLabel: isWorkCenterSubjectValue(selectedSubject),
-      getSessionSubjectType: getSessionSubjectType,
       detailTitle: "Detalle de sesiones guardadas",
       detailPage: state.savedDetailPage,
       detailPageSize: state.detailPageSize,
@@ -1318,12 +1293,10 @@
       enable_no_intraday_gaps: checked("gen-opt-no-intraday-gaps"),
       enable_subject_unavailable_times: checked("gen-opt-subject-unavailable"),
       enable_teacher_unavailable_times: checked("gen-opt-teacher-unavailable"),
-      enable_tc_distribution: checked("gen-opt-tc-distribution"),
       enable_subject_time_preferences: checked("gen-opt-subject-preferences"),
       enable_teacher_time_preferences: checked("gen-opt-teacher-preferences"),
       enable_subject_day_spread: checked("gen-opt-day-spread"),
       enable_teacher_gap_minimization: checked("gen-opt-gap-minimization"),
-      include_tc: checked("gen-opt-include-tc"),
     };
   }
 
