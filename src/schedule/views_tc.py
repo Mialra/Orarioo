@@ -179,7 +179,9 @@ def _get_teacher(teacher_id, team):
     try:
         return Teacher.objects.get(pk=teacher_id, team=team), None
     except Teacher.DoesNotExist:
-        return None, Response({"detail": "Teacher not found."}, status=status.HTTP_404_NOT_FOUND)
+        return None, Response(
+            {"detail": "Teacher not found."}, status=status.HTTP_404_NOT_FOUND
+        )
 
 
 def _parse_time_str(raw, field):
