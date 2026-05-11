@@ -136,7 +136,6 @@ def _run_single_pass(
                     indices=indices,
                     slot_day_index=slot_day_index,
                 )
-                teacher_day = teacher_day_slots[teacher_id].get(day_idx, set())
                 any_move = True
                 break
 

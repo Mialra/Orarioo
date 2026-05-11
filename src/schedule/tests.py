@@ -2363,7 +2363,7 @@ class TestTCAssigner(TestCase):
             teachers_on_duty=2,  # only 1 teacher available
             team=self.team,
         )
-        self.assertTrue(len(result.warnings) > 0)
+        self.assertGreater(len(result.warnings), 0)
         first_warning = result.warnings[0]
         self.assertEqual(first_warning["required"], 2)
         self.assertEqual(first_warning["assigned"], 1)

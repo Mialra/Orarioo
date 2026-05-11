@@ -6,11 +6,10 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from auditableEntity.models import AuditableEntity, TeamScopedModel
-from common.stages import (  # noqa: F401 – EducationalStage kept for backward compat
-    EducationalStage,
-    canonical_group_stage,
-)
+from common.stages import EducationalStage, canonical_group_stage
 from namedEntity.models import team_scoped_case_insensitive_name_constraint
+
+__all__ = ["EducationalStage", "Subject", "SubjectType", "SubjectTimePreferenceState"]
 
 
 class SubjectType(models.TextChoices):

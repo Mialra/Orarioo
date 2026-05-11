@@ -5,8 +5,10 @@ Group domain model scoped to a collaboration team.
 from django.db import models
 
 from auditableEntity.models import AuditableEntity, TeamScopedModel
-from common.stages import GroupEducationalStage as EducationalStage  # noqa: F401
+from common.stages import GroupEducationalStage as EducationalStage
 from namedEntity.models import team_scoped_case_insensitive_name_constraint
+
+__all__ = ["EducationalStage", "Group"]
 
 
 class Group(TeamScopedModel, AuditableEntity):
