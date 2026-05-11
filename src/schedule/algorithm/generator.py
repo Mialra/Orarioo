@@ -20,14 +20,16 @@ from schedule.algorithm.diagnostics import (
     raise_schedule_generation_diagnostics,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
+from schedule.algorithm.postprocessing import apply_teacher_gap_local_search
 from schedule.algorithm.slots import (
     build_weekly_slots,
     parse_schedule_config_to_slot_windows,
     session_stage_code,
     slot_instance_key,
 )
-from schedule.constants import AUTO_GENERATED_OBSERVATION
-from schedule.models import Schedule
+from schedule.algorithm.tc_assigner import assign_tc_sessions
+from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
+from schedule.models import Schedule, TCSession
 from subject.models import Subject
 from teacher.models import Teacher
 
@@ -204,6 +206,13 @@ class BasicScheduleGenerator:
             )
         )
 
+        slot_by_session, classroom_by_session = apply_teacher_gap_local_search(
+            slot_by_session=slot_by_session,
+            classroom_by_session=classroom_by_session,
+            sessions=sessions,
+            slots=slots,
+        )
+
         created = []
         timestamp = timezone.now()
         for session_index, slot_index in enumerate(slot_by_session):
@@ -229,16 +238,33 @@ class BasicScheduleGenerator:
                 )
             )
 
+        teachers_on_duty = generation_options.get("teachers_on_duty", 0)
+        tc_result = None
+        if teachers_on_duty > 0:
+            tc_result = assign_tc_sessions(
+                teachers=teachers,
+                existing_schedules=created,
+                weekly_slots=slots,
+                teachers_on_duty=teachers_on_duty,
+                team=team,
+            )
+
         created = cls._bulk_create_generated_schedules(
             schedules=created,
             user=user,
         )
 
+        TCSession.objects.filter(team=team).exclude(
+            observations__startswith=SAVED_TIMETABLE_PREFIX
+        ).delete()
+        if tc_result and tc_result.tc_sessions:
+            TCSession.objects.bulk_create(tc_result.tc_sessions)
+
         cls._create_generation_audit_entry(
             schedules=created,
             team=team,
         )
-        return created, is_optimal, soft_score_info
+        return created, is_optimal, soft_score_info, tc_result
 
     @staticmethod
     def _clear_previous_generated_schedules(*, actor_email: str, user, team):
@@ -327,7 +353,9 @@ class BasicScheduleGenerator:
             entity_id=schedules[0].id,
             entity_name="Generacion automatica",
             action_type=AuditActionType.CREATE,
-            detail=(f"Se generó un horario automatico con {len(schedules)} sesiones."),
+            detail=(
+                f"Se generó el horario {schedules[0].name} con {len(schedules)} sesiones."
+            ),
             changed_fields=[
                 {
                     "campo": "Sesiones generadas",

@@ -31,6 +31,10 @@
     currentClassrooms: [],
     currentGroups: [],
     latestGeneratedSchedules: [],
+    latestTCSessions: [],
+    tcSessionsContext: null,
+    generatedTCViewMode: false,
+    savedTCViewMode: false,
     generatedUnavailability: null,
     generatedDetailPage: 1,
     savedDetailPage: 1,
@@ -100,7 +104,7 @@
     onShowSavedWorkspace: showSavedWorkspace,
     onShowSavedPicker: showSavedPicker,
     onRenderSavedWorkspace: renderSavedWorkspace,
-    onPopulateFilters: populateWorkspaceFiltersFromSessions,
+    onPopulateFilters: populateFiltersWithTC,
     savedFilterIds: savedFilterIds,
   });
 
@@ -158,7 +162,7 @@
     showAlert: showAlert,
     apiJson: apiJson,
     getFilteredSessions: getFilteredSessions,
-    populateFilters: populateWorkspaceFiltersFromSessions,
+    populateFilters: populateFiltersWithTC,
     getUnavailability: function () {
       return state.generatedUnavailability;
     },
@@ -204,7 +208,7 @@
     showAlert: showAlert,
     apiJson: apiJson,
     getFilteredSessions: getFilteredSessions,
-    populateFilters: populateWorkspaceFiltersFromSessions,
+    populateFilters: populateFiltersWithTC,
     getUnavailability: function () {
       const group = savedManager.getSelectedSavedGroup();
       return (group && group.unavailability) || null;
@@ -717,6 +721,137 @@
     setSelectOptions(filterIds.subjectId, subjectNames, "Todas las asignaturas");
   }
 
+  // Reference Monday (2024-01-01 = Monday) used to convert TC day+time to UTC datetime strings.
+  var TC_REFERENCE_MONDAY_MS = Date.UTC(2024, 0, 1); // 2024-01-01 00:00:00 UTC
+
+  /**
+   * Converts a TCSession API object to a pseudo-schedule object that renderScheduleBoard can render.
+   * TC sessions have day (0-4) + TimeField; the board expects UTC ISO datetime strings.
+   * Input: tcSession - TCSession object from GET /tc-sessions/
+   * Output: pseudo-schedule object with is_tc: true and fake ISO datetimes
+   */
+  function tcSessionToScheduleFormat(tcSession) {
+    var dayOffsetMs = tcSession.day * 24 * 60 * 60 * 1000;
+    var timeParts = (tcSession.start_time || "00:00:00").split(":");
+    var endParts = (tcSession.end_time || "00:00:00").split(":");
+    var startMs =
+      TC_REFERENCE_MONDAY_MS +
+      dayOffsetMs +
+      parseInt(timeParts[0], 10) * 3600000 +
+      parseInt(timeParts[1], 10) * 60000;
+    var endMs =
+      TC_REFERENCE_MONDAY_MS +
+      dayOffsetMs +
+      parseInt(endParts[0], 10) * 3600000 +
+      parseInt(endParts[1], 10) * 60000;
+    return {
+      id: tcSession.id,
+      teacher: tcSession.teacher,
+      teacher_name: tcSession.teacher_name || "-",
+      group: null,
+      group_name: "-",
+      classroom: null,
+      classroom_name: "-",
+      subject: null,
+      subject_name: "Guardia TC",
+      start_time: new Date(startMs).toISOString(),
+      end_time: new Date(endMs).toISOString(),
+      is_tc: true,
+    };
+  }
+
+  /**
+   * Returns TC sessions to overlay on the board based on active filters.
+   * Hidden when filtering by course, classroom or subject (those views don't include TC).
+   * Filtered by teacher when a teacher filter is active; all TC sessions otherwise.
+   * Input: filterIds - workspace filter IDs object
+   * Output: filtered array of pseudo-schedule TC session objects, or []
+   */
+  function getFilteredTCSessions(filterIds) {
+    if (getFilterValue(filterIds.courseId) || getFilterValue(filterIds.classroomId) || getFilterValue(filterIds.subjectId)) {
+      return [];
+    }
+    var pool = state.latestTCSessions || [];
+    var selectedTeacher = getFilterValue(filterIds.teacherId);
+    if (selectedTeacher) {
+      return pool
+        .filter(function (tc) {
+          return normalizeForCompare(tc.teacher_name) === normalizeForCompare(selectedTeacher);
+        })
+        .map(tcSessionToScheduleFormat);
+    }
+    return pool.map(tcSessionToScheduleFormat);
+  }
+
+  /**
+   * Adds TC session minutes to a base workload-by-name object and returns a new merged object.
+   * Input: baseWorkloads - object { teacherName: hoursNumber } from regular sessions
+   *        tcSessions    - array of raw TC session objects from state.latestTCSessions
+   * Output: new object with TC hours added on top of regular hours
+   */
+  function mergeTCWorkloads(baseWorkloads, tcSessions) {
+    var merged = Object.assign({}, baseWorkloads);
+    (tcSessions || []).forEach(function (tc) {
+      var name = String(tc.teacher_name || "").trim();
+      if (!name) {
+        return;
+      }
+      var startParts = (tc.start_time || "00:00:00").split(":");
+      var endParts = (tc.end_time || "00:00:00").split(":");
+      var durationMinutes =
+        (parseInt(endParts[0], 10) * 60 + parseInt(endParts[1], 10)) -
+        (parseInt(startParts[0], 10) * 60 + parseInt(startParts[1], 10));
+      if (durationMinutes > 0) {
+        merged[name] = (merged[name] || 0) + durationMinutes / 60;
+      }
+    });
+    return merged;
+  }
+
+  /**
+   * Re-populates both workspace filter dropdowns with workloads that include TC hours.
+   * Call this whenever state.latestTCSessions changes.
+   * Input: none
+   * Output: void
+   */
+  function refreshFilterWorkloads() {
+    const generatedWorkloads = mergeTCWorkloads(
+      state.generatedTeacherWorkloadsByName,
+      state.latestTCSessions,
+    );
+    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds, {
+      teacherWorkloadsByName: generatedWorkloads,
+    });
+    const savedGroup = savedManager.getSelectedSavedGroup();
+    if (savedGroup) {
+      const savedWorkloads = mergeTCWorkloads(
+        state.savedTeacherWorkloadsByName,
+        state.latestTCSessions,
+      );
+      populateWorkspaceFiltersFromSessions(
+        Array.isArray(savedGroup.sessions) ? savedGroup.sessions : [],
+        savedFilterIds,
+        { teacherWorkloadsByName: savedWorkloads },
+      );
+    }
+  }
+
+  /**
+   * TC-aware wrapper for populateWorkspaceFiltersFromSessions.
+   * Automatically merges latestTCSessions into teacherWorkloadsByName before populating.
+   * Use this everywhere instead of calling populateWorkspaceFiltersFromSessions directly
+   * (except inside refreshFilterWorkloads which already does the merge manually).
+   */
+  function populateFiltersWithTC(sessions, filterIds, options) {
+    var opts = options || {};
+    var base = opts.teacherWorkloadsByName || {};
+    populateWorkspaceFiltersFromSessions(
+      sessions,
+      filterIds,
+      Object.assign({}, opts, { teacherWorkloadsByName: mergeTCWorkloads(base, state.latestTCSessions) }),
+    );
+  }
+
   /**
    * Returns the subset of sessions matching all active filter dropdown selections.
    * Input: sessions - array of raw API session objects
@@ -974,6 +1109,18 @@
    * Output: void
    */
   function showSavedPicker() {
+    if (state.tcSessionsContext !== "") {
+      state.tcSessionsContext = "";
+      state.latestTCSessions = [];
+      if (state.latestGeneratedSchedules.length > 0) {
+        apiJson("/tc-sessions/").then(function (res) {
+          if (res.ok) {
+            state.latestTCSessions = (res.data && (res.data.results || res.data)) || [];
+            refreshFilterWorkloads();
+          }
+        });
+      }
+    }
     toggleSection("savedPickerSection", true);
     toggleSection("savedWorkspaceSection", false);
     savedWorkspace.clearDropFeedback();
@@ -987,17 +1134,38 @@
    */
   function renderGeneratedWorkspace() {
     updateGeneratedWorkspaceHeader();
-    const selectedSubject = getFilterValue(generatedFilterIds.subjectId);
-    const filtered = getFilteredSessions(state.latestGeneratedSchedules, generatedFilterIds);
-    const detail = renderScheduleBoard(filtered, "generatedWorkspaceOutput", {
+    const tcBtn = document.getElementById("generatedWorkspaceTCBtn");
+    var boardSessions;
+    var tcSessions;
+    var enableTcCreate;
+    if (state.generatedTCViewMode) {
+      boardSessions = [];
+      tcSessions = (state.latestTCSessions || []).map(tcSessionToScheduleFormat);
+      enableTcCreate = false;
+      if (tcBtn) {
+        tcBtn.classList.add("schedule-toolbar-btn-tc--active");
+      }
+    } else {
+      boardSessions = getFilteredSessions(state.latestGeneratedSchedules, generatedFilterIds);
+      tcSessions = getFilteredTCSessions(generatedFilterIds);
+      enableTcCreate = !!getFilterValue(generatedFilterIds.teacherId);
+      if (tcBtn) {
+        tcBtn.classList.remove("schedule-toolbar-btn-tc--active");
+      }
+    }
+    const detail = renderScheduleBoard(boardSessions.concat(tcSessions), "generatedWorkspaceOutput", {
       detailTitle: "Detalle de sesiones generadas",
       detailPage: state.generatedDetailPage,
       detailPageSize: state.detailPageSize,
-      enableDragDrop: true,
+      enableDragDrop: !state.generatedTCViewMode,
       teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
       scheduleConfig: state.scheduleConfig,
+      enableTcCreate: enableTcCreate,
     });
     state.generatedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
+    if (window.orariooAuth && typeof window.orariooAuth.initLucideIcons === "function") {
+      window.orariooAuth.initLucideIcons();
+    }
   }
 
   /**
@@ -1014,18 +1182,57 @@
       }
       return;
     }
-    const selectedSubject = getFilterValue(savedFilterIds.subjectId);
+
+    const currentTimetableName = String(selectedGroup.name || "");
+    if (state.tcSessionsContext !== currentTimetableName) {
+      state.tcSessionsContext = currentTimetableName;
+      state.latestTCSessions = [];
+      if (currentTimetableName) {
+        apiJson("/tc-sessions/?timetable_name=" + encodeURIComponent(currentTimetableName)).then(function (res) {
+          if (res.ok) {
+            state.latestTCSessions = (res.data && (res.data.results || res.data)) || [];
+            refreshFilterWorkloads();
+            renderSavedWorkspace();
+          }
+        });
+      }
+      return;
+    }
+
     const sourceSessions = Array.isArray(selectedGroup.sessions) ? selectedGroup.sessions : [];
     const filtered = getFilteredSessions(sourceSessions, savedFilterIds);
-    const detail = renderScheduleBoard(filtered, "savedWorkspaceOutput", {
+    const tcBtn = document.getElementById("savedWorkspaceTCBtn");
+    var boardSessions;
+    var tcSessions;
+    var enableTcCreate;
+    if (state.savedTCViewMode) {
+      boardSessions = [];
+      tcSessions = (state.latestTCSessions || []).map(tcSessionToScheduleFormat);
+      enableTcCreate = false;
+      if (tcBtn) {
+        tcBtn.classList.add("schedule-toolbar-btn-tc--active");
+      }
+    } else {
+      boardSessions = filtered;
+      tcSessions = getFilteredTCSessions(savedFilterIds);
+      enableTcCreate = !!getFilterValue(savedFilterIds.teacherId);
+      if (tcBtn) {
+        tcBtn.classList.remove("schedule-toolbar-btn-tc--active");
+      }
+    }
+    const detail = renderScheduleBoard(boardSessions.concat(tcSessions), "savedWorkspaceOutput", {
       detailTitle: "Detalle de sesiones guardadas",
       detailPage: state.savedDetailPage,
       detailPageSize: state.detailPageSize,
-      enableDragDrop: true,
+      enableDragDrop: !state.savedTCViewMode,
       teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
       scheduleConfig: state.scheduleConfig,
+      enableTcCreate: enableTcCreate,
     });
     state.savedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
+    if (window.orariooAuth && typeof window.orariooAuth.initLucideIcons === "function") {
+      window.orariooAuth.initLucideIcons();
+    }
   }
 
   // ── Save generated modal ───────────────────────────────────────────────────
@@ -1211,9 +1418,7 @@
       result.data && Array.isArray(result.data.teacher_workloads)
         ? buildTeacherWorkloadsByNameFromApi(result.data.teacher_workloads)
         : buildTeacherWorkloadsByNameFromSessions(state.latestGeneratedSchedules);
-    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds, {
-      teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
-    });
+    refreshFilterWorkloads();
     renderGeneratedWorkspace();
     savedManager.rememberSavedTimetableSummary(timetableName, state.latestGeneratedSchedules);
     showAlert("success", 'Horario guardado como "' + timetableName + '".');
@@ -1289,6 +1494,7 @@
       var el = document.getElementById(id);
       return el ? el.checked : true;
     }
+    var dutyEl = document.getElementById("gen-opt-teachers-on-duty");
     return {
       enable_no_intraday_gaps: checked("gen-opt-no-intraday-gaps"),
       enable_subject_unavailable_times: checked("gen-opt-subject-unavailable"),
@@ -1297,6 +1503,7 @@
       enable_teacher_time_preferences: checked("gen-opt-teacher-preferences"),
       enable_subject_day_spread: checked("gen-opt-day-spread"),
       enable_teacher_gap_minimization: checked("gen-opt-gap-minimization"),
+      teachers_on_duty: dutyEl ? parseInt(dutyEl.value, 10) || 0 : 0,
     };
   }
 
@@ -1316,6 +1523,88 @@
     return {
       timeout_minutes: timeoutInput ? timeoutInput.value : "",
     };
+  }
+
+  /**
+   * Resolves a teacher name to its numeric ID from the latest generated sessions.
+   * Input: teacherName - string
+   * Output: integer teacher ID, or null if not found
+   */
+  function resolveTeacherId(teacherName) {
+    const savedGroup = savedManager.getSelectedSavedGroup();
+    const savedSessions = savedGroup && Array.isArray(savedGroup.sessions) ? savedGroup.sessions : [];
+    const allSessions = (state.latestGeneratedSchedules || [])
+      .concat(savedSessions)
+      .concat(state.latestTCSessions || []);
+    const found = allSessions.find(function (s) {
+      return normalizeForCompare(s.teacher_name) === normalizeForCompare(teacherName);
+    });
+    return found ? found.teacher : null;
+  }
+
+  /**
+   * Creates a TC session for the active teacher at the given cell slot.
+   * Input: day - weekday name string (e.g. "Lunes"), startHm - "HH:MM", endHm - "HH:MM",
+   *        filterIds - workspace filter IDs object
+   * Output: Promise<void>
+   */
+  async function handleTCSessionCreate(day, startHm, endHm, filterIds) {
+    const teacherName = getFilterValue(filterIds.teacherId);
+    if (!teacherName) {
+      return;
+    }
+    const teacherId = resolveTeacherId(teacherName);
+    if (!teacherId) {
+      showAlert("error", "No se pudo identificar al profesor seleccionado.");
+      return;
+    }
+    const dayIndex = { Lunes: 0, Martes: 1, "Miércoles": 2, Jueves: 3, Viernes: 4 }[day];
+    if (dayIndex === undefined) {
+      return;
+    }
+    const result = await apiJson("/tc-sessions/create/", "POST", {
+      teacher: teacherId,
+      day: dayIndex,
+      start_time: startHm + ":00",
+      end_time: endHm + ":00",
+    });
+    if (!result.ok) {
+      const msg = (result.data && result.data.detail) || "No se pudo crear la guardia TC.";
+      showAlert("error", msg);
+      return;
+    }
+    const created = result.data && result.data.tc_session;
+    if (created) {
+      state.latestTCSessions = (state.latestTCSessions || []).concat([created]);
+    }
+    if (result.data && result.data.warning) {
+      showAlert("warning", result.data.warning);
+    }
+    refreshFilterWorkloads();
+    renderGeneratedWorkspace();
+    renderSavedWorkspace();
+  }
+
+  /**
+   * Deletes a TC session by ID, updates state, and re-renders both workspaces.
+   * Input: tcSessionId - integer PK of the TCSession to delete
+   * Output: Promise<void>
+   */
+  async function handleTCSessionDelete(tcSessionId) {
+    if (!tcSessionId) {
+      return;
+    }
+    const result = await apiJson("/tc-sessions/" + tcSessionId + "/", "DELETE");
+    if (!result.ok) {
+      showAlert("error", "No se pudo eliminar la guardia TC.");
+      return;
+    }
+    state.latestTCSessions = (state.latestTCSessions || []).filter(function (tc) {
+      return tc.id !== tcSessionId;
+    });
+    refreshFilterWorkloads();
+    renderGeneratedWorkspace();
+    renderSavedWorkspace();
   }
 
   /**
@@ -1343,6 +1632,15 @@
       return;
     }
     state.latestGeneratedSchedules = (result.data && result.data.schedules) || [];
+    state.latestTCSessions = [];
+    state.tcSessionsContext = "";
+    apiJson("/tc-sessions/").then(function (tcResult) {
+      if (tcResult.ok) {
+        state.latestTCSessions = (tcResult.data && (tcResult.data.results || tcResult.data)) || [];
+        refreshFilterWorkloads();
+        renderGeneratedWorkspace();
+      }
+    });
     state.generatedUnavailability = (result.data && result.data.unavailability) || null;
     state.generatedDetailPage = 1;
     state.generatedSaved = false;
@@ -1352,14 +1650,21 @@
         ? buildTeacherWorkloadsByNameFromApi(result.data.teacher_workloads)
         : buildTeacherWorkloadsByNameFromSessions(state.latestGeneratedSchedules);
     state.generatedMoveInFlight = false;
-    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds, {
-      teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
-    });
+    refreshFilterWorkloads();
     showGeneratedWorkspace();
     renderGeneratedWorkspace();
     const generatedCount =
       result.data && result.data.generated_count ? result.data.generated_count : state.latestGeneratedSchedules.length;
     showAlert("success", "Se generaron " + generatedCount + " sesiones.");
+    const tcWarnings = (result.data && result.data.tc_warnings) || [];
+    if (tcWarnings.length > 0) {
+      const days = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+      const lines = tcWarnings.map(function (w) {
+        const dayName = days[w.day] || "Día " + w.day;
+        return dayName + " " + w.start_time.slice(0, 5) + ": " + w.assigned + "/" + w.required + " docentes TC";
+      });
+      showAlert("warning", "Guardias TC con cobertura incompleta:\n" + lines.join("\n"));
+    }
   }
 
   /**
@@ -1446,6 +1751,19 @@
         if (!(target instanceof Element)) {
           return;
         }
+        const tcDeleteBtn = target.closest("button[data-tc-delete-id]");
+        if (tcDeleteBtn) {
+          handleTCSessionDelete(Number.parseInt(tcDeleteBtn.dataset.tcDeleteId, 10));
+          return;
+        }
+        const tcAddBtn = target.closest("button[data-add-tc]");
+        if (tcAddBtn) {
+          const cell = tcAddBtn.closest("td[data-board-day]");
+          if (cell) {
+            handleTCSessionCreate(cell.dataset.boardDay, cell.dataset.boardStart, cell.dataset.boardEnd, generatedFilterIds);
+          }
+          return;
+        }
         const pageButton = target.closest("button[data-detail-page]");
         if (!pageButton) {
           return;
@@ -1507,6 +1825,14 @@
     });
 
     syncGenerationTimeoutControls();
+
+    const tcBtn = document.getElementById("generatedWorkspaceTCBtn");
+    if (tcBtn) {
+      tcBtn.addEventListener("click", function () {
+        state.generatedTCViewMode = !state.generatedTCViewMode;
+        renderGeneratedWorkspace();
+      });
+    }
   }
 
   /**
@@ -1602,6 +1928,19 @@
         if (!(target instanceof Element)) {
           return;
         }
+        const tcDeleteBtn = target.closest("button[data-tc-delete-id]");
+        if (tcDeleteBtn) {
+          handleTCSessionDelete(Number.parseInt(tcDeleteBtn.dataset.tcDeleteId, 10));
+          return;
+        }
+        const tcAddBtn = target.closest("button[data-add-tc]");
+        if (tcAddBtn) {
+          const cell = tcAddBtn.closest("td[data-board-day]");
+          if (cell) {
+            handleTCSessionCreate(cell.dataset.boardDay, cell.dataset.boardStart, cell.dataset.boardEnd, savedFilterIds);
+          }
+          return;
+        }
         const pageButton = target.closest("button[data-detail-page]");
         if (!pageButton) {
           return;
@@ -1631,6 +1970,14 @@
           source: "saved",
           savedName: state.selectedSavedTimetableName || "",
         });
+      });
+    }
+
+    const tcBtn = document.getElementById("savedWorkspaceTCBtn");
+    if (tcBtn) {
+      tcBtn.addEventListener("click", function () {
+        state.savedTCViewMode = !state.savedTCViewMode;
+        renderSavedWorkspace();
       });
     }
   }
@@ -1748,6 +2095,15 @@
       apiJson("/schedule-config/").then(function (res) {
         if (res.ok && res.data && res.data.schedule_config) {
           state.scheduleConfig = res.data.schedule_config;
+        }
+      }),
+    );
+    state.tcSessionsContext = "";
+    initTasks.push(
+      apiJson("/tc-sessions/").then(function (res) {
+        if (res.ok) {
+          state.latestTCSessions = (res.data && (res.data.results || res.data)) || [];
+          refreshFilterWorkloads();
         }
       }),
     );

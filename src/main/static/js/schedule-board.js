@@ -74,6 +74,7 @@
       end: end,
       startHm: utils.toUtcHM(start),
       endHm: utils.toUtcHM(end),
+      isTc: session.is_tc === true,
     };
   }
 
@@ -154,12 +155,28 @@
 
   /**
    * Renders the HTML article element for a single session card.
-   * Input: session - mapped board session object
+   * Input: session - mapped board session object; isTc flag triggers TC-specific styling/delete button
    *        options - object with enableDragDrop boolean and teacherWorkloadsByName map
    * Output: HTML string for a schedule-board-card article
    */
   function renderSessionCard(session, options) {
     var safeOptions = options || {};
+
+    if (session.isTc) {
+      return (
+        '<article class="schedule-board-card schedule-board-card--tc"' +
+        ' data-tc-session-id="' + session.id + '">' +
+        '<div class="schedule-board-card-tc-row">' +
+        '<h4 class="schedule-board-card-subject mb-0">Guardia TC</h4>' +
+        '<button class="schedule-board-card-tc-delete" data-tc-delete-id="' + session.id + '" title="Eliminar guardia TC" aria-label="Eliminar guardia TC">' +
+        '<i data-lucide="trash-2" class="schedule-board-card-tc-delete-icon" aria-hidden="true"></i>' +
+        '</button>' +
+        '</div>' +
+        '<p class="schedule-board-card-line">' + session.teacherName + "</p>" +
+        "</article>"
+      );
+    }
+
     var canDrag = safeOptions.enableDragDrop === true;
     var dragAttrs = canDrag ? ' draggable="true" data-draggable="true"' : "";
     var dragClass = canDrag ? " schedule-board-card-draggable" : "";
@@ -195,10 +212,20 @@
 
   /**
    * Returns the placeholder HTML for an empty board cell.
-   * Input: none
+   * Input: options - optional object; if options.enableTcCreate is true, renders an add-TC button
    * Output: HTML string
    */
-  function renderEmptyCell() {
+  function renderEmptyCell(options) {
+    var safeOptions = options || {};
+    if (safeOptions.enableTcCreate) {
+      return (
+        '<div class="schedule-board-slot-empty schedule-board-slot-empty--tc-add">' +
+        '<button class="schedule-board-slot-tc-add" data-add-tc="true" title="Añadir guardia TC" aria-label="Añadir guardia TC">' +
+        '<i data-lucide="shield-plus" class="schedule-board-slot-tc-add-icon" aria-hidden="true"></i>' +
+        '</button>' +
+        '</div>'
+      );
+    }
     return '<div class="schedule-board-slot-empty" aria-hidden="true"></div>';
   }
 
@@ -408,7 +435,7 @@
                     return renderSessionCard(entry, safeOptions);
                   })
                   .join("")
-              : renderEmptyCell()) +
+              : renderEmptyCell(safeOptions)) +
             "</td>"
           );
         }).join("");

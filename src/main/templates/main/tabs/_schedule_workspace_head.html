@@ -83,11 +83,19 @@
             {% endif %}
         </div>
     </div>
-    <p class="schedule-workspace-hint mb-0"
-       title="Puedes arrastrar y soltar una sesión para recolocarla dentro del horario.">
-        <i data-lucide="move"
-           class="schedule-workspace-hint-icon"
-           aria-hidden="true"></i>
-        Filtra por curso, profesor, aula o asignatura. Luego, arrastra y suelta una sesión para sustituirla por otra si se cumplen las restricciones.
-    </p>
+    <div class="schedule-workspace-hint-row">
+        <p class="schedule-workspace-hint mb-0"
+           title="Puedes arrastrar y soltar una sesión para recolocarla dentro del horario.">
+            <i data-lucide="move"
+               class="schedule-workspace-hint-icon"
+               aria-hidden="true"></i>
+            Filtra por curso, profesor, aula o asignatura. Luego, arrastra y suelta una sesión para sustituirla por otra si se cumplen las restricciones.
+        </p>
+        <button type="button"
+                id="{{ ws_prefix }}WorkspaceTCBtn"
+                class="btn schedule-toolbar-btn schedule-toolbar-btn-tc"
+                title="Ver solo horas de guardia TC">
+            <i data-lucide="shield-check" aria-hidden="true"></i>
+        </button>
+    </div>
 </div>

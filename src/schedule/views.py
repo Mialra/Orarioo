@@ -414,12 +414,14 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 )
 
         try:
-            schedules, is_optimal, soft_score_info = BasicScheduleGenerator.generate(
-                actor_email=actor,
-                user=request.user,
-                team=active_team,
-                random_seed=generation_seed,
-                generation_options=generation_options,
+            schedules, is_optimal, soft_score_info, tc_result = (
+                BasicScheduleGenerator.generate(
+                    actor_email=actor,
+                    user=request.user,
+                    team=active_team,
+                    random_seed=generation_seed,
+                    generation_options=generation_options,
+                )
             )
         except ScheduleGenerationError as exc:
             logger.warning(
@@ -441,29 +443,23 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "generated_count": len(serialized.data),
                 "teacher_workloads": build_teacher_workloads(schedules),
                 "unavailability": build_unavailability_index(schedules),
+                "tc_warnings": tc_result.warnings if tc_result else [],
             },
             status=status.HTTP_201_CREATED,
         )
 
-    def _saved_queryset_for_user(self, request_user):
-        """Return a queryset of all saved (non-auto-generated) schedules for a user.
-        Input: request_user - User instance
-        Output: Schedule queryset excluding auto-generated observations
+    def _saved_queryset(self):
+        """Return a queryset of all saved (non-auto-generated) schedules for the active team.
+        Output: Schedule queryset excluding auto-generated observations, scoped to the team
         """
-        return (
-            self.get_queryset()
-            .exclude(observations=AUTO_GENERATED_OBSERVATION)
-            .filter(users=request_user)
-        )
+        return self.get_queryset().exclude(observations=AUTO_GENERATED_OBSERVATION)
 
     def saved(self, request):
-        """Return all saved schedules for the current user.
+        """Return all saved schedules for the active team.
         Input: request - DRF Request
         Output: Response with count, results and teacher workloads (HTTP 200)
         """
-        saved_queryset = self._saved_queryset_for_user(request.user).order_by(
-            "start_time", "id"
-        )
+        saved_queryset = self._saved_queryset().order_by("start_time", "id")
         saved_schedules = list(saved_queryset)
         serialized = self.get_serializer(saved_schedules, many=True)
         return Response(
@@ -481,7 +477,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         Output: Response with count and results (name + updated_at per timetable) (HTTP 200)
         """
         summary_queryset = (
-            self._saved_queryset_for_user(request.user)
+            self._saved_queryset()
             .exclude(name__isnull=True)
             .exclude(name__exact="")
             .values("name")
@@ -510,7 +506,6 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             )
 
         schedules, error_response = self._fetch_saved_timetable_schedules(
-            request_user=request.user,
             timetable_name=timetable_name,
             team=self.get_active_team(),
         )
@@ -543,10 +538,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         return timetable_name, None
 
     @staticmethod
-    def _fetch_saved_timetable_schedules(*, request_user, timetable_name, team):
+    def _fetch_saved_timetable_schedules(*, timetable_name, team):
         """Fetch all schedules belonging to a saved timetable by name.
-        Input: request_user - User instance; timetable_name - saved timetable name;
-               team - Team instance
+        Input: timetable_name - saved timetable name; team - Team instance
         Output: tuple (schedules, None) on success, or (None, Response) with HTTP 404 if not found
         """
         saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
@@ -554,7 +548,6 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             Schedule.objects.select_related("teacher", "classroom", "group", "subject")
             .prefetch_related("users")
             .filter(
-                users=request_user,
                 observations=saved_observation,
                 team=team,
             )
@@ -578,7 +571,6 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             return error_response
 
         schedules, error_response = self._fetch_saved_timetable_schedules(
-            request_user=request.user,
             timetable_name=timetable_name,
             team=self.get_active_team(),
         )
@@ -772,15 +764,13 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 through_model.objects.bulk_create(missing_pairs, ignore_conflicts=True)
 
     @staticmethod
-    def _saved_timetable_name_exists(*, request_user, timetable_name, team):
-        """Check whether a saved timetable with the given name already exists.
-        Input: request_user - User instance; timetable_name - name to check;
-               team - Team instance
+    def _saved_timetable_name_exists(*, timetable_name, team):
+        """Check whether a saved timetable with the given name already exists for the team.
+        Input: timetable_name - name to check; team - Team instance
         Output: True if a matching saved timetable exists, False otherwise
         """
         saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
         return Schedule.objects.filter(
-            users=request_user,
             observations=saved_observation,
             team=team,
         ).exists()
@@ -801,7 +791,6 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             )
 
         if self._saved_timetable_name_exists(
-            request_user=request.user,
             timetable_name=timetable_name,
             team=active_team,
         ):
@@ -859,6 +848,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             actor_email=actor,
             target_users=target_users,
         )
+        self._persist_saved_tc_sessions(timetable_name=timetable_name, team=active_team)
 
         serialized = self.get_serializer(schedules, many=True)
         return Response(
@@ -870,6 +860,30 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
+
+    @staticmethod
+    def _persist_saved_tc_sessions(*, timetable_name, team):
+        """Copy draft TC sessions (observations="") to a saved timetable name.
+        Deletes any existing TC sessions for that name first, then duplicates the drafts.
+        Input: timetable_name - name of the saved timetable; team - CollaborationTeam instance
+        Output: None
+        """
+        from schedule.constants import SAVED_TIMETABLE_PREFIX
+        from schedule.models import TCSession
+
+        saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
+        TCSession.objects.filter(team=team, observations=saved_observation).delete()
+        drafts = list(
+            TCSession.objects.filter(team=team).exclude(
+                observations__startswith=SAVED_TIMETABLE_PREFIX
+            )
+        )
+        if drafts:
+            for tc in drafts:
+                tc.pk = None
+                tc.name = timetable_name
+                tc.observations = saved_observation
+            TCSession.objects.bulk_create(drafts)
 
     def _resolve_timetable_scope_queryset(
         self,
@@ -1318,7 +1332,29 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         Output: list of defect dicts; raises ValidationAppError if analysis fails
         """
         try:
-            return ScheduleEvaluator.analyze_schedules(schedules)
+            from schedule.constants import SAVED_TIMETABLE_PREFIX
+            from schedule.models import TCSession
+
+            team = schedules[0].team if schedules else None
+            if not team:
+                tc_sessions = []
+            else:
+                first_obs = (schedules[0].observations or "") if schedules else ""
+                if first_obs.startswith(SAVED_TIMETABLE_PREFIX):
+                    tc_sessions = list(
+                        TCSession.objects.filter(
+                            team=team, observations=first_obs
+                        ).select_related("teacher")
+                    )
+                else:
+                    tc_sessions = list(
+                        TCSession.objects.filter(
+                            team=team, observations=""
+                        ).select_related("teacher")
+                    )
+            return ScheduleEvaluator.analyze_schedules(
+                schedules, tc_sessions=tc_sessions
+            )
         except Exception as exc:
             logger.exception("Error analyzing schedules: %s", str(exc))
             raise ValidationAppError(

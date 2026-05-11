@@ -129,6 +129,7 @@ def parse_base_generation_int_options(payload, options):
         "recess_supervisors_preschool": (0, 20),
         "recess_supervisors_primary": (0, 20),
         "timeout_minutes": (1, 1440),
+        "teachers_on_duty": (0, 20),
     }
 
     for field_name, bounds in int_fields.items():
@@ -148,6 +149,7 @@ def parse_base_generation_int_options(payload, options):
 DEFAULT_GENERATION_OPTIONS = {
     "recess_supervisors_preschool": 0,
     "recess_supervisors_primary": 0,
+    "teachers_on_duty": 0,
     "enable_no_intraday_gaps": True,
     "enable_subject_unavailable_times": True,
     "enable_teacher_unavailable_times": True,

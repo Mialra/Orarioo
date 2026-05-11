@@ -457,6 +457,29 @@
     color: #ffffff;
 }
 
+.schedule-toolbar-btn-tc {
+    --bs-btn-color: #92700a;
+    --bs-btn-bg: #fffbee;
+    --bs-btn-border-color: #e8c84a;
+    --bs-btn-hover-color: #6a4e00;
+    --bs-btn-hover-bg: #fef3cc;
+    --bs-btn-hover-border-color: #c9960a;
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+}
+
+.schedule-toolbar-btn-tc svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+.schedule-toolbar-btn-tc--active {
+    --bs-btn-color: #6a4e00;
+    --bs-btn-bg: #fef3cc;
+    --bs-btn-border-color: #c9960a;
+    box-shadow: inset 0 0 0 2px #c9960a;
+}
+
 .schedule-toolbar-btn-analyze {
     --bs-btn-color: #d97706;
     --bs-btn-bg: #fff8f0;
@@ -489,6 +512,14 @@
     --bs-btn-hover-color: #1a2a3e;
     --bs-btn-hover-bg: #f4f6fa;
     --bs-btn-hover-border-color: #a0aec0;
+}
+
+.schedule-workspace-hint-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
 }
 
 .schedule-workspace-hint {
@@ -710,6 +741,78 @@
 
 .schedule-board-card-invalid-shake {
     animation: scheduleCardShake 0.3s ease;
+}
+
+.schedule-board-slot-empty--tc-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.schedule-board-slot-tc-add {
+    border: none;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    color: #c9960a;
+    opacity: 0.4;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.15s;
+}
+
+.schedule-board-slot-tc-add:hover {
+    opacity: 0.9;
+}
+
+.schedule-board-slot-tc-add-icon {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+
+.schedule-board-card--tc {
+    border-color: #e8c84a;
+    border-left-color: #c9960a;
+    background: #fffbee;
+}
+
+.schedule-board-card-tc-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem;
+    margin-bottom: 0.14rem;
+}
+
+.schedule-board-card--tc .schedule-board-card-subject {
+    color: #7a5a00;
+}
+
+.schedule-board-card--tc .schedule-board-card-line {
+    color: #8a7030;
+}
+
+.schedule-board-card-tc-delete {
+    flex-shrink: 0;
+    border: none;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    line-height: 1;
+    color: #c9960a;
+    opacity: 0.55;
+    display: inline-flex;
+    align-items: center;
+}
+
+.schedule-board-card-tc-delete:hover {
+    opacity: 1;
+}
+
+.schedule-board-card-tc-delete-icon {
+    width: 0.8rem;
+    height: 0.8rem;
 }
 
 @keyframes scheduleCellPulse {

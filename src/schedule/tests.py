@@ -1,7 +1,9 @@
 ﻿from datetime import datetime, timedelta
 from io import BytesIO
+from types import SimpleNamespace
 from unittest import skipIf
 
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -20,10 +22,12 @@ from schedule.algorithm.slots import (
     build_weekly_slots,
     build_windows_from_stage_config,
     parse_schedule_config_to_slot_windows,
+    slot_instance_key,
     slot_preference_key_from_datetime,
 )
+from schedule.algorithm.tc_assigner import assign_tc_sessions
 from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
-from schedule.models import Schedule
+from schedule.models import Schedule, TCSession
 from subject.models import Subject, SubjectTimePreferenceState, SubjectType
 from teacher.models import Teacher, TeacherTimePreferenceState
 
@@ -2146,3 +2150,731 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
         left_start, left_end = assigned_ranges[0]
         right_start, right_end = assigned_ranges[1]
         self.assertFalse(left_start < right_end and right_start < left_end)
+
+
+# ---------------------------------------------------------------------------
+# TC Tests — helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_team_and_teacher(
+    *, email_prefix, max_weekly_hours=20, weekly_hours_exact=False
+):
+    """Create an isolated team + teacher for unit tests that don't use APITestCase."""
+    from user.models import CollaborationTeam
+
+    team = CollaborationTeam.objects.create(name=f"{email_prefix}-team")
+    teacher = Teacher.objects.create(
+        team=team,
+        name=f"Teacher {email_prefix}",
+        max_weekly_hours=max_weekly_hours,
+        weekly_hours_exact=weekly_hours_exact,
+    )
+    return team, teacher
+
+
+def _next_monday_slot(hour_start=9, hour_end=10):
+    """Return (start_dt, end_dt) for next Monday at the given hours (timezone-aware)."""
+    now = timezone.localtime()
+    days_until = (7 - now.weekday()) % 7 or 7
+    monday = now.date() + timedelta(days=days_until)
+    start_dt = timezone.make_aware(
+        datetime.combine(monday, datetime.min.time().replace(hour=hour_start))
+    )
+    end_dt = timezone.make_aware(
+        datetime.combine(monday, datetime.min.time().replace(hour=hour_end))
+    )
+    return start_dt, end_dt
+
+
+# ---------------------------------------------------------------------------
+# TC Model tests
+# ---------------------------------------------------------------------------
+
+
+class TestTCSessionModel(TestCase):
+    def setUp(self):
+        self.team, self.teacher = _make_team_and_teacher(email_prefix="tc-model")
+
+    def test_creacion_basica(self):
+        from datetime import time
+
+        tc = TCSession.objects.create(
+            teacher=self.teacher,
+            team=self.team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        self.assertEqual(tc.day, 0)
+        self.assertEqual(tc.teacher, self.teacher)
+        self.assertEqual(tc.team, self.team)
+
+    def test_str(self):
+        from datetime import time
+
+        tc = TCSession(
+            teacher=self.teacher,
+            team=self.team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        self.assertIn("Lunes", str(tc))
+        self.assertIn(self.teacher.name, str(tc))
+
+    def test_ordering(self):
+        from datetime import time
+
+        TCSession.objects.create(
+            teacher=self.teacher,
+            team=self.team,
+            day=1,
+            start_time=time(10, 0),
+            end_time=time(11, 0),
+        )
+        TCSession.objects.create(
+            teacher=self.teacher,
+            team=self.team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        sessions = list(TCSession.objects.filter(team=self.team))
+        self.assertEqual(sessions[0].day, 0)
+        self.assertEqual(sessions[1].day, 1)
+
+
+# ---------------------------------------------------------------------------
+# TC Assigner unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestTCAssigner(TestCase):
+    def setUp(self):
+        self.team, self.teacher = _make_team_and_teacher(email_prefix="tc-algo")
+        self.slots = build_weekly_slots()
+
+    def _make_unsaved_schedule(self, slot_index):
+        """Return a lightweight object mimicking an unsaved Schedule for tc_assigner input."""
+        slot = self.slots[slot_index]
+        return SimpleNamespace(
+            teacher=self.teacher,
+            teacher_id=self.teacher.id,
+            start_time=slot["start"],
+            end_time=slot["end"],
+        )
+
+    def _first_non_recess_slot_index(self):
+        return next(i for i, s in enumerate(self.slots) if not s.get("is_recess"))
+
+    def test_teachers_on_duty_cero_no_genera_nada(self):
+        result = assign_tc_sessions(
+            teachers=[self.teacher],
+            existing_schedules=[],
+            weekly_slots=self.slots,
+            teachers_on_duty=0,
+            team=self.team,
+        )
+        self.assertEqual(result.tc_sessions, [])
+        self.assertEqual(result.warnings, [])
+
+    def test_docente_con_clase_excluido(self):
+        idx = self._first_non_recess_slot_index()
+        slot = self.slots[idx]
+        unsaved = self._make_unsaved_schedule(idx)
+
+        result = assign_tc_sessions(
+            teachers=[self.teacher],
+            existing_schedules=[unsaved],
+            weekly_slots=self.slots,
+            teachers_on_duty=1,
+            team=self.team,
+        )
+        # Teacher has class at this slot — should not get a TCSession there
+        slot_day = slot["start"].weekday()
+        slot_time = slot["start"].time()
+        conflict = any(
+            tc.day == slot_day and tc.start_time == slot_time
+            for tc in result.tc_sessions
+        )
+        self.assertFalse(conflict)
+
+    def test_docente_con_clase_solapada_excluido(self):
+        """TC at 11:30 must be blocked when teacher has class 11:00-12:00 (partial overlap)."""
+        from datetime import datetime, time, timezone
+
+        ref = datetime(2024, 1, 1, tzinfo=timezone.utc)  # Monday
+        schedule = SimpleNamespace(
+            teacher=self.teacher,
+            teacher_id=self.teacher.id,
+            start_time=ref.replace(hour=11, minute=0),
+            end_time=ref.replace(hour=12, minute=0),
+        )
+        # Build a TC slot at 11:30–12:00 manually
+        tc_slot = SimpleNamespace(
+            day=0,
+            start_time=time(11, 30),
+            end_time=time(12, 0),
+        )
+        from schedule.algorithm.tc_assigner import (
+            _compute_busy_intervals,
+            _overlaps_any,
+        )
+
+        busy = _compute_busy_intervals([schedule])
+        self.assertTrue(
+            _overlaps_any(
+                tc_slot.day,
+                tc_slot.start_time,
+                tc_slot.end_time,
+                busy.get(self.teacher.id, []),
+            ),
+            "Partial overlap not detected: class 11:00-12:00 should block TC at 11:30-12:00",
+        )
+
+    def test_docente_unavailable_excluido(self):
+        idx = self._first_non_recess_slot_index()
+        slot = self.slots[idx]
+        key = slot_instance_key(slot=slot)
+        self.teacher.time_preferences = {key: TeacherTimePreferenceState.UNAVAILABLE}
+        self.teacher.save()
+
+        result = assign_tc_sessions(
+            teachers=[self.teacher],
+            existing_schedules=[],
+            weekly_slots=self.slots,
+            teachers_on_duty=1,
+            team=self.team,
+        )
+        slot_day = slot["start"].weekday()
+        slot_time = slot["start"].time()
+        conflict = any(
+            tc.day == slot_day and tc.start_time == slot_time
+            for tc in result.tc_sessions
+        )
+        self.assertFalse(conflict)
+
+    def test_warning_cuando_hay_pocos_candidatos(self):
+        result = assign_tc_sessions(
+            teachers=[self.teacher],
+            existing_schedules=[],
+            weekly_slots=self.slots,
+            teachers_on_duty=2,  # only 1 teacher available
+            team=self.team,
+        )
+        self.assertTrue(len(result.warnings) > 0)
+        first_warning = result.warnings[0]
+        self.assertEqual(first_warning["required"], 2)
+        self.assertEqual(first_warning["assigned"], 1)
+
+    def test_sin_warning_cuando_cobertura_completa(self):
+        _, teacher2 = _make_team_and_teacher(email_prefix="tc-algo2")
+        teacher2.team = self.team
+        teacher2.save()
+
+        result = assign_tc_sessions(
+            teachers=[self.teacher, teacher2],
+            existing_schedules=[],
+            weekly_slots=self.slots,
+            teachers_on_duty=2,
+            team=self.team,
+        )
+        self.assertEqual(result.warnings, [])
+
+    def test_deduplicacion_slots_multietapa(self):
+        result = assign_tc_sessions(
+            teachers=[self.teacher],
+            existing_schedules=[],
+            weekly_slots=self.slots,
+            teachers_on_duty=1,
+            team=self.team,
+        )
+        # No TCSession should share (day, start_time) — deduplicated across stages
+        seen = set()
+        for tc in result.tc_sessions:
+            key = (tc.day, tc.start_time)
+            self.assertNotIn(
+                key,
+                seen,
+                "Overlapping TCSession found: same (day, start_time) assigned twice",
+            )
+            seen.add(key)
+
+    def test_invariante_no_solapamiento_schedule_tcsession(self):
+        idx = self._first_non_recess_slot_index()
+        unsaved = self._make_unsaved_schedule(idx)
+
+        result = assign_tc_sessions(
+            teachers=[self.teacher],
+            existing_schedules=[unsaved],
+            weekly_slots=self.slots,
+            teachers_on_duty=1,
+            team=self.team,
+        )
+        busy_slots = {(s.start_time.weekday(), s.start_time.time()) for s in [unsaved]}
+        for tc in result.tc_sessions:
+            self.assertNotIn(
+                (tc.day, tc.start_time),
+                busy_slots,
+                "TCSession overlaps with a Schedule slot",
+            )
+
+    def test_hueco_muerto_priorizado(self):
+        """Teacher with a dead gap (class before AND after) should appear before one without."""
+        _, teacher_no_gap = _make_team_and_teacher(email_prefix="tc-no-gap")
+        teacher_no_gap.team = self.team
+        teacher_no_gap.save()
+
+        # Give teacher_with_gap a class at slot 0 and slot 2 of Monday → slot 1 is a dead gap
+        non_recess = [s for s in self.slots if not s.get("is_recess")]
+        monday_slots = [s for s in non_recess if s["start"].weekday() == 0]
+        if len(monday_slots) < 3:
+            self.skipTest("Not enough Monday slots to test dead gap")
+
+        def _unsaved(slot):
+            return SimpleNamespace(
+                teacher=self.teacher,
+                teacher_id=self.teacher.id,
+                start_time=slot["start"],
+                end_time=slot["end"],
+            )
+
+        existing = [_unsaved(monday_slots[0]), _unsaved(monday_slots[2])]
+        gap_slot = monday_slots[1]
+
+        result = assign_tc_sessions(
+            teachers=[self.teacher, teacher_no_gap],
+            existing_schedules=existing,
+            weekly_slots=self.slots,
+            teachers_on_duty=1,
+            team=self.team,
+        )
+        gap_day = gap_slot["start"].weekday()
+        gap_time = gap_slot["start"].time()
+        gap_tc = [
+            tc
+            for tc in result.tc_sessions
+            if tc.day == gap_day and tc.start_time == gap_time
+        ]
+        if gap_tc:
+            self.assertEqual(gap_tc[0].teacher_id, self.teacher.id)
+
+
+# ---------------------------------------------------------------------------
+# TC API view tests
+# ---------------------------------------------------------------------------
+
+
+class TestTCSessionListView(AuthenticatedAdminAPIMixin, APITestCase):
+    def setUp(self):
+        self.authenticate_admin(email_prefix="tc-list")
+        self.teacher = Teacher.objects.create(
+            team=self.team, name="Profe Lista", max_weekly_hours=18
+        )
+
+    def _create_tc(self, day=0):
+        from datetime import time
+
+        return TCSession.objects.create(
+            teacher=self.teacher,
+            team=self.team,
+            day=day,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+
+    def test_lista_solo_sesiones_del_equipo(self):
+        self._create_tc()
+        _, other_team = self.create_isolated_user(email_prefix="tc-other")
+        other_teacher = Teacher.objects.create(
+            team=other_team, name="Otro", max_weekly_hours=10
+        )
+        from datetime import time
+
+        TCSession.objects.create(
+            teacher=other_teacher,
+            team=other_team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        response = self.client.get(reverse("tc-session-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+
+    def test_filtro_por_teacher(self):
+        self._create_tc()
+        teacher2 = Teacher.objects.create(
+            team=self.team, name="Profe2", max_weekly_hours=18
+        )
+        from datetime import time
+
+        TCSession.objects.create(
+            teacher=teacher2,
+            team=self.team,
+            day=1,
+            start_time=time(10, 0),
+            end_time=time(11, 0),
+        )
+        response = self.client.get(
+            reverse("tc-session-list"), {"teacher": self.teacher.id}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["teacher"], self.teacher.id)
+
+    def test_filtro_por_day(self):
+        self._create_tc(day=0)
+        self._create_tc(day=2)
+        response = self.client.get(reverse("tc-session-list"), {"day": 2})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["day"], 2)
+
+    def test_requiere_autenticacion(self):
+        self.client.force_authenticate(None)
+        response = self.client.get(reverse("tc-session-list"))
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class TestTCSessionCreateView(AuthenticatedAdminAPIMixin, APITestCase):
+    def setUp(self):
+        self.authenticate_admin(email_prefix="tc-create")
+        self.teacher = Teacher.objects.create(
+            team=self.team, name="Profe Create", max_weekly_hours=18
+        )
+        self.classroom = Classroom.objects.create(name="Aula", team=self.team)
+        self.group = Group.objects.create(
+            name="1A", stage=EducationalStage.PRIMARY, team=self.team
+        )
+
+    def _payload(self, **overrides):
+        data = {
+            "teacher": self.teacher.id,
+            "day": 0,
+            "start_time": "09:00",
+            "end_time": "10:00",
+        }
+        data.update(overrides)
+        return data
+
+    def test_crear_tc_session_ok(self):
+        response = self.client.post(
+            reverse("tc-session-create"), self._payload(), format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("tc_session", response.data)
+        self.assertEqual(TCSession.objects.filter(team=self.team).count(), 1)
+
+    def test_crear_tc_session_conflicto_schedule(self):
+        start_dt, end_dt = _next_monday_slot(9, 10)
+        sch = Schedule.objects.create(
+            name="Math",
+            start_time=start_dt,
+            end_time=end_dt,
+            teacher=self.teacher,
+            classroom=self.classroom,
+            group=self.group,
+            team=self.team,
+            created_by="test",
+            updated_by="test",
+            observations="",
+        )
+        sch.users.add(self.user)
+
+        response = self.client.post(
+            reverse("tc-session-create"),
+            self._payload(day=0, start_time="09:00", end_time="10:00"),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_crear_tc_session_conflicto_tc_existente(self):
+        from datetime import time
+
+        TCSession.objects.create(
+            teacher=self.teacher,
+            team=self.team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        response = self.client.post(
+            reverse("tc-session-create"), self._payload(), format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_crear_tc_session_unavailable(self):
+        slots = build_weekly_slots()
+        monday_slot = next(
+            s
+            for s in slots
+            if s["start"].weekday() == 0
+            and s["start"].time().hour == 9
+            and not s.get("is_recess")
+        )
+        key = slot_instance_key(slot=monday_slot)
+        self.teacher.time_preferences = {key: TeacherTimePreferenceState.UNAVAILABLE}
+        self.teacher.save()
+
+        response = self.client.post(
+            reverse("tc-session-create"), self._payload(), format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_crear_tc_session_warning_horas_exactas(self):
+        teacher_exact = Teacher.objects.create(
+            team=self.team,
+            name="Profe Exact",
+            max_weekly_hours=1,
+            weekly_hours_exact=True,
+        )
+        # Create 1h TC to fill the quota, then add another
+        from datetime import time
+
+        TCSession.objects.create(
+            teacher=teacher_exact,
+            team=self.team,
+            day=1,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        response = self.client.post(
+            reverse("tc-session-create"),
+            {
+                "teacher": teacher_exact.id,
+                "day": 0,
+                "start_time": "09:00",
+                "end_time": "10:00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("warning", response.data)
+
+
+class TestTCSessionDeleteView(AuthenticatedAdminAPIMixin, APITestCase):
+    def setUp(self):
+        self.authenticate_admin(email_prefix="tc-delete")
+        self.teacher = Teacher.objects.create(
+            team=self.team, name="Profe Delete", max_weekly_hours=18
+        )
+
+    def _create_tc(self, **kwargs):
+        from datetime import time
+
+        defaults = dict(
+            teacher=self.teacher,
+            team=self.team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        defaults.update(kwargs)
+        return TCSession.objects.create(**defaults)
+
+    def test_eliminar_tc_session_ok(self):
+        tc = self._create_tc()
+        response = self.client.delete(
+            reverse("tc-session-delete", kwargs={"pk": tc.pk})
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["deleted"])
+        self.assertFalse(TCSession.objects.filter(pk=tc.pk).exists())
+
+    def test_eliminar_tc_session_warning_horas_exactas(self):
+        teacher_exact = Teacher.objects.create(
+            team=self.team,
+            name="Exact",
+            max_weekly_hours=2,
+            weekly_hours_exact=True,
+        )
+        from datetime import time
+
+        tc = TCSession.objects.create(
+            teacher=teacher_exact,
+            team=self.team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        response = self.client.delete(
+            reverse("tc-session-delete", kwargs={"pk": tc.pk})
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("warning", response.data)
+
+    def test_eliminar_tc_session_otro_equipo(self):
+        _, other_team = self.create_isolated_user(email_prefix="tc-del-other")
+        other_teacher = Teacher.objects.create(
+            team=other_team, name="Otro", max_weekly_hours=10
+        )
+        from datetime import time
+
+        tc = TCSession.objects.create(
+            teacher=other_teacher,
+            team=other_team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        response = self.client.delete(
+            reverse("tc-session-delete", kwargs={"pk": tc.pk})
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class TestTCSessionSwapView(AuthenticatedAdminAPIMixin, APITestCase):
+    def setUp(self):
+        self.authenticate_admin(email_prefix="tc-swap")
+        self.teacher_a = Teacher.objects.create(
+            team=self.team, name="Profe A", max_weekly_hours=18
+        )
+        self.teacher_b = Teacher.objects.create(
+            team=self.team, name="Profe B", max_weekly_hours=18
+        )
+        self.classroom = Classroom.objects.create(name="Aula", team=self.team)
+        self.group = Group.objects.create(
+            name="1A", stage=EducationalStage.PRIMARY, team=self.team
+        )
+
+    def _create_tc(self, teacher, day, hour_start=9, hour_end=10):
+        from datetime import time
+
+        return TCSession.objects.create(
+            teacher=teacher,
+            team=self.team,
+            day=day,
+            start_time=time(hour_start, 0),
+            end_time=time(hour_end, 0),
+        )
+
+    def _swap(self, tc_a, tc_b):
+        return self.client.post(
+            reverse("tc-session-swap"),
+            {"tc_session_a": tc_a.pk, "tc_session_b": tc_b.pk},
+            format="json",
+        )
+
+    def test_swap_ok(self):
+        tc_a = self._create_tc(self.teacher_a, day=0)
+        tc_b = self._create_tc(self.teacher_b, day=1)
+        response = self._swap(tc_a, tc_b)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        tc_a.refresh_from_db()
+        tc_b.refresh_from_db()
+        self.assertEqual(tc_a.day, 1)
+        self.assertEqual(tc_b.day, 0)
+
+    def test_swap_mismo_docente_distinto_slot(self):
+        tc_a = self._create_tc(self.teacher_a, day=0)
+        tc_b = self._create_tc(self.teacher_a, day=1)
+        response = self._swap(tc_a, tc_b)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        tc_a.refresh_from_db()
+        self.assertEqual(tc_a.day, 1)
+
+    def test_swap_distinta_duracion(self):
+        tc_a = self._create_tc(self.teacher_a, day=0, hour_start=9, hour_end=10)
+        tc_b = self._create_tc(self.teacher_b, day=1, hour_start=9, hour_end=11)
+        response = self._swap(tc_a, tc_b)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_swap_conflicto_schedule_docente_a(self):
+        tc_a = self._create_tc(self.teacher_a, day=0)
+        tc_b = self._create_tc(self.teacher_b, day=1)
+        # Give teacher_a a class at slot B (day=1, 09:00)
+        start_dt, end_dt = _next_monday_slot(9, 10)
+        tuesday = start_dt + timedelta(days=1)
+        tuesday_end = end_dt + timedelta(days=1)
+        sch = Schedule.objects.create(
+            name="Conflict",
+            start_time=tuesday,
+            end_time=tuesday_end,
+            teacher=self.teacher_a,
+            classroom=self.classroom,
+            group=self.group,
+            team=self.team,
+            created_by="test",
+            updated_by="test",
+            observations="",
+        )
+        sch.users.add(self.user)
+        response = self._swap(tc_a, tc_b)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_swap_conflicto_schedule_docente_b(self):
+        tc_a = self._create_tc(self.teacher_a, day=0)
+        tc_b = self._create_tc(self.teacher_b, day=1)
+        # Give teacher_b a class at slot A (day=0, 09:00)
+        start_dt, end_dt = _next_monday_slot(9, 10)
+        sch = Schedule.objects.create(
+            name="Conflict B",
+            start_time=start_dt,
+            end_time=end_dt,
+            teacher=self.teacher_b,
+            classroom=self.classroom,
+            group=self.group,
+            team=self.team,
+            created_by="test",
+            updated_by="test",
+            observations="",
+        )
+        sch.users.add(self.user)
+        response = self._swap(tc_a, tc_b)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_swap_unavailable_docente_a(self):
+        slots = build_weekly_slots()
+        tuesday_slot = next(
+            s
+            for s in slots
+            if s["start"].weekday() == 1
+            and s["start"].time().hour == 9
+            and not s.get("is_recess")
+        )
+        key = slot_instance_key(slot=tuesday_slot)
+        self.teacher_a.time_preferences = {key: TeacherTimePreferenceState.UNAVAILABLE}
+        self.teacher_a.save()
+
+        tc_a = self._create_tc(self.teacher_a, day=0)
+        tc_b = self._create_tc(self.teacher_b, day=1)
+        response = self._swap(tc_a, tc_b)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_swap_unavailable_docente_b(self):
+        slots = build_weekly_slots()
+        monday_slot = next(
+            s
+            for s in slots
+            if s["start"].weekday() == 0
+            and s["start"].time().hour == 9
+            and not s.get("is_recess")
+        )
+        key = slot_instance_key(slot=monday_slot)
+        self.teacher_b.time_preferences = {key: TeacherTimePreferenceState.UNAVAILABLE}
+        self.teacher_b.save()
+
+        tc_a = self._create_tc(self.teacher_a, day=0)
+        tc_b = self._create_tc(self.teacher_b, day=1)
+        response = self._swap(tc_a, tc_b)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_swap_tc_session_otro_equipo(self):
+        _, other_team = self.create_isolated_user(email_prefix="tc-swap-other")
+        other_teacher = Teacher.objects.create(
+            team=other_team, name="Otro", max_weekly_hours=10
+        )
+        from datetime import time
+
+        tc_other = TCSession.objects.create(
+            teacher=other_teacher,
+            team=other_team,
+            day=1,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        tc_own = self._create_tc(self.teacher_a, day=0)
+        response = self._swap(tc_own, tc_other)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
