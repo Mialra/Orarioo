@@ -598,7 +598,7 @@ def create_subjects(teachers, groups, team):  # noqa: C901
             ]
         )
 
-    # ── Primaria 1º-4º (25h/semana) ─────────────────────────────────────────
+    # ── Primaria 1º-4º (25 sesiones/semana) ────────────────────────────────
     for idx, grade in enumerate(
         ["1º Primaria", "2º Primaria", "3º Primaria", "4º Primaria"], start=1
     ):
@@ -699,6 +699,14 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "time_preferences": build_subject_time_preferences(
                         prefer_no=pri_last,
                     ),
+                },
+                {
+                    "name": f"Tutoría {grade}",
+                    "weekly_hours": 1,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
                 },
             ]
         )
@@ -808,17 +816,25 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                         prefer_yes=pri_afternoon,
                     ),
                 },
+                {
+                    "name": f"Tutoría {grade}",
+                    "weekly_hours": 1,
+                    "duration": 1.0,
+                    "stage": EducationalStage.PRIMARY,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                },
             ]
         )
 
-    # ── ESO 1º-4º (30h/semana) ───────────────────────────────────────────────
+    # ── ESO 1º-4º ────────────────────────────────────────────────────────────
     eso_block = [
-        ("1º ESO", "Biología y Geología", "eso_bio"),
-        ("2º ESO", "Física y Química", "eso_fq"),
-        ("3º ESO", "Física y Química", "eso_fq"),
-        ("4º ESO", "Biología y Geología", "eso_bio"),
+        ("1º ESO", "Biología y Geología", "eso_bio", "eso_lengua"),
+        ("2º ESO", "Física y Química", "eso_fq", "eso_mates"),
+        ("3º ESO", "Física y Química", "eso_fq", "eso_social"),
+        ("4º ESO", "Biología y Geología", "eso_bio", "eso_bio"),
     ]
-    for grade, science_name, science_teacher in eso_block:
+    for grade, science_name, science_teacher, tutor_key in eso_block:
         subjects_data.extend(
             [
                 {
@@ -925,6 +941,22 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                     "time_preferences": build_subject_time_preferences(
                         prefer_no=sec_last,
                     ),
+                },
+                {
+                    "name": f"Tutoría {grade}",
+                    "weekly_hours": 1,
+                    "duration": 1.0,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": tutor_key,
+                    "group_name": grade,
+                },
+                {
+                    "name": f"Libre Elección Curricular {grade}",
+                    "weekly_hours": 3,
+                    "duration": 1.0,
+                    "stage": EducationalStage.SECONDARY,
+                    "teacher_key": "eso_social",
+                    "group_name": grade,
                 },
             ]
         )
