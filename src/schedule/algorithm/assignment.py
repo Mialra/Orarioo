@@ -106,11 +106,17 @@ def solve_session_assignment(
 
 def _apply_option_constraints(*, model, x, sessions, slots, opts):
     if opts.get("enable_no_intraday_gaps", True):
-        add_group_no_intraday_gap_constraints(model=model, x=x, sessions=sessions, slots=slots)
+        add_group_no_intraday_gap_constraints(
+            model=model, x=x, sessions=sessions, slots=slots
+        )
     if opts.get("enable_subject_unavailable_times", True):
-        add_subject_time_hard_constraints(model=model, x=x, sessions=sessions, slots=slots)
+        add_subject_time_hard_constraints(
+            model=model, x=x, sessions=sessions, slots=slots
+        )
     if opts.get("enable_teacher_unavailable_times", True):
-        add_teacher_time_hard_constraints(model=model, x=x, sessions=sessions, slots=slots)
+        add_teacher_time_hard_constraints(
+            model=model, x=x, sessions=sessions, slots=slots
+        )
 
 
 def _cp_sat_session_assignment(
@@ -201,7 +207,9 @@ def _cp_sat_session_assignment(
         slots=slots,
     )
     opts = generation_options or {}
-    _apply_option_constraints(model=model, x=x, sessions=sessions, slots=slots, opts=opts)
+    _apply_option_constraints(
+        model=model, x=x, sessions=sessions, slots=slots, opts=opts
+    )
 
     feasible_timeout = None
     optimization_timeout = _resolve_optimization_timeout_seconds(

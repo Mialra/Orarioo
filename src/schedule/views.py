@@ -374,9 +374,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
     def _fetch_tc_sessions_for_export(self, params, saved_name):
         from schedule.models import TCSession
 
-        tc_qs = TCSession.objects.filter(
-            team=self.get_active_team()
-        ).select_related("teacher")
+        tc_qs = TCSession.objects.filter(team=self.get_active_team()).select_related(
+            "teacher"
+        )
         source = params["source"]
         if source == "generated":
             tc_qs = tc_qs.filter(observations="")
@@ -403,7 +403,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         saved_name = (params.get("saved_timetable_name") or "").strip()
         queryset = self.get_queryset().order_by("start_time", "id")
         queryset = self._resolve_source_queryset(queryset, params["source"])
-        queryset = self._apply_export_queryset_filters(queryset, params, saved_name, request)
+        queryset = self._apply_export_queryset_filters(
+            queryset, params, saved_name, request
+        )
 
         include_tc = bool(params.get("include_tc"))
         card_filters = params.get("card_filters") or {}

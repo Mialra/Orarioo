@@ -196,7 +196,9 @@ def _build_tc_roster_unit(tc_sessions):
     }
 
 
-def _build_entity_name_and_stage_maps(entity_type, model_cls, selected_ids, active_team):
+def _build_entity_name_and_stage_maps(
+    entity_type, model_cls, selected_ids, active_team
+):
     if entity_type == "group":
         group_objs = list(
             model_cls.objects.filter(
@@ -218,7 +220,9 @@ def _build_entity_name_and_stage_maps(entity_type, model_cls, selected_ids, acti
     return name_map, stage_map
 
 
-def _build_card_export_units(queryset, filters, export_entity_config, active_team, tc_by_teacher_id):
+def _build_card_export_units(
+    queryset, filters, export_entity_config, active_team, tc_by_teacher_id
+):
     units = []
     for entity_type in EXPORT_ENTITY_ORDER:
         config = export_entity_config[entity_type]
