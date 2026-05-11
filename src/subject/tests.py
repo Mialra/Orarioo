@@ -2,10 +2,11 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from common.stages import EducationalStage
 from common.test_utils import AuthenticatedAdminAPIMixin
 from group.models import EducationalStage as GroupEducationalStage
 from group.models import Group
-from subject.models import EducationalStage, Subject, SubjectType
+from subject.models import Subject, SubjectType
 from teacher.models import Teacher
 
 
@@ -30,7 +31,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "Mathematics",
             "weekly_hours": 5,
             "preferred_time_slot": "Morning",
-            "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -48,7 +48,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=4,
             duration=1.0,
-            stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -62,13 +61,13 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
         self.assertEqual(detail_response.data["name"], "Science")
         self.assertEqual(detail_response.data["stage"], EducationalStage.SECONDARY)
+        self.assertEqual(detail_response.data["stage_color"], "orange")
 
     def test_update_subject(self):
         subject = Subject.objects.create(
             name="History",
             weekly_hours=3,
             duration=1.0,
-            stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -79,8 +78,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "History Updated",
             "weekly_hours": 4,
             "preferred_time_slot": "Afternoon",
-            "stage": EducationalStage.PRIMARY,
-            "type": SubjectType.TC,
+            "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
         }
@@ -93,14 +91,13 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         subject.refresh_from_db()
         self.assertEqual(subject.name, "History Updated")
         self.assertEqual(subject.weekly_hours, 4)
-        self.assertEqual(subject.type, SubjectType.TC)
+        self.assertEqual(subject.type, SubjectType.NORMAL)
 
     def test_delete_subject(self):
         subject = Subject.objects.create(
             name="Art",
             weekly_hours=2,
             duration=1.0,
-            stage=EducationalStage.PRESCHOOL,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -117,7 +114,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "Invalid Subject",
             "weekly_hours": 3,
             "duration": -1.0,
-            "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -132,7 +128,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         payload = {
             "name": "Invalid Subject",
             "weekly_hours": -5,
-            "stage": EducationalStage.PRIMARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -148,7 +143,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Physics",
             weekly_hours=4,
             duration=1.5,
-            stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -163,7 +157,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         payload = {
             "name": "Sin curso",
             "weekly_hours": 3,
-            "stage": EducationalStage.SECONDARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
         }
@@ -177,7 +170,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         payload = {
             "name": "   ",
             "weekly_hours": 3,
-            "stage": EducationalStage.SECONDARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -193,7 +185,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "Biology",
             "weekly_hours": 3,
             "preferred_time_slot": "  Morning  ",
-            "stage": EducationalStage.SECONDARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -209,7 +200,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Historia",
             weekly_hours=3,
             duration=1.0,
-            stage=EducationalStage.SECONDARY,
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -219,7 +209,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         payload = {
             "name": "historia",
             "weekly_hours": 2,
-            "stage": EducationalStage.SECONDARY,
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -230,23 +219,70 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("name", response.data)
 
-    def test_allow_same_name_as_teacher_in_different_entity(self):
-        teacher_named_pedro = Teacher.objects.create(
-            name="Pedro",
-            max_weekly_hours=20,
-            working_hours=10,
+    def test_allow_same_name_in_different_team(self):
+        Subject.objects.create(
+            name="Historia Compartida",
+            weekly_hours=3,
+            duration=1.0,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=self.group,
+            team=self.team,
+        )
+        other_user, other_team = self.create_isolated_user(
+            email_prefix="subject-api-other"
+        )
+        other_teacher = Teacher.objects.create(
+            name="Other Teacher",
+            max_weekly_hours=40,
+            working_hours=20,
+            team=other_team,
+        )
+        other_group = Group.objects.create(
+            name="2º ESO B",
+            stage=GroupEducationalStage.SECONDARY,
+            team=other_team,
+        )
+        self.client.force_authenticate(other_user)
+
+        response = self.client.post(
+            reverse("subject-list"),
+            {
+                "name": "historia compartida",
+                "weekly_hours": 2,
+                "type": SubjectType.NORMAL,
+                "teacher": other_teacher.id,
+                "group": other_group.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            Subject.objects.filter(name__iexact="Historia Compartida").count(), 2
+        )
+        self.assertTrue(
+            Subject.objects.filter(
+                name__iexact="Historia Compartida",
+                team=other_team,
+            ).exists()
+        )
+
+    def test_list_summary_options_include_type(self):
+        Subject.objects.create(
+            name="Tutoria",
+            weekly_hours=1,
+            duration=1.0,
+            type=SubjectType.NORMAL,
+            teacher=self.teacher,
+            group=self.group,
             team=self.team,
         )
 
-        payload = {
-            "name": "Pedro",
-            "weekly_hours": 2,
-            "stage": EducationalStage.SECONDARY,
-            "type": SubjectType.NORMAL,
-            "teacher": teacher_named_pedro.id,
-            "group": self.group.id,
-        }
+        response = self.client.get(reverse("subject-list") + "?summary=options")
 
-        response = self.client.post(reverse("subject-list"), payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], "Tutoria")
+        self.assertEqual(response.data[0]["type"], SubjectType.NORMAL)
+        self.assertEqual(set(response.data[0].keys()), {"id", "name", "type"})

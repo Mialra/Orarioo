@@ -28,39 +28,55 @@
                         <form id="signup-form" class="d-grid gap-3" novalidate>
                             <div class="row g-3">
                                 <div class="col-12 col-md-6">
-                                    <label class="form-label fw-semibold" for="given_name">Nombre</label>
+                                    <div class="d-flex align-items-center gap-1 mb-1">
+                                        <label class="form-label fw-semibold mb-0" for="given_name">Nombre</label>
+                                        <span class="text-danger">*</span>
+                                    </div>
                                     <input id="given_name"
                                            name="given_name"
                                            class="form-control form-control-lg"
                                            type="text"
                                            autocomplete="given-name"
-                                           placeholder="Juan"
+                                           placeholder="Ej: Juan"
+                                           maxlength="{{ string_max_length }}"
                                            required>
+                                    <div id="given_name_error" class="invalid-feedback"></div>
                                 </div>
                                 <div class="col-12 col-md-6">
-                                    <label class="form-label fw-semibold" for="family_name">Apellidos</label>
+                                    <div class="d-flex align-items-center gap-1 mb-1">
+                                        <label class="form-label fw-semibold mb-0" for="family_name">Apellidos</label>
+                                    </div>
                                     <input id="family_name"
                                            name="family_name"
                                            class="form-control form-control-lg"
                                            type="text"
                                            autocomplete="family-name"
-                                           placeholder="García"
-                                           required>
+                                           placeholder="Ej: García"
+                                           maxlength="{{ string_max_length }}">
+                                    <div id="family_name_error" class="invalid-feedback"></div>
                                 </div>
                             </div>
                             <div>
-                                <label class="form-label fw-semibold" for="email">Correo electrónico</label>
+                                <div class="d-flex align-items-center gap-1 mb-1">
+                                    <label class="form-label fw-semibold mb-0" for="email">Correo electrónico</label>
+                                    <span class="text-danger">*</span>
+                                </div>
                                 <input id="email"
                                        name="email"
                                        class="form-control form-control-lg"
                                        type="email"
                                        inputmode="email"
                                        autocomplete="email"
-                                       placeholder="usuario@escuela.edu"
+                                       placeholder="Ej: usuario@escuela.edu"
+                                       maxlength="{{ max_length_extended }}"
                                        required>
+                                <div id="email_error" class="invalid-feedback"></div>
                             </div>
                             <div>
-                                <label class="form-label fw-semibold" for="password">Contraseña</label>
+                                <div class="d-flex align-items-center gap-1 mb-1">
+                                    <label class="form-label fw-semibold mb-0" for="password">Contraseña</label>
+                                    <span class="text-danger">*</span>
+                                </div>
                                 <div class="input-group input-group-lg">
                                     <input id="password"
                                            name="password"
@@ -76,10 +92,14 @@
                                             title="Mostrar contraseña">
                                         <span class="password-toggle-icon-slot" aria-hidden="true"></span>
                                     </button>
+                                    <div id="password_error" class="invalid-feedback"></div>
                                 </div>
                             </div>
                             <div>
-                                <label class="form-label fw-semibold" for="password_confirm">Confirmar contraseña</label>
+                                <div class="d-flex align-items-center gap-1 mb-1">
+                                    <label class="form-label fw-semibold mb-0" for="password_confirm">Confirmar contraseña</label>
+                                    <span class="text-danger">*</span>
+                                </div>
                                 <div class="input-group input-group-lg">
                                     <input id="password_confirm"
                                            name="password_confirm"
@@ -95,6 +115,7 @@
                                             title="Mostrar contraseña">
                                         <span class="password-toggle-icon-slot" aria-hidden="true"></span>
                                     </button>
+                                    <div id="password_confirm_error" class="invalid-feedback"></div>
                                 </div>
                             </div>
                             <div class="form-check mt-1">
@@ -110,8 +131,9 @@
                                     <a href="{% url 'privacy-policy' %}"
                                        class="auth-link-btn fw-semibold"
                                        target="_self">Política de Privacidad</a>
-                                    <span class="text-danger fw-semibold" aria-label="requerido">*</span>
+                                    <span class="text-danger">*</span>
                                 </label>
+                                <div id="privacy_policy_accepted_error" class="invalid-feedback"></div>
                             </div>
                             <div class="form-check mt-1">
                                 <input class="form-check-input"
@@ -128,6 +150,7 @@
                                        target="_self">Términos y Condiciones de Uso</a>
                                     <span class="text-danger fw-semibold" aria-label="requerido">*</span>
                                 </label>
+                                <div id="terms_conditions_accepted_error" class="invalid-feedback"></div>
                             </div>
                             <button id="signup-submit"
                                     class="btn btn-primary btn-lg auth-submit"
@@ -157,5 +180,7 @@
     </main>
 {% endblock content %}
 {% block extra_scripts %}
+    <script src="{% static 'js/validators.js' %}"></script>
+    <script src="{% static 'js/error-handler.js' %}?v=20260502_email_validation"></script>
     <script src="{% static 'js/signup.js' %}"></script>
 {% endblock extra_scripts %}

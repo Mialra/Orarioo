@@ -380,6 +380,29 @@
     padding: 2.9rem 1.2rem;
 }
 
+.orarioo-toast {
+    position: fixed;
+    top: 1.25rem;
+    right: 1.25rem;
+    z-index: 1090;
+    background: #16a34a;
+    color: #fff;
+    padding: 0.6rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateX(120%);
+    opacity: 0;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+    pointer-events: none;
+}
+
+.orarioo-toast.orarioo-toast--visible {
+    transform: translateX(0);
+    opacity: 1;
+}
+
 @media (max-width: 991.98px) {
     .dash-brand {
         margin-bottom: 0.75rem;

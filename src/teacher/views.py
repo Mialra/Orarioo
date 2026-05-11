@@ -1,24 +1,18 @@
-from django.db.models.functions import Lower
-from rest_framework.pagination import PageNumberPagination
+"""
+Admin page entrypoint and API viewset for teachers.
+"""
 
-from common.drf import TeamScopedAuditableModelViewSet
-from main.views import render_admin_dashboard
+from django.db.models.functions import Lower
+
+from common.admin import StandardTeamScopedCrudViewSet, build_admin_tab_view
 from teacher.models import Teacher
 from teacher.serializers import TeacherSerializer
 
-
-def admin_teachers(request):
-    return render_admin_dashboard(request, "teachers")
+admin_teachers = build_admin_tab_view("teachers")
 
 
-class TeacherViewSet(TeamScopedAuditableModelViewSet):
+class TeacherViewSet(StandardTeamScopedCrudViewSet):
     """CRUD API for teachers."""
-
-    class TeacherPagination(PageNumberPagination):
-        page_size = 9
-        page_size_query_param = "page_size"
-        max_page_size = 100
 
     queryset = Teacher.objects.all().order_by(Lower("name"), "id")
     serializer_class = TeacherSerializer
-    pagination_class = TeacherPagination

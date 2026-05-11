@@ -1,6 +1,12 @@
+/**
+ * Application shell: guards authenticated routes and handles logout on every page.
+ */
 (function () {
   const logoutButton = document.getElementById("logout-button");
 
+  /**
+   * Redirects to sign-in if no valid session exists or the /api/users/me/ check fails.
+   */
   async function ensureAuthenticated() {
     const tokens = window.orariooAuth.getTokens();
     if (!tokens.access && !tokens.refresh) {
@@ -8,23 +14,16 @@
       return;
     }
     try {
-      const response = await window.orariooAuth.apiFetch("/api/users/me/", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        window.orariooAuth.clearAuthSession();
-        window.location.replace("/sign-in/");
-      }
+      await window.orariooAuth.fetchCurrentUser();
     } catch (error) {
       window.orariooAuth.clearAuthSession();
       window.location.replace("/sign-in/");
     }
   }
 
+  /**
+   * Calls the logout endpoint, clears the local auth session, and redirects to sign-in.
+   */
   async function logout() {
     const tokens = window.orariooAuth.getTokens();
 

@@ -1,3 +1,6 @@
+/**
+ * Audit log page: filterable, paginated change-history table with date-range picker and CSV/PDF export.
+ */
 (function () {
     const filtersForm = document.getElementById("audit-filters-form");
     const entityFilter = document.getElementById("audit-filter-entity");
@@ -8,8 +11,6 @@
         document.querySelectorAll("[data-audit-range-preset]")
     );
     const resetFiltersButton = document.getElementById("audit-reset-filters");
-    const exportCsvButton = document.getElementById("audit-export-csv");
-    const exportPdfButton = document.getElementById("audit-export-pdf");
     const tableBody = document.getElementById("audit-table-body");
     const errorNode = document.getElementById("audit-error");
     const paginationNode = document.getElementById("audit-pagination");
@@ -38,6 +39,10 @@
             ? new window.bootstrap.Modal(detailModalElement)
             : null;
 
+    /**
+     * Shows or hides the page-level error banner with the given message.
+     * Input: message - error string; empty string clears the banner
+     */
     function setError(message) {
         if (!errorNode) {
             return;
@@ -53,6 +58,10 @@
         errorNode.classList.remove("d-none");
     }
 
+    /**
+     * Replaces the table body with a single full-width loading/message row.
+     * Input: message - text to display in the placeholder row
+     */
     function setLoading(message) {
         tableBody.innerHTML = "";
         const row = document.createElement("tr");
@@ -64,15 +73,11 @@
         tableBody.appendChild(row);
     }
 
-    function escapeHtml(value) {
-        return String(value || "")
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;")
-            .replaceAll('"', "&quot;")
-            .replaceAll("'", "&#39;");
-    }
-
+    /**
+     * Formats an ISO date string as a localised es-ES date-time string.
+     * Input: value - ISO date string or null/undefined
+     * Output: formatted date string, or "-" for empty/invalid input
+     */
     function toDisplayDate(value) {
         if (!value) {
             return "-";
@@ -93,7 +98,7 @@
     }
 
     function normalizeToken(value) {
-        return String(value || "")
+        return String(value ?? "")
             .toLowerCase()
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")
@@ -121,9 +126,14 @@
         if (value === "preschool") {
             return "Infantil";
         }
-        return String(rawValue || "");
+        return String(rawValue ?? "");
     }
 
+    /**
+     * Converts an audit field value (scalar, array, or object) to a human-readable string.
+     * Input: value - any audit field value
+     * Output: display string, or "-" for null/empty values
+     */
     function formatAuditValue(value) {
         if (Array.isArray(value)) {
             return value.length
@@ -195,6 +205,11 @@
         return localizeDisplayToken(value);
     }
 
+    /**
+     * Formats a single audit change object into a field name and descriptive text pair.
+     * Input: change - object with campo, valor_anterior, and/or valor_nuevo
+     * Output: object with field and text string properties
+     */
     function formatAuditChangeLine(change) {
         const field = change.campo || "Campo";
         const previousValue = formatAuditValue(change.valor_anterior);
@@ -223,6 +238,11 @@
         };
     }
 
+    /**
+     * Filters team-related changes and formats the remaining entries into display line objects.
+     * Input: changes - array of change objects with campo, valor_anterior, valor_nuevo
+     * Output: array of { field, text } objects, or "-" if no displayable changes
+     */
     function formatAuditChanges(changes) {
         if (!Array.isArray(changes) || !changes.length) {
             return "-";
@@ -303,6 +323,10 @@
             .replace(/\s+(Campos modificados:)/i, "\n$1");
     }
 
+    /**
+     * Opens the audit detail modal for the entry at the given index in currentResults.
+     * Input: index - numeric index into state.currentResults
+     */
     function openAuditDetailModal(index) {
         const entry = state.currentResults[index];
         if (!entry || !detailModal || !detailBody || !detailSubtitle) {
@@ -324,9 +348,9 @@
                     .map(function (line) {
                         return (
                             "<li><strong>" +
-                            escapeHtml(line.field) +
+                            window.OrariooErrorHandler.escapeHtml(line.field) +
                             ":</strong> " +
-                            escapeHtml(line.text) +
+                            window.OrariooErrorHandler.escapeHtml(line.text) +
                             "</li>"
                         );
                     })
@@ -337,31 +361,11 @@
         detailModal.show();
     }
 
-    function parseApiError(payload, fallbackMessage) {
-        if (!payload) {
-            return fallbackMessage;
-        }
-
-        if (typeof payload.detail === "string" && payload.detail.trim()) {
-            return payload.detail;
-        }
-
-        const firstKey = Object.keys(payload)[0];
-        if (!firstKey) {
-            return fallbackMessage;
-        }
-
-        const value = payload[firstKey];
-        if (Array.isArray(value) && value.length > 0) {
-            return String(value[0]);
-        }
-        if (typeof value === "string") {
-            return value;
-        }
-
-        return fallbackMessage;
-    }
-
+    /**
+     * Returns the CSS class string for an audit action badge based on the action type.
+     * Input: action - action type string (e.g. "creacion", "modificacion", "borrado")
+     * Output: CSS class string
+     */
     function getActionBadgeClass(action) {
         const normalized = normalizeToken(action);
 
@@ -492,21 +496,21 @@
             const row = document.createElement("tr");
             row.innerHTML =
                 "<td>" +
-                escapeHtml(toDisplayDate(entry.fecha)) +
+                window.OrariooErrorHandler.escapeHtml(toDisplayDate(entry.fecha)) +
                 "</td>" +
                 "<td>" +
-                escapeHtml(entry.usuario || "-") +
+                window.OrariooErrorHandler.escapeHtml(entry.usuario || "-") +
                 "</td>" +
                 "<td>" +
-                escapeHtml(entry.tipo_entidad || "-") +
+                window.OrariooErrorHandler.escapeHtml(entry.tipo_entidad || "-") +
                 "</td>" +
                 "<td><span class=\"" +
                 getActionBadgeClass(actionLabel) +
                 "\">" +
-                escapeHtml(actionLabel) +
+                window.OrariooErrorHandler.escapeHtml(actionLabel) +
                 "</span></td>" +
                 "<td class=\"audit-cell-detail\">" +
-                escapeHtml(detailText) +
+                window.OrariooErrorHandler.escapeHtml(detailText) +
                 "</td>" +
                 "<td><button type=\"button\" class=\"btn btn-sm btn-outline-secondary audit-detail-button\" data-audit-detail-index=\"" +
                 String(index) +
@@ -705,6 +709,9 @@
                             state.datePickerInstance.set("minDate", state.dateAbsoluteMin);
                         }
                         setDateRangeSelection("", "");
+                        fetchAuditEntries(1).catch(function (error) {
+                            setError(error.message || "No se pudo cargar el registro de cambios.");
+                        });
                         return;
                     }
 
@@ -719,11 +726,17 @@
 
                     if (selectedDates.length === 2 && state.datePickerInstance) {
                         state.datePickerInstance.set("minDate", state.dateAbsoluteMin);
+                        fetchAuditEntries(1).catch(function (error) {
+                            setError(error.message || "No se pudo cargar el registro de cambios.");
+                        });
                     }
                 },
                 onClose: function (selectedDates) {
                     if (Array.isArray(selectedDates) && selectedDates.length === 1) {
                         setDateRangeSelection(toIsoDate(selectedDates[0]), "");
+                        fetchAuditEntries(1).catch(function (error) {
+                            setError(error.message || "No se pudo cargar el registro de cambios.");
+                        });
                     }
                 },
             });
@@ -759,7 +772,7 @@
         });
 
         if (!response.ok) {
-            throw new Error(parseApiError(payload, "No se pudieron cargar los usuarios."));
+            throw new Error(window.OrariooErrorHandler.parseApiError(payload, { fallbackMessage: "No se pudieron cargar los usuarios." }).message);
         }
 
         if (!userFilter) {
@@ -792,7 +805,7 @@
 
         if (!response.ok) {
             throw new Error(
-                parseApiError(payload, "No se pudo cargar el registro de cambios.")
+                window.OrariooErrorHandler.parseApiError(payload, { fallbackMessage: "No se pudo cargar el registro de cambios." }).message
             );
         }
 
@@ -804,10 +817,15 @@
         updatePagination();
     }
 
-    async function exportAudit(format) {
+    async function exportAudit(format, selectedColumns) {
         const params = buildQueryParams({ page: 1 });
         params.set("export_format", format);
         params.delete("page");
+        if (Array.isArray(selectedColumns) && selectedColumns.length > 0) {
+            selectedColumns.forEach(function (col) {
+                params.append("columns", col);
+            });
+        }
 
         const response = await window.orariooAuth.apiFetch(
             "/api/audit-entries/export/?" + params.toString(),
@@ -821,7 +839,7 @@
                 return null;
             });
             throw new Error(
-                parseApiError(payload, "No se pudo exportar el registro de cambios.")
+                window.OrariooErrorHandler.parseApiError(payload, { fallbackMessage: "No se pudo exportar el registro de cambios." }).message
             );
         }
 
@@ -838,12 +856,15 @@
         window.URL.revokeObjectURL(downloadUrl);
     }
 
-    filtersForm.addEventListener("submit", function (event) {
-        event.preventDefault();
-        fetchAuditEntries(1).catch(function (error) {
-            setError(error.message || "No se pudo cargar el registro de cambios.");
-            setLoading("No se pudo cargar la actividad.");
-        });
+    [entityFilter, actionFilter, userFilter].forEach(function (select) {
+        if (select) {
+            select.addEventListener("change", function () {
+                fetchAuditEntries(1).catch(function (error) {
+                    setError(error.message || "No se pudo cargar el registro de cambios.");
+                    setLoading("No se pudo cargar la actividad.");
+                });
+            });
+        }
     });
 
     if (resetFiltersButton) {
@@ -897,21 +918,49 @@
         });
     }
 
-    if (exportCsvButton) {
-        exportCsvButton.addEventListener("click", function () {
-            exportAudit("csv").catch(function (error) {
-                setError(error.message || "No se pudo exportar en CSV.");
-            });
-        });
-    }
+    (function () {
+        const auditExportModalElement = document.getElementById("auditExportModal");
+        const auditExportConfirmBtn = document.getElementById("auditExportConfirmBtn");
+        const auditExportColCards = auditExportModalElement
+            ? Array.from(auditExportModalElement.querySelectorAll("[data-audit-export-col]"))
+            : [];
 
-    if (exportPdfButton) {
-        exportPdfButton.addEventListener("click", function () {
-            exportAudit("pdf").catch(function (error) {
-                setError(error.message || "No se pudo exportar en PDF.");
+        auditExportColCards.forEach(function (card) {
+            card.addEventListener("click", function () {
+                const isActive = card.classList.toggle("active");
+                card.setAttribute("aria-pressed", isActive ? "true" : "false");
             });
         });
-    }
+
+        if (auditExportModalElement) {
+            auditExportModalElement.addEventListener("hidden.bs.modal", function () {
+                auditExportColCards.forEach(function (card) {
+                    card.classList.remove("active");
+                    card.setAttribute("aria-pressed", "false");
+                });
+            });
+        }
+
+        if (auditExportConfirmBtn) {
+            auditExportConfirmBtn.addEventListener("click", function () {
+                const format = document.getElementById("auditExportFormat")
+                    ? document.getElementById("auditExportFormat").value
+                    : "csv";
+
+                const selectedColumns = auditExportColCards
+                    .filter(function (card) { return card.classList.contains("active"); })
+                    .map(function (card) { return card.getAttribute("data-audit-export-col"); });
+
+                if (auditExportModalElement && window.bootstrap) {
+                    window.bootstrap.Modal.getInstance(auditExportModalElement).hide();
+                }
+
+                exportAudit(format, selectedColumns).catch(function (error) {
+                    setError(error.message || "No se pudo exportar el registro de cambios.");
+                });
+            });
+        }
+    }());
 
     tableBody.addEventListener("click", function (event) {
         const button = event.target.closest(".audit-detail-button");

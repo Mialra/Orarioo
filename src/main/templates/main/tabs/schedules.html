@@ -56,72 +56,48 @@
                 </div>
             </section>
         </div>
-        <section id="generatedWorkspaceSection" class="schedule-workspace d-none">
-            <div class="schedule-workspace-head">
-                <div class="schedule-workspace-topbar">
-                    <div class="schedule-workspace-brand">
-                        <div class="schedule-workspace-brand-icon" aria-hidden="true">
-                            <i data-lucide="calendar-days" class="workspace-icon"></i>
+        <section id="generatedProgressSection" class="gen-progress-section d-none" aria-live="polite">
+            <div class="gen-progress-inner">
+                <div class="gen-progress-step" id="genProgressStep1">
+                    <div class="gen-progress-step-header">
+                        <div class="gen-progress-step-icon gen-progress-step-icon--active" id="genProgressIcon1">
+                            <div class="gen-spinner"></div>
                         </div>
-                        <div class="schedule-workspace-heading">
-                            <div class="schedule-workspace-title-row">
-                                <h3 class="schedule-workspace-title">Horario Escolar</h3>
-                                <span id="generatedWorkspaceStateBadge"
-                                      class="schedule-pill schedule-pill-draft">Borrador</span>
-                            </div>
+                        <div>
+                            <p class="gen-progress-step-title mb-0">Buscando solución válida</p>
+                            <p class="gen-progress-step-desc text-secondary small mb-0">Comprobando que el horario es factible con las restricciones actuales.</p>
                         </div>
                     </div>
-                    <button type="button"
-                            id="generatedWorkspaceSaveBtn"
-                            class="btn btn-success-subtle schedule-toolbar-btn schedule-toolbar-btn-save">
-                        <i data-lucide="save" class="btn-icon" aria-hidden="true"></i>
-                        <span id="generatedWorkspaceSaveBtnLabel">Guardar</span>
-                    </button>
-                </div>
-                <div class="schedule-workspace-toolbar">
-                    <div class="schedule-toolbar-filters">
-                        <select id="generatedWorkspaceCourseFilter"
-                                class="form-select schedule-toolbar-select"
-                                aria-label="Filtrar por curso">
-                            <option value="">Todos los cursos</option>
-                        </select>
-                        <select id="generatedWorkspaceTeacherFilter"
-                                class="form-select schedule-toolbar-select"
-                                aria-label="Filtrar por profesor">
-                            <option value="">Todos los profesores</option>
-                        </select>
-                        <select id="generatedWorkspaceClassroomFilter"
-                                class="form-select schedule-toolbar-select"
-                                aria-label="Filtrar por aula">
-                            <option value="">Todas las aulas</option>
-                        </select>
-                        <select id="generatedWorkspaceSubjectFilter"
-                                class="form-select schedule-toolbar-select"
-                                aria-label="Filtrar por asignatura">
-                            <option value="">Todas las asignaturas</option>
-                        </select>
-                    </div>
-                    <div class="schedule-toolbar-buttons">
-                        <button type="button"
-                                id="generatedWorkspaceExportBtn"
-                                class="btn btn-outline-secondary schedule-toolbar-btn">
-                            <i data-lucide="download" class="btn-icon" aria-hidden="true"></i>
-                            Exportar
-                        </button>
-                        <button type="button"
-                                id="generatedWorkspaceRegenerateBtn"
-                                class="btn btn-primary schedule-toolbar-btn schedule-toolbar-btn-regenerate">
-                            <i data-lucide="sparkles" class="btn-icon" aria-hidden="true"></i>
-                            Regenerar
-                        </button>
+                    <div class="progress gen-progress-bar mt-2">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                             id="genProgressBar1"></div>
                     </div>
                 </div>
-                <p class="schedule-workspace-hint mb-0"
-                   title="Puedes arrastrar y soltar una sesión para recolocarla dentro del horario.">
-                    <i data-lucide="move" class="schedule-workspace-hint-icon" aria-hidden="true"></i>
-                    Arrastra y suelta una sesión para recolocarla dentro del horario. Si la sueltas sobre otra, se intercambian automáticamente.
-                </p>
+                <div class="gen-progress-step gen-progress-step--pending" id="genProgressStep2">
+                    <div class="gen-progress-step-header">
+                        <div class="gen-progress-step-icon" id="genProgressIcon2">
+                            <span class="gen-progress-step-num">2</span>
+                        </div>
+                        <div>
+                            <p class="gen-progress-step-title mb-0">
+                                Optimizando el horario
+                                <span id="genProgressTimeLabel" class="gen-progress-time-label"></span>
+                            </p>
+                            <p class="gen-progress-step-desc text-secondary small mb-0">Minimizando huecos, distribuyendo asignaturas y respetando preferencias.</p>
+                        </div>
+                    </div>
+                    <div class="progress gen-progress-bar mt-2 d-none" id="genProgressBar2Wrap">
+                        <div class="progress-bar bg-success"
+                             id="genProgressBar2"
+                             role="progressbar"
+                             aria-valuemin="0"
+                             aria-valuemax="100"></div>
+                    </div>
+                </div>
             </div>
+        </section>
+        <section id="generatedWorkspaceSection" class="schedule-workspace d-none">
+            {% include "main/tabs/_schedule_workspace_head.html" with ws_prefix="generated" ws_icon="calendar-days" ws_title="Horario Escolar" ws_badge_class="schedule-pill-draft" ws_badge_text="Borrador" ws_show_save=1 ws_show_regenerate=1 %}
             <div id="generatedWorkspaceOutput" class="schedule-board-shell"></div>
         </section>
     </div>

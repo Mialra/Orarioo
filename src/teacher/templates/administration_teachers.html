@@ -35,11 +35,15 @@
                         <input type="hidden" id="admin-teacher-id" value="">
                         <input type="hidden" id="admin-teacher-mode" value="create">
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-teacher-name">Nombre*</label>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="admin-teacher-name">Nombre</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
                             <input class="form-control"
                                    id="admin-teacher-name"
                                    type="text"
                                    placeholder="Ej: Juan"
+                                   maxlength="{{ string_max_length }}"
                                    required>
                             <div class="invalid-feedback" id="admin-teacher-name-error"></div>
                         </div>
@@ -48,20 +52,50 @@
                             <input class="form-control"
                                    id="admin-teacher-surnames"
                                    type="text"
-                                   placeholder="Ej: Garcia Perez">
+                                   placeholder="Ej: García"
+                                   maxlength="{{ string_max_length }}">
+                            <div class="invalid-feedback" id="admin-teacher-surnames-error"></div>
                         </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-teacher-max-weekly-hours">Máximo horas semanales*</label>
-                            <input class="form-control"
-                                   id="admin-teacher-max-weekly-hours"
-                                   type="number"
-                                   min="1"
-                                   step="1"
-                                   placeholder="20"
-                                   value="20"
-                                   required>
+                        <div class="col-12">
+                            <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                                <div class="d-flex align-items-center gap-1">
+                                    <label class="form-label fw-semibold mb-0">Carga semanal</label>
+                                    <span class="text-danger" aria-hidden="true">*</span>
+                                </div>
+                                <div class="btn-group ms-auto"
+                                     role="group"
+                                     aria-label="Modo de carga semanal"
+                                     id="admin-teacher-hours-mode-group">
+                                    <button type="button"
+                                            class="btn btn-sm btn-primary"
+                                            id="admin-teacher-mode-max">Hasta un máximo</button>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-secondary"
+                                            id="admin-teacher-mode-exact">Exactamente</button>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2 align-items-center">
+                                <input class="form-control"
+                                       id="admin-teacher-max-weekly-hours"
+                                       type="number"
+                                       min="0"
+                                       step="1"
+                                       placeholder="0"
+                                       style="max-width:90px"
+                                       required>
+                                <span class="text-body-secondary small">horas</span>
+                                <select class="form-select"
+                                        id="admin-teacher-max-weekly-minutes"
+                                        style="max-width:90px">
+                                    <option value="0">0</option>
+                                    <option value="30">30</option>
+                                </select>
+                                <span class="text-body-secondary small">minutos</span>
+                            </div>
+                            <div class="form-text mt-1" id="admin-teacher-weekly-load-hint"></div>
                             <div class="invalid-feedback" id="admin-teacher-max-weekly-hours-error"></div>
                         </div>
+                        <input type="hidden" id="admin-teacher-weekly-hours-exact" value="false">
                         <input type="hidden" id="admin-teacher-working-hours" value="0">
                         <div class="col-12">
                             <input type="hidden" id="admin-teacher-time-preferences" value="{}">
@@ -93,6 +127,10 @@
                             <div class="invalid-feedback" id="admin-teacher-time-preferences-error"></div>
                         </div>
                         <div class="col-12 admin-form-actions">
+                            <button type="button"
+                                    class="btn btn-outline-secondary px-4 admin-modal-action-btn"
+                                    id="admin-teacher-cancel-btn"
+                                    data-bs-dismiss="modal">Cancelar</button>
                             <button type="submit"
                                     class="btn btn-primary px-4 admin-modal-action-btn"
                                     id="admin-teacher-submit-btn">
@@ -101,10 +139,6 @@
                                       aria-hidden="true"></span>
                                 <span id="admin-teacher-submit-text">Crear</span>
                             </button>
-                            <button type="button"
-                                    class="btn btn-light border px-4 admin-modal-action-btn"
-                                    id="admin-teacher-cancel-btn"
-                                    data-bs-dismiss="modal">Cancelar</button>
                         </div>
                     </form>
                 </div>
@@ -133,7 +167,7 @@
                 </div>
                 <div class="modal-footer justify-content-center gap-2">
                     <button type="button"
-                            class="btn btn-light border"
+                            class="btn btn-outline-secondary"
                             id="admin-teacher-delete-cancel-btn"
                             data-bs-dismiss="modal">Cancelar</button>
                     <button type="button"

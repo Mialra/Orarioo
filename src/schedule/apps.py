@@ -1,3 +1,5 @@
+"""App configuration for the schedule application."""
+
 from django.apps import AppConfig
 
 

@@ -1,3 +1,6 @@
+/**
+ * Admin page entrypoint for read-only user list with pagination.
+ */
 (function () {
   const admin = window.AdminBase || {};
   const api = admin.api;
@@ -19,11 +22,21 @@
     pageSize: 9,
   });
 
+  /**
+   * Returns the best available display name for a user object.
+   * Input: user - user object with given_name, family_name, and email fields
+   * Output: display name string, falling back through full name → given name → email → "Usuario"
+   */
   function resolveUserName(user) {
     const fullName = ((user.given_name || "") + (user.family_name ? " " + user.family_name : "")).trim();
     return fullName || user.given_name || user.email || "Usuario";
   }
 
+  /**
+   * Builds the card DOM node for a single user list item.
+   * Input: user - user object with given_name, family_name, and email fields
+   * Output: col div element containing the user card
+   */
   function renderUserItem(user) {
     return dom.createElement("div", {
       className: "col",
@@ -64,16 +77,24 @@
     });
   }
 
+  /**
+   * Renders an array of user objects into the list container and refreshes Lucide icons.
+   * Input: users - array of user objects
+   */
   function renderUsers(users) {
+    listContainer.classList.remove("justify-content-center");
     listRenderer.renderCollection(listContainer, users, renderUserItem);
     uiState.refreshIconsIfNeeded(listContainer);
   }
 
+  /**
+   * Fetches a paginated user list from the API and renders it into the list container.
+   * Input: page - page number to fetch (defaults to the current pagination controller page)
+   */
   async function loadUsers(page) {
     const targetPage = Number(page) || paginationController.getCurrentPage() || 1;
     uiState.hideAlert(alertBox);
     uiState.setBusy(listContainer, true);
-    uiState.renderLoadingState(listContainer, "Cargando usuarios...");
 
     const response = await api.get("/api/users/?page=" + targetPage + "&page_size=" + paginationController.pageSize);
 

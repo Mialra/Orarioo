@@ -103,3 +103,151 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("name", response.data)
+
+    def test_allow_same_name_in_different_team(self):
+        Teacher.objects.create(
+            name="Laura",
+            max_weekly_hours=20,
+            working_hours=10,
+            team=self.team,
+        )
+        other_user, other_team = self.create_isolated_user(
+            email_prefix="teacher-api-other"
+        )
+        self.client.force_authenticate(other_user)
+
+        response = self.client.post(
+            reverse("teacher-list"),
+            {
+                "name": "laura",
+                "max_weekly_hours": 18,
+                "working_hours": 8,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Teacher.objects.filter(name__iexact="Laura").count(), 2)
+        self.assertTrue(
+            Teacher.objects.filter(name__iexact="Laura", team=other_team).exists()
+        )
+
+    def test_create_teacher_with_30_minutes(self):
+        payload = {
+            "name": "Luis Mora",
+            "max_weekly_hours": 10,
+            "max_weekly_minutes": 30,
+            "working_hours": 8,
+        }
+
+        response = self.client.post(reverse("teacher-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        teacher = Teacher.objects.get(name="Luis Mora")
+        self.assertEqual(teacher.max_weekly_minutes, 30)
+
+    def test_create_teacher_exact_mode(self):
+        payload = {
+            "name": "Eva Blanco",
+            "max_weekly_hours": 12,
+            "weekly_hours_exact": True,
+            "working_hours": 10,
+        }
+
+        response = self.client.post(reverse("teacher-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        teacher = Teacher.objects.get(name="Eva Blanco")
+        self.assertTrue(teacher.weekly_hours_exact)
+
+    def test_reject_invalid_minutes_45(self):
+        payload = {
+            "name": "Bad Teacher",
+            "max_weekly_hours": 10,
+            "max_weekly_minutes": 45,
+            "working_hours": 8,
+        }
+
+        response = self.client.post(reverse("teacher-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("max_weekly_minutes", response.data["errors"])
+        errors = response.data["errors"]["max_weekly_minutes"]
+        self.assertEqual(errors[0]["code"], "INVALID_MINUTES_VALUE")
+
+    def test_reject_invalid_minutes_60(self):
+        payload = {
+            "name": "Bad Teacher 2",
+            "max_weekly_hours": 10,
+            "max_weekly_minutes": 60,
+            "working_hours": 8,
+        }
+
+        response = self.client.post(reverse("teacher-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("max_weekly_minutes", response.data["errors"])
+
+    def test_reject_zero_total_load(self):
+        payload = {
+            "name": "Zero Teacher",
+            "max_weekly_hours": 0,
+            "max_weekly_minutes": 0,
+            "working_hours": 0,
+        }
+
+        response = self.client.post(reverse("teacher-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("max_weekly_hours", response.data["errors"])
+        errors = response.data["errors"]["max_weekly_hours"]
+        self.assertEqual(errors[0]["code"], "ZERO_WEEKLY_LOAD")
+
+    def test_default_minutes_and_mode(self):
+        payload = {
+            "name": "Default Teacher",
+            "max_weekly_hours": 20,
+            "working_hours": 10,
+        }
+
+        response = self.client.post(reverse("teacher-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["max_weekly_minutes"], 0)
+        self.assertFalse(response.data["weekly_hours_exact"])
+
+    def test_list_summary_count_and_options_are_team_scoped(self):
+        Teacher.objects.create(
+            name="Ana Perez",
+            max_weekly_hours=20,
+            working_hours=10,
+            team=self.team,
+        )
+        Teacher.objects.create(
+            name="Carlos Gomez",
+            max_weekly_hours=18,
+            working_hours=12,
+            team=self.team,
+        )
+        _, isolated_team = self.create_isolated_user(email_prefix="teacher-summary")
+        Teacher.objects.create(
+            name="Fuera de equipo",
+            max_weekly_hours=16,
+            working_hours=8,
+            team=isolated_team,
+        )
+
+        count_response = self.client.get(reverse("teacher-list") + "?summary=count")
+        options_response = self.client.get(reverse("teacher-list") + "?summary=options")
+
+        self.assertEqual(count_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(count_response.data, {"count": 2})
+        self.assertEqual(options_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(options_response.data), 2)
+        self.assertEqual(
+            {item["name"] for item in options_response.data},
+            {"Ana Perez", "Carlos Gomez"},
+        )
+        self.assertTrue(
+            all(set(item.keys()) == {"id", "name"} for item in options_response.data)
+        )

@@ -1,3 +1,7 @@
+"""
+CRUD routes for teacher administration endpoints.
+"""
+
 from django.urls import path
 
 from common.drf import build_crud_views

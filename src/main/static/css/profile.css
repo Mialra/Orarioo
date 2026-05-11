@@ -173,6 +173,25 @@
     font-size: 0.9rem;
 }
 
+.input-group .password-toggle-btn {
+    border-color: #d9e0ec;
+    background-color: #ffffff;
+    color: #6b7280;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.input-group .password-toggle-btn:hover,
+.input-group .password-toggle-btn:focus {
+    border-color: rgba(36, 88, 240, 0.7);
+    box-shadow: 0 0 0 0.2rem rgba(36, 88, 240, 0.15);
+}
+
+.input-group .password-toggle-btn:disabled {
+    background: #f4f7fc;
+    border-color: #e2e8f3;
+    color: #74839d;
+}
+
 .profile-icon {
     width: 1.05rem;
     height: 1.05rem;

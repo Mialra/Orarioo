@@ -1,18 +1,23 @@
 <section class="card border-0 shadow-sm admin-shell">
-    {% include 'main/tabs/_admin_tabs.html' %}
-
+    {% include "main/tabs/_admin_tabs.html" %}
     <div class="card-body admin-shell-body">
-        {% include 'main/tabs/_admin_section_header.html' with button_id='admin-add-group-btn' modal_target='#admin-group-modal' %}
-
-        <div id="admin-groups-alert" class="alert d-none mb-3" role="status" aria-live="polite"></div>
+        {% include "main/tabs/_admin_section_header.html" with button_id="admin-add-group-btn" modal_target="#admin-group-modal" %}
+        <div id="admin-groups-alert"
+             class="alert d-none mb-3"
+             role="status"
+             aria-live="polite"></div>
         <p id="admin-groups-empty-message" class="d-none text-center">{{ dashboard_admin_state.empty_message }}</p>
-
-        <div id="admin-groups-list" class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3 pt-1 admin-list-grid" aria-busy="false" aria-live="polite"></div>
-
+        <div id="admin-groups-list"
+             class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3 pt-1 admin-list-grid"
+             aria-busy="false"
+             aria-live="polite"></div>
         <div id="admin-groups-pagination" class="mt-3"></div>
     </div>
-
-    <div class="modal fade" id="admin-group-modal" tabindex="-1" aria-labelledby="admin-group-modal-title" aria-hidden="true">
+    <div class="modal fade"
+         id="admin-group-modal"
+         tabindex="-1"
+         aria-labelledby="admin-group-modal-title"
+         aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
             <div class="modal-content shadow-lg">
                 <div class="modal-header">
@@ -20,58 +25,88 @@
                         <h3 class="modal-title h4 mb-0" id="admin-group-modal-title">Añadir curso</h3>
                         <p class="admin-modal-note">Completa los datos para crear o editar un curso.</p>
                     </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
                 </div>
-
                 <div class="modal-body">
                     <form id="admin-group-form" class="row g-3" novalidate>
                         <input type="hidden" id="admin-group-id" value="">
                         <input type="hidden" id="admin-group-mode" value="create">
-
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-group-name">Nombre del grupo*</label>
-                            <input class="form-control" id="admin-group-name" type="text" placeholder="Ej: 1A" required>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="admin-group-name">Nombre del grupo</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
+                            <input class="form-control"
+                                   id="admin-group-name"
+                                   type="text"
+                                   placeholder="Ej: 1º Primaria"
+                                   maxlength="{{ string_max_length }}"
+                                   required>
                             <div class="invalid-feedback" id="admin-group-name-error"></div>
                         </div>
-
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-group-stage">Etapa educativa*</label>
-                            <select class="form-select orarioo-custom-select" id="admin-group-stage" required>
-                                <option value="preschool">Infantil</option>
-                                <option value="primary" selected>Primaria</option>
-                                <option value="secondary">Secundaria</option>
-                            </select>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="admin-group-stage">Etapa educativa</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
+                            <select class="form-select orarioo-custom-select"
+                                    id="admin-group-stage"
+                                    required></select>
                             <div class="invalid-feedback" id="admin-group-stage-error"></div>
                         </div>
-
                         <div class="col-12 admin-form-actions">
-                            <button type="submit" class="btn btn-primary px-4 admin-modal-action-btn" id="admin-group-submit-btn">
-                                <span id="admin-group-submit-spinner" class="spinner-border spinner-border-sm d-none me-2" aria-hidden="true"></span>
+                            <button type="button"
+                                    class="btn btn-outline-secondary px-4 admin-modal-action-btn"
+                                    id="admin-group-cancel-btn"
+                                    data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit"
+                                    class="btn btn-primary px-4 admin-modal-action-btn"
+                                    id="admin-group-submit-btn">
+                                <span id="admin-group-submit-spinner"
+                                      class="spinner-border spinner-border-sm d-none me-2"
+                                      aria-hidden="true"></span>
                                 <span id="admin-group-submit-text">Crear</span>
                             </button>
-                            <button type="button" class="btn btn-light border px-4 admin-modal-action-btn" id="admin-group-cancel-btn" data-bs-dismiss="modal">Cancelar</button>
                         </div>
                     </form>
                 </div>
             </div>
         </div>
     </div>
-
-    <div class="modal fade" id="admin-group-delete-modal" tabindex="-1" aria-labelledby="admin-group-delete-title" aria-hidden="true">
+    <div class="modal fade"
+         id="admin-group-delete-modal"
+         tabindex="-1"
+         aria-labelledby="admin-group-delete-title"
+         aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
                     <h3 class="modal-title h5 mb-0" id="admin-group-delete-title">Confirmar eliminación</h3>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body py-4">
-                    <p class="mb-2 text-center fw-semibold">¿Está seguro de que quiere eliminar el curso <strong id="admin-group-delete-name">seleccionado</strong>?</p>
+                    <p class="mb-2 text-center fw-semibold">
+                        ¿Está seguro de que quiere eliminar el curso <strong id="admin-group-delete-name">seleccionado</strong>?
+                    </p>
                     <p class="mb-0 text-center text-body-secondary">Esta acción no se puede deshacer.</p>
                 </div>
                 <div class="modal-footer justify-content-center gap-2">
-                    <button type="button" class="btn btn-light border" id="admin-group-delete-cancel-btn" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-danger" id="admin-group-delete-confirm-btn">
-                        <span id="admin-group-delete-spinner" class="spinner-border spinner-border-sm d-none me-2" aria-hidden="true"></span>
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            id="admin-group-delete-cancel-btn"
+                            data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button"
+                            class="btn btn-danger"
+                            id="admin-group-delete-confirm-btn">
+                        <span id="admin-group-delete-spinner"
+                              class="spinner-border spinner-border-sm d-none me-2"
+                              aria-hidden="true"></span>
                         <span id="admin-group-delete-text">Eliminar</span>
                     </button>
                 </div>

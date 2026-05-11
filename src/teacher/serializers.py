@@ -1,24 +1,33 @@
+"""
+Serializer for teacher CRUD operations with hour-range validation and audit fields.
+"""
+
 from rest_framework import serializers
 
+from common.errors import build_error_entry
 from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
-from common.validation import (
-    collect_invalid_time_preference_entries,
-    normalize_time_preferences,
-)
+from common.serializers import TeamScopedModelSerializerMixin
+from common.validators import raise_validation_error, validate_time_preferences
 from namedEntity.serializers import NamedEntityNameValidationMixin
 from teacher.models import Teacher, TeacherTimePreferenceState
 
 
-class TeacherSerializer(NamedEntityNameValidationMixin, serializers.ModelSerializer):
-    enforce_case_insensitive_unique_name = True
+class TeacherSerializer(
+    TeamScopedModelSerializerMixin,
+    NamedEntityNameValidationMixin,
+    serializers.ModelSerializer,
+):
+    """Validate and serialize teachers using the shared NamedEntity rules."""
 
-    team = serializers.PrimaryKeyRelatedField(read_only=True)
+    enforce_case_insensitive_unique_name = True
 
     class Meta:
         model = Teacher
         fields = with_audit_fields(
             "name",
             "max_weekly_hours",
+            "max_weekly_minutes",
+            "weekly_hours_exact",
             "working_hours",
             "time_preferences",
             "team",
@@ -26,50 +35,79 @@ class TeacherSerializer(NamedEntityNameValidationMixin, serializers.ModelSeriali
         read_only_fields = AUDIT_READ_ONLY_FIELD_NAMES
 
     def validate(self, attrs):
+        """Cross-validate workload fields and normalize time_preferences.
+        Input: attrs - dict of deserialized field values
+        Output: dict validated attrs with normalized time_preferences; raises ValidationError on constraint violations
+        """
         max_weekly_hours = attrs.get(
             "max_weekly_hours",
             self.instance.max_weekly_hours if self.instance else None,
+        )
+        max_weekly_minutes = attrs.get(
+            "max_weekly_minutes",
+            self.instance.max_weekly_minutes if self.instance else 0,
         )
         working_hours = attrs.get(
             "working_hours",
             self.instance.working_hours if self.instance else 0,
         )
 
+        if max_weekly_hours == 0 and max_weekly_minutes == 0:
+            raise_validation_error(
+                "max_weekly_hours",
+                "ZERO_WEEKLY_LOAD",
+                "Total weekly load cannot be zero.",
+                context={"field": "max_weekly_hours"},
+            )
+
         if max_weekly_hours is not None and working_hours > max_weekly_hours:
-            raise serializers.ValidationError(
-                {
-                    "working_hours": (
-                        "working_hours cannot be greater than max_weekly_hours."
-                    )
-                }
+            raise_validation_error(
+                "working_hours",
+                "INVALID_HOUR_RANGE",
+                "working_hours cannot be greater than max_weekly_hours.",
+                context={
+                    "field": "working_hours",
+                    "max_weekly_hours": max_weekly_hours,
+                    "working_hours": working_hours,
+                },
             )
 
         time_preferences = attrs.get(
             "time_preferences",
             self.instance.time_preferences if self.instance else {},
         )
-        try:
-            normalized_time_preferences = normalize_time_preferences(time_preferences)
-        except serializers.ValidationError as exc:
-            raise serializers.ValidationError(
-                {"time_preferences": str(exc.detail[0])}
-            ) from exc
-
-        valid_states = {state.value for state in TeacherTimePreferenceState}
-        _, invalid_values = collect_invalid_time_preference_entries(
-            normalized_time_preferences,
-            valid_states,
+        attrs["time_preferences"] = validate_time_preferences(
+            time_preferences,
+            valid_states={state.value for state in TeacherTimePreferenceState},
+            require_string_keys=False,
         )
-
-        if invalid_values:
-            raise serializers.ValidationError(
-                {
-                    "time_preferences": {
-                        "invalid_states": invalid_values,
-                        "allowed": sorted(valid_states),
-                    }
-                }
-            )
-
-        attrs["time_preferences"] = normalized_time_preferences
         return attrs
+
+    def validate_max_weekly_hours(self, value):
+        """Ensure max_weekly_hours is below the 168-hour weekly limit.
+        Input: value - int submitted for max_weekly_hours
+        Output: int validated value; raises ValidationError if >= 168
+        """
+        if value >= 168:
+            raise_validation_error(
+                "max_weekly_hours",
+                "WEEKLY_HOURS_EXCEEDS_LIMIT",
+                "Maximum weekly hours cannot be 168 or more.",
+                context={"field": "max_weekly_hours", "value": value},
+            )
+        return value
+
+    def validate_max_weekly_minutes(self, value):
+        """Ensure max_weekly_minutes is 0 or 30.
+        Input: value - int submitted for max_weekly_minutes
+        Output: int validated value; raises ValidationError if not in {0, 30}
+        """
+        if value not in (0, 30):
+            raise serializers.ValidationError(
+                [
+                    build_error_entry(
+                        "INVALID_MINUTES_VALUE", "max_weekly_minutes must be 0 or 30."
+                    )
+                ]
+            )
+        return value

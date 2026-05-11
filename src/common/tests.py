@@ -5,7 +5,8 @@ from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 
-from common.exceptions import api_exception_handler
+from common.errors import api_exception_handler
+from common.errors.exceptions import ValidationAppError
 from common.notifications import send_security_email
 
 
@@ -21,6 +22,13 @@ class ApiExceptionHandlerTests(SimpleTestCase):
         self.assertIn("_error", response.data)
         self.assertIn("_meta", response.data)
         self.assertEqual(response.data["_meta"]["success"], False)
+        self.assertEqual(
+            response.data["name"], ["name cannot be empty or whitespace only."]
+        )
+        self.assertEqual(
+            response.data["errors"]["name"][0]["message"],
+            "name cannot be empty or whitespace only.",
+        )
 
     def test_hides_internal_exception_message(self):
         exc = RuntimeError("Database password leaked: super-secret")
@@ -29,7 +37,23 @@ class ApiExceptionHandlerTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
         self.assertEqual(response.data["detail"], "An internal server error occurred.")
+        self.assertEqual(response.data["_error"]["code"], "INTERNAL_ERROR")
         self.assertNotIn("super-secret", str(response.data))
+
+    def test_serializes_app_error_with_structured_field_payload(self):
+        exc = ValidationAppError(
+            "REQUIRED_FIELD",
+            "name is required.",
+            field_name="name",
+            context={"field": "name"},
+        )
+
+        response = api_exception_handler(exc, context={})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["name"], ["name is required."])
+        self.assertEqual(response.data["_error"]["code"], "REQUIRED_FIELD")
+        self.assertEqual(response.data["errors"]["name"][0]["context"]["field"], "name")
 
 
 @override_settings(

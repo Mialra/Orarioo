@@ -1,11 +1,24 @@
+/**
+ * Client-side pagination controller that renders a Bootstrap pagination nav into a container.
+ */
 (function () {
     const root = window.OrariooAdmin = window.OrariooAdmin || {};
     const dom = root.dom;
 
+    /**
+     * Clamps a numeric value between min and max (inclusive).
+     * Input: value, min, max - numbers
+     * Output: number within [min, max]
+     */
     function clamp(value, min, max) {
         return Math.max(min, Math.min(max, value));
     }
 
+    /**
+     * Creates a pagination controller that manages page state and renders Bootstrap nav buttons.
+     * Input: config - object with container (DOM element) and pageSize (number, default 5)
+     * Output: object with setTotalItems, getPageSlice, setPage, getCurrentPage, render, and pageSize
+     */
     function createPaginationController(config) {
         const options = config || {};
         const container = options.container;

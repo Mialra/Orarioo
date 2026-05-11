@@ -1,26 +1,28 @@
+"""
+URL routing for user authentication, profile management, and collaboration team endpoints.
+"""
+
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from user.views import (
+from user.views import CustomTokenObtainPairView, UserSelfUpdateView, UserViewSet
+from user.views_account import UserAccountDeletionView
+from user.views_teams import (
     CollaborationTeamCreateView,
     CollaborationTeamInvitationListView,
     CollaborationTeamInvitationRespondView,
     CollaborationTeamInviteView,
     CollaborationTeamLeaveView,
-    CustomTokenObtainPairView,
+    OnboardingView,
+    ScheduleConfigView,
     SetActiveTeamView,
-    UserAccountDeletionView,
-    UserSelfUpdateView,
-    UserViewSet,
 )
 
-# Create a router for the viewsets
 router = DefaultRouter()
 router.register(r"users", UserViewSet, basename="user")
 
 urlpatterns = [
-    # Router routes
     path("", include(router.urls)),
     path("users/me/update/", UserSelfUpdateView.as_view(), name="user-self-update"),
     path(
@@ -58,4 +60,7 @@ urlpatterns = [
     path("login/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("signup/", UserViewSet.as_view({"post": "create"}), name="signup"),
+    # Onboarding and schedule config
+    path("onboarding/", OnboardingView.as_view(), name="onboarding"),
+    path("schedule-config/", ScheduleConfigView.as_view(), name="schedule-config"),
 ]

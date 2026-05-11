@@ -138,14 +138,28 @@
             </div>
         </nav>
         <main class="container-xl py-4 py-lg-5">
-            {% include dashboard_route_template %}
+            {% if dashboard_section == 'administration' %}
+                <section class="dash-panel">
+                    <div class="dash-panel-body">
+                        <div class="dash-panel-header">
+                            <div>
+                                <h2 class="dash-panel-title">Administración de horarios</h2>
+                                <p class="dash-panel-copy">Visualiza los usuarios de tu equipo actual y gestiona los elementos de tu colegio.</p>
+                            </div>
+                        </div>
+                        {% include dashboard_route_template %}
+                    </div>
+                </section>
+            {% else %}
+                {% include dashboard_route_template %}
+            {% endif %}
         </main>
         <div class="modal fade"
              id="dashboardCreateTeamModal"
              tabindex="-1"
              aria-labelledby="dashboardCreateTeamModalLabel"
              aria-hidden="true">
-            <div class="modal-dialog">
+            <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title" id="dashboardCreateTeamModalLabel">Crear equipo</h5>
@@ -155,7 +169,10 @@
                                 aria-label="Cerrar"></button>
                     </div>
                     <div class="modal-body">
-                        <label for="dashboard-new-team-name" class="form-label">Nombre del equipo</label>
+                        <div class="d-flex align-items-center gap-1 mb-1">
+                            <label for="dashboard-new-team-name" class="form-label fw-semibold mb-0">Nombre del equipo</label>
+                            <span class="text-danger" aria-hidden="true">*</span>
+                        </div>
                         <input id="dashboard-new-team-name"
                                type="text"
                                class="form-control"
@@ -164,7 +181,7 @@
                         <div id="dashboard-create-team-error"
                              class="text-danger small mt-2 d-none"></div>
                     </div>
-                    <div class="modal-footer">
+                    <div class="modal-footer justify-content-center">
                         <button type="button"
                                 class="btn btn-outline-secondary"
                                 data-bs-dismiss="modal">Cancelar</button>
@@ -180,7 +197,7 @@
              tabindex="-1"
              aria-labelledby="dashboardInviteTeamModalLabel"
              aria-hidden="true">
-            <div class="modal-dialog">
+            <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title" id="dashboardInviteTeamModalLabel">Invitar usuario</h5>
@@ -190,15 +207,18 @@
                                 aria-label="Cerrar"></button>
                     </div>
                     <div class="modal-body">
-                        <label for="dashboard-invite-email" class="form-label">Email del usuario existente</label>
+                        <div class="d-flex align-items-center gap-1 mb-1">
+                            <label for="dashboard-invite-email" class="form-label fw-semibold mb-0">Email del usuario existente</label>
+                            <span class="text-danger" aria-hidden="true">*</span>
+                        </div>
                         <input id="dashboard-invite-email"
                                type="email"
                                class="form-control"
                                placeholder="usuario@centro.com" />
-                        <div id="dashboard-invite-team-error"
-                             class="text-danger small mt-2 d-none"></div>
+                        <small class="text-secondary d-block mt-1">La invitación solo se enviará a cuentas registradas en Orarioo.</small>
+                        <div id="dashboard-invite-team-error" class="small mt-2 d-none"></div>
                     </div>
-                    <div class="modal-footer">
+                    <div class="modal-footer justify-content-center">
                         <button type="button"
                                 class="btn btn-outline-secondary"
                                 data-bs-dismiss="modal">Cancelar</button>
@@ -235,6 +255,41 @@
                 </div>
             </div>
         </div>
+        <div class="modal fade"
+             id="dashboardLeaveTeamModal"
+             tabindex="-1"
+             aria-labelledby="dashboardLeaveTeamModalLabel"
+             aria-hidden="true"
+             data-bs-backdrop="static"
+             data-bs-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="modal-title h5 mb-0" id="dashboardLeaveTeamModalLabel">Salir del equipo</h3>
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body py-4">
+                        <p class="mb-2 text-center fw-semibold">¿Está seguro de que quiere salir del equipo?</p>
+                        <p class="mb-0 text-center text-body-secondary">
+                            Para volver a entrar será necesario que le inviten de nuevo. Si es el último miembro, todos los datos del equipo (horarios, grupos, materias, profesores y aulas) se eliminarán permanentemente.
+                        </p>
+                        <div id="dashboard-leave-team-error"
+                             class="text-danger small mt-3 text-center d-none"></div>
+                    </div>
+                    <div class="modal-footer justify-content-center gap-2">
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                data-bs-dismiss="modal">Cancelar</button>
+                        <button id="dashboard-leave-team-confirm"
+                                type="button"
+                                class="btn btn-danger">Confirmar y salir</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 {% endblock content %}
 {% block extra_scripts %}
@@ -245,8 +300,8 @@
     <script src="{% static 'js/dashboard-selects.js' %}?v=20260406_dashboard_selects_1"></script>
     <script src="{% static 'js/dashboard.js' %}"></script>
     {% for script in dashboard_extra_scripts %}
-        {% if script == 'js/schedules.js' %}
-            <script src="{% static script %}?v=20260406_schedule_filters_2"></script>
+        {% if script == 'js/schedules.js' or script == 'js/schedule-utils.js' or script == 'js/schedule-board.js' or script == 'js/schedule-workspace.js' or script == 'js/schedule-analysis.js' or script == 'js/schedule-filter-dropdown.js' or script == 'js/schedule-saved.js' or script == 'js/schedule-export.js' %}
+            <script src="{% static script %}?v=20260420_schedule_split_2"></script>
         {% else %}
             <script src="{% static script %}"></script>
         {% endif %}

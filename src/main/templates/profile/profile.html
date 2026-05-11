@@ -169,22 +169,23 @@
                                 <input id="profile-given-name"
                                        name="given_name"
                                        type="text"
-                                       maxlength="150"
+                                       maxlength="{{ string_max_length }}"
                                        class="form-control profile-control"
                                        autocomplete="given-name"
                                        disabled
                                        required>
+                                <div class="invalid-feedback" id="profile-given-name-error"></div>
                             </div>
                             <div class="col-12 col-md-6">
                                 <label for="profile-family-name" class="form-label">Apellidos</label>
                                 <input id="profile-family-name"
                                        name="family_name"
                                        type="text"
-                                       maxlength="150"
+                                       maxlength="{{ string_max_length }}"
                                        class="form-control profile-control"
                                        autocomplete="family-name"
-                                       disabled
-                                       required>
+                                       disabled>
+                                <div class="invalid-feedback" id="profile-family-name-error"></div>
                             </div>
                             <div class="col-12">
                                 <label for="profile-email" class="form-label">Email</label>
@@ -193,6 +194,7 @@
                                        type="email"
                                        class="form-control profile-control"
                                        autocomplete="email"
+                                       maxlength="{{ max_length_extended }}"
                                        readonly
                                        disabled>
                             </div>
@@ -235,35 +237,65 @@
                               novalidate>
                             <div class="col-12">
                                 <label for="profile-current-password" class="form-label">Contraseña actual</label>
-                                <input id="profile-current-password"
-                                       name="current_password"
-                                       type="password"
-                                       class="form-control profile-control"
-                                       autocomplete="current-password"
-                                       disabled
-                                       required>
+                                <div class="input-group">
+                                    <input id="profile-current-password"
+                                           name="current_password"
+                                           type="password"
+                                           class="form-control profile-control"
+                                           autocomplete="current-password"
+                                           disabled
+                                           required>
+                                    <button type="button"
+                                            class="btn btn-outline-secondary password-toggle-btn"
+                                            id="profile-current-password-toggle"
+                                            aria-label="Mostrar contraseña"
+                                            title="Mostrar contraseña">
+                                        <span class="password-toggle-icon-slot" aria-hidden="true"></span>
+                                    </button>
+                                </div>
+                                <div class="invalid-feedback" id="profile-current-password-error"></div>
                             </div>
                             <div class="col-12 col-md-6">
                                 <label for="profile-new-password" class="form-label">Nueva contraseña</label>
-                                <input id="profile-new-password"
-                                       name="new_password"
-                                       type="password"
-                                       minlength="8"
-                                       class="form-control profile-control"
-                                       autocomplete="new-password"
-                                       disabled
-                                       required>
+                                <div class="input-group">
+                                    <input id="profile-new-password"
+                                           name="new_password"
+                                           type="password"
+                                           minlength="8"
+                                           class="form-control profile-control"
+                                           autocomplete="new-password"
+                                           disabled
+                                           required>
+                                    <button type="button"
+                                            class="btn btn-outline-secondary password-toggle-btn"
+                                            id="profile-new-password-toggle"
+                                            aria-label="Mostrar contraseña"
+                                            title="Mostrar contraseña">
+                                        <span class="password-toggle-icon-slot" aria-hidden="true"></span>
+                                    </button>
+                                </div>
+                                <div class="invalid-feedback" id="profile-new-password-error"></div>
                             </div>
                             <div class="col-12 col-md-6">
                                 <label for="profile-confirm-password" class="form-label">Repite la nueva contraseña</label>
-                                <input id="profile-confirm-password"
-                                       name="password_confirm"
-                                       type="password"
-                                       minlength="8"
-                                       class="form-control profile-control"
-                                       autocomplete="new-password"
-                                       disabled
-                                       required>
+                                <div class="input-group">
+                                    <input id="profile-confirm-password"
+                                           name="password_confirm"
+                                           type="password"
+                                           minlength="8"
+                                           class="form-control profile-control"
+                                           autocomplete="new-password"
+                                           disabled
+                                           required>
+                                    <button type="button"
+                                            class="btn btn-outline-secondary password-toggle-btn"
+                                            id="profile-confirm-password-toggle"
+                                            aria-label="Mostrar contraseña"
+                                            title="Mostrar contraseña">
+                                        <span class="password-toggle-icon-slot" aria-hidden="true"></span>
+                                    </button>
+                                </div>
+                                <div class="invalid-feedback" id="profile-confirm-password-error"></div>
                             </div>
                             <div class="col-12 d-none" id="profile-password-actions">
                                 <div class="d-flex flex-column flex-sm-row gap-2 pt-1">
@@ -272,7 +304,9 @@
                                             type="button"
                                             class="btn btn-outline-secondary">Cancelar</button>
                                 </div>
-                                <p class="profile-form-note mt-2 mb-0">Mínimo 8 caracteres. Usa una combinación robusta y única.</p>
+                                <p class="profile-form-note mt-2 mb-0">
+                                    Mínimo 8 caracteres, incluyendo al menos una letra y un número. Usa una combinación robusta y única.
+                                </p>
                             </div>
                         </form>
                         <div id="profile-password-alert"
@@ -334,7 +368,7 @@
              tabindex="-1"
              aria-labelledby="dashboardCreateTeamModalLabel"
              aria-hidden="true">
-            <div class="modal-dialog">
+            <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title" id="dashboardCreateTeamModalLabel">Crear equipo</h5>
@@ -344,16 +378,19 @@
                                 aria-label="Cerrar"></button>
                     </div>
                     <div class="modal-body">
-                        <label for="dashboard-new-team-name" class="form-label">Nombre del equipo</label>
+                        <div class="d-flex align-items-center gap-1 mb-1">
+                            <label for="dashboard-new-team-name" class="form-label fw-semibold mb-0">Nombre del equipo</label>
+                            <span class="text-danger" aria-hidden="true">*</span>
+                        </div>
                         <input id="dashboard-new-team-name"
                                type="text"
                                class="form-control"
-                               maxlength="150"
+                               maxlength="{{ string_max_length }}"
                                placeholder="Ej: Equipo de Jefatura" />
                         <div id="dashboard-create-team-error"
                              class="text-danger small mt-2 d-none"></div>
                     </div>
-                    <div class="modal-footer">
+                    <div class="modal-footer justify-content-center">
                         <button type="button"
                                 class="btn btn-outline-secondary"
                                 data-bs-dismiss="modal">Cancelar</button>
@@ -369,7 +406,7 @@
              tabindex="-1"
              aria-labelledby="dashboardInviteTeamModalLabel"
              aria-hidden="true">
-            <div class="modal-dialog">
+            <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title" id="dashboardInviteTeamModalLabel">Invitar usuario</h5>
@@ -379,15 +416,19 @@
                                 aria-label="Cerrar"></button>
                     </div>
                     <div class="modal-body">
-                        <label for="dashboard-invite-email" class="form-label">Email del usuario existente</label>
+                        <div class="d-flex align-items-center gap-1 mb-1">
+                            <label for="dashboard-invite-email" class="form-label fw-semibold mb-0">Email del usuario existente</label>
+                            <span class="text-danger" aria-hidden="true">*</span>
+                        </div>
                         <input id="dashboard-invite-email"
                                type="email"
                                class="form-control"
+                               maxlength="{{ max_length_extended }}"
                                placeholder="usuario@centro.com" />
-                        <div id="dashboard-invite-team-error"
-                             class="text-danger small mt-2 d-none"></div>
+                        <small class="text-secondary d-block mt-1">La invitación solo se enviará a cuentas registradas en Orarioo.</small>
+                        <div id="dashboard-invite-team-error" class="small mt-2 d-none"></div>
                     </div>
-                    <div class="modal-footer">
+                    <div class="modal-footer justify-content-center">
                         <button type="button"
                                 class="btn btn-outline-secondary"
                                 data-bs-dismiss="modal">Cancelar</button>
@@ -425,6 +466,44 @@
             </div>
         </div>
         <div class="modal fade"
+             id="dashboardLeaveTeamModal"
+             tabindex="-1"
+             aria-labelledby="dashboardLeaveTeamModalLabel"
+             aria-hidden="true"
+             data-bs-backdrop="static"
+             data-bs-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="modal-title h5 mb-0" id="dashboardLeaveTeamModalLabel">Salir del equipo</h3>
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body py-4">
+                        <p class="mb-2 text-center fw-semibold">
+                            ¿Está seguro de que quiere <strong>salir del equipo</strong>?
+                        </p>
+                        <p class="mb-0 text-center text-body-secondary">Para volver a entrar será necesario que le inviten de nuevo.</p>
+                        <p class="mb-0 text-center text-body-secondary">
+                            Si es el último miembro, todos los datos del equipo (horarios, grupos, materias, profesores y aulas) se eliminarán permanentemente.
+                        </p>
+                        <div id="dashboard-leave-team-error"
+                             class="text-danger small mt-3 text-center d-none"></div>
+                    </div>
+                    <div class="modal-footer justify-content-center gap-2">
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                data-bs-dismiss="modal">Cancelar</button>
+                        <button id="dashboard-leave-team-confirm"
+                                type="button"
+                                class="btn btn-danger">Confirmar y salir</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade"
              id="profileDeleteAccountModal"
              tabindex="-1"
              aria-labelledby="profileDeleteAccountModalLabel"
@@ -455,7 +534,7 @@
                                 <input id="profile-delete-confirmation"
                                        type="text"
                                        class="form-control profile-control"
-                                       maxlength="255"
+                                       maxlength="{{ max_length_extended }}"
                                        placeholder="usuario@dominio.com"
                                        autocomplete="off"
                                        required>

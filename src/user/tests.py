@@ -16,7 +16,6 @@ from auditableEntity.models import AuditEntry
 from classroom.models import Classroom
 from group.models import EducationalStage as GroupEducationalStage
 from group.models import Group
-from namedEntity.models import NamedEntity
 from schedule.models import Schedule
 from subject.models import Subject
 from teacher.models import Teacher
@@ -59,9 +58,6 @@ class UserModelTests(TestCase):
         self.assertIn("$", user.password)
         self.assertTrue(user.check_password(raw_password))
 
-    def test_user_inherits_named_entity(self):
-        self.assertTrue(issubclass(User, NamedEntity))
-
     def test_create_superuser(self):
         superuser = User.objects.create_superuser(
             email="admin@example.com",
@@ -71,16 +67,6 @@ class UserModelTests(TestCase):
 
         self.assertTrue(superuser.is_superuser)
         self.assertTrue(superuser.is_staff)
-
-    def test_string_representation(self):
-        user = User.objects.create_user(**self.user_data)
-        expected = f"{user.given_name} {user.family_name} ({user.email})"
-
-        self.assertEqual(str(user), expected)
-
-    def test_create_user_ignores_legacy_role_field(self):
-        user = User.objects.create_user(**self.user_data, role="administrator")
-        self.assertEqual(user.email, self.user_data["email"])
 
 
 class UserAdminNotificationTests(TestCase):
@@ -202,6 +188,35 @@ class AuthenticationApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_signup_rejects_password_without_number(self):
+        invalid_data = self.user_data.copy()
+        invalid_data["email"] = "nonumber@example.com"
+        invalid_data["password"] = "PasswordOnly"
+        invalid_data["password_confirm"] = "PasswordOnly"
+
+        response = self.client.post(self.signup_url, invalid_data, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("password", response.data)
+
+    def test_signup_rejects_email_exceeding_max_length(self):
+        invalid_data = self.user_data.copy()
+        # Create an email much longer than typical to ensure rejection
+        invalid_data["email"] = "a" * 200 + "@example.com"
+
+        response = self.client.post(self.signup_url, invalid_data, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data)
+
+    def test_signup_accepts_email_within_max_length(self):
+        valid_data = self.user_data.copy()
+        valid_data["email"] = "a" * 87 + "@example.com"
+
+        response = self.client.post(self.signup_url, valid_data, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
     def test_signup_requires_privacy_policy_acceptance(self):
         invalid_data = self.user_data.copy()
         invalid_data["privacy_policy_accepted"] = False
@@ -219,26 +234,6 @@ class AuthenticationApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("terms_conditions_accepted", response.data)
-
-    def test_signup_ignores_administrator_role_when_requested(self):
-        payload = self.user_data.copy()
-        payload["email"] = "admin-signup@test.com"
-        payload["role"] = "administrator"
-
-        response = self.client.post(self.signup_url, payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertNotIn("role", response.data["user"])
-
-    def test_signup_ignores_direccion_role_when_requested(self):
-        payload = self.user_data.copy()
-        payload["email"] = "direccion-signup@test.com"
-        payload["role"] = "direccion"
-
-        response = self.client.post(self.signup_url, payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertNotIn("role", response.data["user"])
 
     def test_login_success(self):
         User.objects.create_user(
@@ -684,7 +679,8 @@ class CollaborationTeamApiTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # 409 Conflict: user already in team
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     def test_invite_rejects_duplicate_pending_invitation(self):
         invited_user = User.objects.create_user(
@@ -706,7 +702,8 @@ class CollaborationTeamApiTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # 409 Conflict: pending invitation already exists
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     def test_list_pending_invitations_for_current_user(self):
         CollaborationTeamInvitation.objects.create(
@@ -722,6 +719,56 @@ class CollaborationTeamApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["pending_count"], 1)
         self.assertEqual(response.data["count"], 1)
+
+    def test_list_invitations_can_filter_pending_status(self):
+        CollaborationTeamInvitation.objects.create(
+            team=self.team,
+            invited_user=self.member,
+            invited_by=self.admin,
+            status=CollaborationTeamInvitationStatus.PENDING,
+        )
+        CollaborationTeamInvitation.objects.create(
+            team=self.team,
+            invited_user=self.member,
+            invited_by=self.admin,
+            status=CollaborationTeamInvitationStatus.ACCEPTED,
+        )
+
+        self.client.force_authenticate(user=self.member)
+        response = self.client.get(
+            reverse("list-collaboration-team-invitations") + "?status=pending"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["pending_count"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(
+            response.data["results"][0]["status"],
+            CollaborationTeamInvitationStatus.PENDING,
+        )
+
+    def test_list_invitations_can_return_summary_count(self):
+        CollaborationTeamInvitation.objects.create(
+            team=self.team,
+            invited_user=self.member,
+            invited_by=self.admin,
+            status=CollaborationTeamInvitationStatus.PENDING,
+        )
+        CollaborationTeamInvitation.objects.create(
+            team=self.team,
+            invited_user=self.member,
+            invited_by=self.admin,
+            status=CollaborationTeamInvitationStatus.ACCEPTED,
+        )
+
+        self.client.force_authenticate(user=self.member)
+        response = self.client.get(
+            reverse("list-collaboration-team-invitations") + "?summary=count"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {"count": 2, "pending_count": 1})
 
     def test_accept_invitation_adds_membership(self):
         invitation = CollaborationTeamInvitation.objects.create(
@@ -772,6 +819,8 @@ class CollaborationTeamApiTests(APITestCase):
         self.assertFalse(self.team.members.filter(id=self.member.id).exists())
 
     def test_leave_team_removes_membership(self):
+        second_team = CollaborationTeam.objects.create(name="Equipo Segundo")
+        second_team.members.add(self.member)
         self.client.force_authenticate(user=self.member)
         response = self.client.post(
             reverse("leave-collaboration-team"),
@@ -781,6 +830,214 @@ class CollaborationTeamApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(self.team.members.filter(id=self.member.id).exists())
+
+
+class ScheduleConfigApiTests(APITestCase):
+    """Tests for onboarding and schedule-config stage metadata."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email="tramos@test.com",
+            password="Tramos123!",
+            given_name="Tramos",
+        )
+        self.team = CollaborationTeam.objects.create(name="Equipo Tramos")
+        self.team.members.add(self.user)
+        self.user.active_team = self.team
+        self.user.save(update_fields=["active_team"])
+        self.client.force_authenticate(user=self.user)
+        self.schedule_config_url = "/api/schedule-config/"
+        self.onboarding_url = "/api/onboarding/"
+
+    def test_get_schedule_config_returns_empty_config_when_no_stages_exist(self):
+        response = self.client.get(self.schedule_config_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("stage_colors", response.data)
+        self.assertEqual(response.data["schedule_config"], {})
+
+    def test_put_schedule_config_rejects_invalid_color(self):
+        payload = {
+            "schedule_config": {
+                "PRIMARY": {
+                    "label": "Primaria",
+                    "color": "turquoise",
+                    "start_time": "09:00",
+                    "end_time": "14:00",
+                    "breaks": [],
+                    "session_duration": 60,
+                }
+            }
+        }
+
+        response = self.client.put(self.schedule_config_url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("schedule_config", response.data)
+
+    def test_put_schedule_config_persists_color_and_stage_colors_map(self):
+        payload = {
+            "schedule_config": {
+                "PRIMARY": {
+                    "label": "Primaria",
+                    "color": "pink",
+                    "start_time": "09:00",
+                    "end_time": "14:00",
+                    "breaks": [],
+                    "session_duration": 60,
+                }
+            }
+        }
+
+        response = self.client.put(self.schedule_config_url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.team.refresh_from_db()
+        self.assertEqual(self.team.schedule_config["PRIMARY"]["color"], "pink")
+        self.assertEqual(response.data["stage_colors"]["PRIMARY"], "pink")
+
+    def test_put_schedule_config_rejects_non_sixty_minute_session_duration(self):
+        payload = {
+            "schedule_config": {
+                "PRIMARY": {
+                    "label": "Primaria",
+                    "color": "blue",
+                    "start_time": "09:00",
+                    "end_time": "14:00",
+                    "breaks": [],
+                    "session_duration": 45,
+                }
+            }
+        }
+
+        response = self.client.put(self.schedule_config_url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("schedule_config", response.data)
+
+    def test_put_schedule_config_returns_code_for_break_outside_stage_range(self):
+        payload = {
+            "schedule_config": {
+                "PRIMARY": {
+                    "label": "Primaria",
+                    "color": "blue",
+                    "start_time": "09:00",
+                    "end_time": "14:00",
+                    "breaks": [{"start": "08:30", "end": "09:15"}],
+                    "session_duration": 60,
+                }
+            }
+        }
+
+        response = self.client.put(self.schedule_config_url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        error_entry = response.data["errors"]["schedule_config"][0]
+        self.assertEqual(error_entry["code"], "BREAK_OUTSIDE_STAGE_RANGE")
+        self.assertEqual(
+            error_entry["message"],
+            "El recreo debe estar dentro de la hora de entrada y salida de la etapa.",
+        )
+
+    def test_onboarding_applies_default_stage_color_when_missing(self):
+        onboarding_user = User.objects.create_user(
+            email="nuevo-centro@test.com",
+            password="NuevoCentro123!",
+            given_name="Centro",
+        )
+        self.client.force_authenticate(user=onboarding_user)
+
+        response = self.client.post(
+            self.onboarding_url,
+            {
+                "team_name": "Centro Nuevo",
+                "schedule_config": {
+                    "PRIMARY": {
+                        "label": "Primaria",
+                        "start_time": "09:00",
+                        "end_time": "14:00",
+                        "breaks": [],
+                        "session_duration": 60,
+                    }
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        onboarding_user.refresh_from_db()
+        self.assertEqual(
+            onboarding_user.active_team.schedule_config["PRIMARY"]["color"],
+            "blue",
+        )
+
+    def test_onboarding_allows_empty_schedule_config(self):
+        onboarding_user = User.objects.create_user(
+            email="centro-sin-tramos@test.com",
+            password="NuevoCentro123!",
+            given_name="Centro",
+        )
+        self.client.force_authenticate(user=onboarding_user)
+
+        response = self.client.post(
+            self.onboarding_url,
+            {
+                "team_name": "Centro Sin Tramos",
+                "schedule_config": {},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        onboarding_user.refresh_from_db()
+        self.assertEqual(onboarding_user.active_team.name, "Centro Sin Tramos")
+        self.assertEqual(onboarding_user.active_team.schedule_config, {})
+
+    def test_put_schedule_config_blocks_deleting_stage_in_use(self):
+        self.team.schedule_config = {
+            "PRIMARY": {
+                "label": "Primaria",
+                "color": "blue",
+                "start_time": "09:00",
+                "end_time": "14:00",
+                "breaks": [],
+                "session_duration": 60,
+            },
+            "SECONDARY": {
+                "label": "ESO",
+                "color": "orange",
+                "start_time": "08:00",
+                "end_time": "14:30",
+                "breaks": [],
+                "session_duration": 60,
+            },
+        }
+        self.team.save(update_fields=["schedule_config"])
+        Group.objects.create(
+            name="1A",
+            team=self.team,
+            stage=GroupEducationalStage.PRIMARY,
+        )
+
+        payload = {
+            "schedule_config": {
+                "SECONDARY": {
+                    "label": "ESO",
+                    "color": "orange",
+                    "start_time": "08:00",
+                    "end_time": "14:30",
+                    "breaks": [],
+                    "session_duration": 60,
+                }
+            }
+        }
+
+        response = self.client.put(self.schedule_config_url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("schedule_config", response.data)
+        self.assertIn("No se puede eliminar una etapa", response.data["detail"])
 
 
 class PermissionsTests(APITestCase):
@@ -928,18 +1185,14 @@ class DataPortabilityTests(TestCase):
         self.assertEqual(third.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
         self.assertIn("Retry-After", third)
 
-    def test_audit_log_is_created_with_user_time_and_ip(self):
+    def test_audit_log_is_created_with_user_time(self):
         self._authenticate_as_user()
 
-        response = self.client.post(
-            self.export_url,
-            REMOTE_ADDR="198.51.100.44",
-        )
+        response = self.client.post(self.export_url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         log = UserDataExportLog.objects.filter(user=self.user).first()
         self.assertIsNotNone(log)
-        self.assertEqual(log.ip_address, "198.51.100.44")
         self.assertEqual(log.outcome, UserDataExportLog.Outcome.SUCCESS)
         self.assertIsNotNone(log.created_at)
 

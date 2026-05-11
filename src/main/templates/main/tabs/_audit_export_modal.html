@@ -1,0 +1,70 @@
+<div class="modal fade"
+     id="auditExportModal"
+     tabindex="-1"
+     aria-labelledby="auditExportModalTitle"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content schedule-modal-content">
+            <div class="modal-header flex-column align-items-start gap-1">
+                <div class="d-flex justify-content-between align-items-center w-100">
+                    <h5 id="auditExportModalTitle" class="modal-title">Exportar registro</h5>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
+                </div>
+                <p class="text-secondary small mb-0">
+                    Se exportará la información filtrada actualmente. Selecciona el formato y la información opcional que quieres incluir.
+                </p>
+            </div>
+            <div class="modal-body">
+                <div class="mb-4">
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <label for="auditExportFormat" class="form-label fw-semibold mb-0">Formato</label>
+                        <span class="text-danger" aria-hidden="true">*</span>
+                    </div>
+                    <select id="auditExportFormat" class="form-select">
+                        <option value="csv">CSV</option>
+                        <option value="pdf">PDF</option>
+                    </select>
+                </div>
+                <div>
+                    <p class="form-label fw-semibold mb-1">Información opcional</p>
+                    <p class="text-secondary small mb-2">Resumen y Detalle siempre se incluyen.</p>
+                    <div class="row row-cols-2 row-cols-lg-4 g-2 export-card-grid">
+                        <div class="col d-grid">
+                            <button type="button"
+                                    class="btn btn-outline-secondary export-entity-card"
+                                    data-audit-export-col="Fecha"
+                                    aria-pressed="false">Fecha</button>
+                        </div>
+                        <div class="col d-grid">
+                            <button type="button"
+                                    class="btn btn-outline-secondary export-entity-card"
+                                    data-audit-export-col="Usuario"
+                                    aria-pressed="false">Usuario</button>
+                        </div>
+                        <div class="col d-grid">
+                            <button type="button"
+                                    class="btn btn-outline-secondary export-entity-card"
+                                    data-audit-export-col="Elemento"
+                                    aria-pressed="false">Elemento</button>
+                        </div>
+                        <div class="col d-grid">
+                            <button type="button"
+                                    class="btn btn-outline-secondary export-entity-card"
+                                    data-audit-export-col="Acción"
+                                    aria-pressed="false">Acción</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="auditExportConfirmBtn" class="btn btn-primary">Exportar</button>
+            </div>
+        </div>
+    </div>
+</div>

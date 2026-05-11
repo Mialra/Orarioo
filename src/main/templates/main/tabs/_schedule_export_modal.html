@@ -6,41 +6,63 @@
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div class="modal-content schedule-modal-content schedule-export-modal-content">
             <div class="modal-header">
-                <h5 id="exportModalTitle" class="modal-title">Exportar horario</h5>
+                <div>
+                    <h5 id="exportModalTitle" class="modal-title mb-0">Exportar horario</h5>
+                    <p id="exportContextText" class="text-secondary small mb-0 mt-1">
+                        Se exportará la información que elijas. Selecciona el formato y las columnas opcionales que quieres incluir.
+                    </p>
+                </div>
                 <button type="button"
                         class="btn-close"
                         data-bs-dismiss="modal"
                         aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <p id="exportContextText" class="text-secondary small mb-3">
-                    Marca las entidades que quieres incluir o selecciona objetos concretos.
-                </p>
+                <div id="export-modal-alert"
+                     class="alert d-none mb-3"
+                     role="alert"
+                     aria-live="polite"></div>
                 <div class="mb-3">
-                    <label for="exportFormat" class="form-label">Formato</label>
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <label for="exportFormat" class="form-label fw-semibold mb-0">Formato</label>
+                        <span class="text-danger" aria-hidden="true">*</span>
+                    </div>
                     <select id="exportFormat" class="form-select">
                         <option value="csv">CSV</option>
                         <option value="pdf">PDF</option>
                     </select>
                 </div>
-                <div class="row row-cols-1 row-cols-lg-3 g-2 mb-2 export-card-grid">
+                <div class="d-flex align-items-center gap-1 mb-2">
+                    <span class="fw-semibold">Información a exportar</span>
+                    <span class="text-danger" aria-hidden="true">*</span>
+                </div>
+                <div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-2 mb-2 export-card-grid">
                     <div class="col d-grid">
                         <button type="button"
                                 class="btn btn-outline-secondary export-entity-card"
                                 data-export-entity="group"
+                                data-export-select="exportGroupSelect"
                                 aria-pressed="false">Todos los cursos</button>
                     </div>
                     <div class="col d-grid">
                         <button type="button"
                                 class="btn btn-outline-secondary export-entity-card"
                                 data-export-entity="teacher"
+                                data-export-select="exportTeacherSelect"
                                 aria-pressed="false">Todos los profesores</button>
                     </div>
                     <div class="col d-grid">
                         <button type="button"
                                 class="btn btn-outline-secondary export-entity-card"
                                 data-export-entity="classroom"
+                                data-export-select="exportClassroomSelect"
                                 aria-pressed="false">Todas las aulas</button>
+                    </div>
+                    <div class="col d-grid">
+                        <button type="button"
+                                class="btn btn-outline-secondary export-entity-card"
+                                data-export-entity="tc"
+                                aria-pressed="false">Horas de guardia</button>
                     </div>
                 </div>
                 <div class="row g-2">
@@ -58,7 +80,7 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer justify-content-center">
                 <button type="button"
                         id="cancelExportBtn"
                         class="btn btn-outline-secondary"

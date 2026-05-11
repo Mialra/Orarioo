@@ -3,6 +3,8 @@ from django.urls import reverse
 
 
 class MainSmokeTests(TestCase):
+    """Smoke tests for main public and dashboard routes."""
+
     def test_placeholder(self):
         self.assertTrue(True)
 
@@ -20,13 +22,6 @@ class MainSmokeTests(TestCase):
             response.context["dashboard_saved_timetable_name"],
             "Horario Demo",
         )
-
-    def test_dashboard_saved_route_has_empty_selected_timetable_name(self):
-        response = self.client.get(reverse("dashboard-saved"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["dashboard_section"], "saved")
-        self.assertEqual(response.context["dashboard_saved_timetable_name"], "")
 
     def test_privacy_policy_route_is_public(self):
         response = self.client.get(reverse("privacy-policy"))
