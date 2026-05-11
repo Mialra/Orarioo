@@ -2,6 +2,7 @@
  * Sign-up page: field validation, server error mapping, and account creation flow.
  */
 (function () {
+  const ONBOARDING_ENTRY_KEY = "orarioo_onboarding_entry";
   const form = document.getElementById("signup-form");
   const submitButton = document.getElementById("signup-submit");
   const alertBox = document.getElementById("auth-alert");
@@ -111,28 +112,17 @@
     alertBox.classList.remove("error", "info", "success");
   }
 
-  /**
-   * Clears all field-level validation states before a new submission attempt.
-   */
   function clearFieldErrors() {
     fields.forEach(function (field) {
       window.OrariooValidators.clearFieldValidity(field.input, field.feedback);
     });
   }
 
-  /**
-   * Clears errors and runs field validators against the payload.
-   * Input: payload - object mapping field names to their current values
-   * Output: boolean true if all fields are valid
-   */
   function validateForm(payload) {
     clearFieldErrors();
     return window.OrariooValidators.validateFields(fields, payload);
   }
 
-  /**
-   * Enables the submit button only when both legal checkboxes are checked.
-   */
   function syncLegalControls() {
     const accepted = privacyCheckbox?.checked && termsCheckbox?.checked;
     submitButton.disabled = !accepted;
@@ -145,11 +135,6 @@
     submitButton.disabled = isLoading || !accepted;
   }
 
-  /**
-   * Returns true if the error response contains per-field errors matching any form field name.
-   * Input: data - parsed API error response object or null
-   * Output: boolean
-   */
   function hasFieldErrors(data) {
     if (!data || typeof data !== "object") {
       return false;
@@ -171,11 +156,6 @@
     });
   }
 
-  /**
-   * Returns a general alert message for signup failures; empty string if errors were field-level.
-   * Input: data - parsed API error response object or null
-   * Output: user-facing error string, or empty string
-   */
   function getFriendlySignupError(data) {
     if (hasFieldErrors(data)) {
       return "";
@@ -186,10 +166,6 @@
     }).message;
   }
 
-  /**
-   * Validates the form, posts to /api/signup/, and redirects to /dashboard/ on success.
-   * Input: event - form submit Event
-   */
   async function submitSignup(event) {
     event.preventDefault();
     clearAlert();
@@ -231,7 +207,12 @@
       }
 
       window.orariooAuth.setAuthSession(data);
-      window.location.href = "/dashboard/";
+      try {
+        window.sessionStorage.setItem(ONBOARDING_ENTRY_KEY, "signup");
+      } catch (_error) {
+        // If sessionStorage is unavailable, the onboarding page will fall back to its guard.
+      }
+      window.location.href = "/onboarding/";
     } catch (e) {
       showAlert("No hay conexión con el servidor.", "error");
     } finally {

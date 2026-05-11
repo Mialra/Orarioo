@@ -131,6 +131,25 @@ class ScheduleSerializer(
                 context={"field": "users"},
             )
 
+        classroom = attrs.get(
+            "classroom", self.instance.classroom if self.instance else None
+        )
+        group = attrs.get("group", self.instance.group if self.instance else None)
+        if classroom is None:
+            raise_validation_error(
+                "classroom",
+                "REQUIRED_FIELD",
+                "This field is required.",
+                context={"field": "classroom"},
+            )
+        if group is None:
+            raise_validation_error(
+                "group",
+                "REQUIRED_FIELD",
+                "This field is required.",
+                context={"field": "group"},
+            )
+
         attrs["observations"] = normalize_optional_text(
             attrs.get(
                 "observations", self.instance.observations if self.instance else ""

@@ -25,6 +25,17 @@
       .toUpperCase();
   }
 
+  function collectDiagnostics(payload) {
+    if (!payload || typeof payload !== "object") {
+      return [];
+    }
+    if (payload.errors && Array.isArray(payload.errors.non_field_errors) && payload.errors.non_field_errors.length) {
+      return payload.errors.non_field_errors;
+    }
+    const context = payload._error && payload._error.context ? payload._error.context : {};
+    return Array.isArray(context.diagnostics) ? context.diagnostics : [];
+  }
+
   const codeMessages = {
     REQUIRED_FIELD: function () {
       return "Este campo es obligatorio.";
@@ -37,14 +48,10 @@
     },
     DUPLICATE_VALUE: function (entry) {
       const context = entry && entry.context ? entry.context : {};
-      const value = context.value || "";
       if (context.field === "email") {
         return "Ya existe un usuario con este correo electrónico.";
       }
-      if (value) {
-        return 'Ya existe un registro con el valor "' + value + '".';
-      }
-      return "Ya existe un registro con este valor.";
+      return "Este nombre ya existe.";
     },
     REQUIRED_COLLECTION: function () {
       return "Debes seleccionar al menos un elemento.";
@@ -54,6 +61,21 @@
     },
     INVALID_TIME_RANGE: function () {
       return "La hora de fin debe ser posterior a la hora de inicio.";
+    },
+    BREAK_OUTSIDE_STAGE_RANGE: function () {
+      return "El recreo debe estar dentro de la hora de entrada y salida de la etapa.";
+    },
+    INVALID_BREAK_RANGE: function () {
+      return "La hora de fin del recreo debe ser posterior a la hora de inicio.";
+    },
+    OVERLAPPING_BREAKS: function () {
+      return "Los recreos no pueden solaparse entre si.";
+    },
+    INVALID_SESSION_DURATION: function () {
+      return "La duracion de la sesion debe ser exactamente de 60 minutos.";
+    },
+    INVALID_SCHEDULE_CONFIG: function () {
+      return "La configuracion de tramos no es valida.";
     },
     INVALID_HOUR_RANGE: function () {
       return "Las horas de trabajo no pueden superar el máximo semanal.";
@@ -100,8 +122,8 @@
     ACTIVE_TEAM_REQUIRED: function () {
       return "Selecciona un equipo antes de continuar.";
     },
-    INVITED_USER_NOT_FOUND: function () {
-      return "No existe un usuario activo con ese correo electrónico.";
+    LAST_TEAM_CANNOT_LEAVE: function () {
+      return "No puedes salir de tu único equipo. Crea o únete a otro equipo primero.";
     },
     USER_ALREADY_IN_TEAM: function () {
       return "Ese usuario ya pertenece al equipo seleccionado.";
@@ -141,6 +163,17 @@
         '" supera su capacidad disponible.'
       );
     },
+    TEACHER_EXACT_HOURS_NOT_MET: function (entry) {
+      return entry && entry.message
+        ? entry.message
+        : "La carga horaria exacta del profesor no pudo ser satisfecha.";
+    },
+    INVALID_MINUTES_VALUE: function () {
+      return "Los minutos deben ser 0 ó 30.";
+    },
+    ZERO_WEEKLY_LOAD: function () {
+      return "La carga semanal total no puede ser cero.";
+    },
     NO_COMPATIBLE_CLASSROOM: function (entry) {
       const context = entry && entry.context ? entry.context : {};
       if (context.subject) {
@@ -178,6 +211,176 @@
     },
     SCHEDULE_GENERATION_FAILED: function () {
       return "No se ha podido generar el horario con las restricciones actuales.";
+    },
+    MISSING_SUBJECTS: function () {
+      return "No puedes generar el horario sin haber creado antes al menos una asignatura.";
+    },
+    GROUP_WEEKLY_CAPACITY_EXCEEDED: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        'El curso "' +
+        (context.group_name || "sin nombre") +
+        '" tiene ' +
+        (context.assigned_sessions || 0) +
+        " sesiones, pero su límite semanal es " +
+        (context.capacity || 0) +
+        "."
+      );
+    },
+    GROUP_DAILY_CAPACITY_EXCEEDED: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        'El curso "' +
+        (context.group_name || "sin nombre") +
+        '" no puede encajar tantas sesiones sin superar su límite diario de ' +
+        (context.daily_capacity || 0) +
+        "."
+      );
+    },
+    TEACHER_WEEKLY_CAPACITY_EXCEEDED: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        'El profesor "' +
+        (context.teacher_name || "sin nombre") +
+        '" tiene ' +
+        (context.assigned_sessions || 0) +
+        " sesiones, pero su límite semanal es " +
+        (context.capacity || 0) +
+        "."
+      );
+    },
+    TC_SLOT_CAPACITY_EXCEEDED: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        "Las sesiones TC requieren " +
+        (context.required_sessions || 0) +
+        " huecos, pero la capacidad actual solo permite " +
+        (context.capacity || 0) +
+        "."
+      );
+    },
+    SUBJECT_NO_AVAILABLE_SLOTS: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return 'La asignatura "' + (context.subject_name || "sin nombre") + '" no tiene ningún hueco disponible.';
+    },
+    TEACHER_NO_AVAILABLE_SLOTS: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return 'El profesor "' + (context.teacher_name || "sin nombre") + '" no tiene ningún hueco disponible.';
+    },
+    GROUP_NO_AVAILABLE_SLOTS: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return 'El curso "' + (context.group_name || "sin nombre") + '" no tiene ningún hueco compatible.';
+    },
+    SUBJECT_INSUFFICIENT_AVAILABLE_SLOTS: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        'La asignatura "' +
+        (context.subject_name || "sin nombre") +
+        '" necesita ' +
+        (context.required_sessions || 0) +
+        " sesiones, pero solo tiene " +
+        (context.available_slots || 0) +
+        " huecos compatibles."
+      );
+    },
+    TEACHER_INSUFFICIENT_AVAILABLE_SLOTS: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        'El profesor "' +
+        (context.teacher_name || "sin nombre") +
+        '" necesita ' +
+        (context.required_sessions || 0) +
+        " sesiones, pero solo tiene " +
+        (context.available_slots || 0) +
+        " huecos compatibles."
+      );
+    },
+    GROUP_INSUFFICIENT_AVAILABLE_SLOTS: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        'El curso "' +
+        (context.group_name || "sin nombre") +
+        '" necesita ' +
+        (context.required_sessions || 0) +
+        " sesiones, pero solo tiene " +
+        (context.available_slots || 0) +
+        " huecos compatibles."
+      );
+    },
+    TEACHER_OVERLAPPED_DEMAND: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        'El profesor "' +
+        (context.teacher_name || "sin nombre") +
+        '" tiene varias asignaturas compitiendo por muy pocos huecos.'
+      );
+    },
+    GROUP_OVERLAPPED_DEMAND: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        'El curso "' +
+        (context.group_name || "sin nombre") +
+        '" tiene varias asignaturas compitiendo por muy pocos huecos.'
+      );
+    },
+    CLASSROOM_BOTTLENECK: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      if (Array.isArray(context.subject_names) && context.subject_names.length) {
+        return "Las asignaturas " + context.subject_names.join(", ") + " dependen de muy pocas aulas compatibles.";
+      }
+      return "Hay demasiadas sesiones compitiendo por muy pocas aulas compatibles.";
+    },
+    SUBJECT_TEACHER_AVAILABILITY_MISMATCH: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        'La asignatura "' +
+        (context.subject_name || "sin nombre") +
+        '" y el profesor "' +
+        (context.teacher_name || "sin nombre") +
+        '" apenas comparten huecos compatibles.'
+      );
+    },
+    SUBJECT_GROUP_AVAILABILITY_MISMATCH: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        'La asignatura "' +
+        (context.subject_name || "sin nombre") +
+        '" y el curso "' +
+        (context.group_name || "sin nombre") +
+        '" apenas comparten huecos compatibles.'
+      );
+    },
+    NO_GAP_CONSTRAINT_TOO_STRICT: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        'La restricción de no dejar huecos intermedios está bloqueando al curso "' +
+        (context.group_name || "sin nombre") +
+        '".'
+      );
+    },
+    STAGE_SLOT_WINDOW_TOO_NARROW: function (entry) {
+      const context = entry && entry.context ? entry.context : {};
+      return (
+        'La etapa del curso "' +
+        (context.group_name || "sin nombre") +
+        '" solo deja ' +
+        (context.available_slots || 0) +
+        " huecos utilizables para " +
+        (context.required_sessions || 0) +
+        " sesiones."
+      );
+    },
+    SCHEDULE_INFEASIBLE: function () {
+      return "No se puede generar el horario con las restricciones obligatorias actuales.";
+    },
+    SCHEDULE_SOLVER_TIMEOUT: function () {
+      return "El generador no ha podido terminar a tiempo con las restricciones actuales.";
+    },
+    SCHEDULE_MODEL_INVALID: function () {
+      return "La configuración actual produce un modelo de horario no válido.";
+    },
+    SCHEDULE_INCOMPLETE_ASSIGNMENT: function () {
+      return "El generador devolvió una asignación incompleta.";
     },
     INTERNAL_ERROR: function () {
       return "Se ha producido un error interno. Inténtalo de nuevo en unos minutos.";
@@ -254,6 +457,16 @@
       return nonFieldErrors[0];
     }
 
+    if (payload.errors && typeof payload.errors === "object") {
+      const keys = Object.keys(payload.errors);
+      for (let i = 0; i < keys.length; i++) {
+        const entries = payload.errors[keys[i]];
+        if (Array.isArray(entries) && entries.length && entries[0] && entries[0].code) {
+          return entries[0];
+        }
+      }
+    }
+
     if (typeof payload.detail === "string" && payload.detail.trim()) {
       return {
         code: code,
@@ -298,6 +511,10 @@
       return codeMessages.PASSWORD_TOO_COMMON();
     }
 
+    if (/enter a valid email address/i.test(rawMessage)) {
+      return "Introduce un email válido.";
+    }
+
     var minMatch = rawMessage.match(/ensure this value is greater than or equal to (\d+)/i);
     if (minMatch) {
       var minValue = parseInt(minMatch[1], 10);
@@ -324,6 +541,10 @@
       return "Este campo no puede tener más de " + maxLength + " caracteres.";
     }
 
+    if (/already exists/i.test(rawMessage)) {
+      return "Este nombre ya existe.";
+    }
+
     if (safeEntry.message) {
       return rawMessage;
     }
@@ -342,12 +563,24 @@
     const fallbackMessage = config.fallbackMessage || "Se ha producido un error.";
     const generalEntry = getGeneralEntry(payload, fallbackMessage);
     const translatedMessage = translateEntry(generalEntry, fallbackMessage);
+    const diagnostics = collectDiagnostics(payload).map(function (entry) {
+      return {
+        code: normalizeCode(entry && entry.code),
+        message: translateEntry(entry, entry && entry.message ? String(entry.message) : fallbackMessage),
+        backendMessage: String((entry && entry.message) || ""),
+        context: entry && entry.context ? entry.context : {},
+        suggestions: Array.isArray(entry && entry.suggestions) ? entry.suggestions : [],
+        severity: entry && entry.severity ? entry.severity : "error",
+        scope: entry && entry.scope ? entry.scope : "",
+      };
+    });
 
     return {
       code: normalizeCode(generalEntry.code || (payload && payload._error ? payload._error.code : "")),
       message: translatedMessage,
       backendMessage: generalEntry.message || "",
       suggestions: Array.isArray(payload && payload.suggestions) ? payload.suggestions : [],
+      diagnostics: diagnostics,
       status: payload && payload._meta ? payload._meta.status_code : 0,
       raw: payload || null,
     };
@@ -387,9 +620,45 @@
   function renderAlertContent(errorInfo) {
     const info = errorInfo || {};
     const parts = ["<div>" + escapeHtml(info.message || "Se ha producido un error.") + "</div>"];
+    const diagnostics = Array.isArray(info.diagnostics) ? info.diagnostics : [];
+    // The headline already shows the first diagnostic, so skip it in the list.
+    const remainingDiagnostics = diagnostics.length > 0 ? diagnostics.slice(1) : [];
+    const visibleDiagnostics = remainingDiagnostics.slice(0, 5);
+    const extraDiagnostics = remainingDiagnostics.slice(5);
+
+    if (visibleDiagnostics.length) {
+      parts.push('<ul class="mb-0 mt-2">');
+      visibleDiagnostics.forEach(function (item) {
+        parts.push(
+          "<li>" + escapeHtml(item.message || item.backendMessage || "Se ha detectado un problema.") + "</li>",
+        );
+      });
+      parts.push("</ul>");
+    }
+
+    if (extraDiagnostics.length) {
+      parts.push('<details class="mt-2"><summary>Ver más problemas detectados</summary><ul class="mb-0 mt-2">');
+      extraDiagnostics.forEach(function (item) {
+        parts.push(
+          "<li>" + escapeHtml(item.message || item.backendMessage || "Se ha detectado un problema.") + "</li>",
+        );
+      });
+      parts.push("</ul></details>");
+    }
+
+    if (diagnostics.length) {
+      info.suggestions = Array.isArray(info.suggestions) ? info.suggestions.slice() : [];
+      diagnostics.forEach(function (item) {
+        (item.suggestions || []).forEach(function (suggestion) {
+          if (info.suggestions.indexOf(suggestion) === -1) {
+            info.suggestions.push(suggestion);
+          }
+        });
+      });
+    }
 
     if (Array.isArray(info.suggestions) && info.suggestions.length) {
-      parts.push('<details class="mt-2"><summary>Como resolverlo</summary><ul class="mb-0 mt-2">');
+      parts.push('<details class="mt-2"><summary>Cómo resolverlo</summary><ul class="mb-0 mt-2">');
       info.suggestions.forEach(function (item) {
         parts.push("<li>" + escapeHtml(item) + "</li>");
       });

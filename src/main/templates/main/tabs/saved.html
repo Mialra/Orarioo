@@ -9,7 +9,7 @@
             <div class="dash-panel-header">
                 <div>
                     <h2 class="dash-panel-title">Horarios Guardados</h2>
-                    <p class="dash-panel-copy">Selecciona un horario para verlo en detalle, filtrarlo y exportarlo.</p>
+                    <p class="dash-panel-copy">Selecciona un horario para verlo en detalle, filtrarlo, modificarlo o exportarlo.</p>
                 </div>
             </div>
             <div id="savedScheduleCards"
@@ -22,76 +22,85 @@
             </div>
         </section>
         <section id="savedWorkspaceSection" class="schedule-workspace d-none">
-            <div class="schedule-workspace-head">
-                <div class="schedule-workspace-topbar">
-                    <div class="schedule-workspace-brand">
-                        <div class="schedule-workspace-brand-icon" aria-hidden="true">
-                            <i data-lucide="folder-open" class="workspace-icon"></i>
-                        </div>
-                        <div class="schedule-workspace-heading">
-                            <div class="schedule-workspace-title-row">
-                                <h3 id="savedWorkspaceTitle" class="schedule-workspace-title">Horario Guardado</h3>
-                                <span id="savedWorkspaceStateBadge"
-                                      class="schedule-pill schedule-pill-saved">Guardado</span>
-                            </div>
-                        </div>
-                    </div>
-                    <button type="button"
-                            id="savedWorkspaceBackBtn"
-                            class="btn btn-outline-dark schedule-toolbar-btn">
-                        <i data-lucide="arrow-left" class="btn-icon" aria-hidden="true"></i>
-                        Volver
-                    </button>
-                </div>
-                <div class="schedule-workspace-toolbar">
-                    <div class="schedule-toolbar-filters">
-                        <select id="savedWorkspaceCourseFilter"
-                                class="form-select schedule-toolbar-select"
-                                aria-label="Filtrar por curso">
-                            <option value="">Todos los cursos</option>
-                        </select>
-                        <select id="savedWorkspaceTeacherFilter"
-                                class="form-select schedule-toolbar-select"
-                                aria-label="Filtrar por profesor">
-                            <option value="">Todos los profesores</option>
-                        </select>
-                        <select id="savedWorkspaceClassroomFilter"
-                                class="form-select schedule-toolbar-select"
-                                aria-label="Filtrar por aula">
-                            <option value="">Todas las aulas</option>
-                        </select>
-                        <select id="savedWorkspaceSubjectFilter"
-                                class="form-select schedule-toolbar-select"
-                                aria-label="Filtrar por asignatura">
-                            <option value="">Todas las asignaturas</option>
-                        </select>
-                    </div>
-                    <div class="schedule-toolbar-buttons">
-                        <button type="button"
-                                id="savedDefectsBtn"
-                                class="btn btn-outline-warning schedule-toolbar-btn"
-                                title="Ver todos los problemas detectados en el horario guardado">
-                            <i data-lucide="alert-circle" class="btn-icon" aria-hidden="true"></i>
-                            <span id="savedDefectsBtnLabel">Analizar</span>
-                        </button>
-                        <button type="button"
-                                id="savedWorkspaceExportBtn"
-                                class="btn btn-outline-secondary schedule-toolbar-btn">
-                            <i data-lucide="download" class="btn-icon" aria-hidden="true"></i>
-                            Exportar
-                        </button>
-                    </div>
-                </div>
-                <p class="schedule-workspace-hint mb-0"
-                   title="Puedes arrastrar y soltar una sesión para recolocarla dentro del horario.">
-                    <i data-lucide="move"
-                       class="schedule-workspace-hint-icon"
-                       aria-hidden="true"></i>
-                    Arrastra y suelta una sesión para recolocarla dentro del horario. Si la sueltas sobre otra, se intercambian automáticamente.
-                </p>
-            </div>
+            {% include "main/tabs/_schedule_workspace_head.html" with ws_prefix="saved" ws_icon="folder-open" ws_title="Horario Guardado" ws_dynamic_title=1 ws_badge_class="schedule-pill-saved" ws_badge_text="Guardado" ws_show_back=1 %}
             <div id="savedWorkspaceOutput" class="schedule-board-shell"></div>
         </section>
     </div>
 </section>
 {% include "main/tabs/_schedule_export_modal.html" %}
+<div class="modal fade"
+     id="renameSavedTimetableModal"
+     tabindex="-1"
+     aria-labelledby="renameSavedTimetableModalTitle"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
+        <div class="modal-content shadow-lg">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title h4 mb-0" id="renameSavedTimetableModalTitle">Renombrar horario</h3>
+                    <p class="text-secondary small mb-0 mt-1">Escribe el nuevo nombre para el horario guardado.</p>
+                </div>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="renameSavedTimetableForm" novalidate>
+                    <div id="renameSavedTimetableAlert" class="alert d-none mb-3" role="alert"></div>
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <label class="form-label fw-semibold mb-0"
+                               for="renameSavedTimetableInput">Nombre</label>
+                        <span class="text-danger" aria-hidden="true">*</span>
+                    </div>
+                    <input class="form-control"
+                           id="renameSavedTimetableInput"
+                           type="text"
+                           maxlength="150"
+                           placeholder="Nombre del horario"
+                           required>
+                    <div class="invalid-feedback" id="renameSavedTimetableNameError"></div>
+                </form>
+            </div>
+            <div class="modal-footer justify-content-center gap-2">
+                <button type="button"
+                        class="btn btn-outline-secondary px-4"
+                        data-bs-dismiss="modal">Cancelar</button>
+                <button type="button"
+                        id="confirmRenameSavedTimetableBtn"
+                        class="btn btn-primary px-4">Renombrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade"
+     id="deleteSavedTimetableModal"
+     tabindex="-1"
+     aria-labelledby="deleteSavedTimetableModalTitle"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title h5 mb-0" id="deleteSavedTimetableModalTitle">Confirmar eliminación</h3>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body py-4">
+                <p class="mb-2 text-center fw-semibold">
+                    ¿Está seguro de que quiere eliminar el horario <strong id="deleteSavedTimetableName"></strong>?
+                </p>
+                <p class="mb-0 text-center text-body-secondary">Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="modal-footer justify-content-center gap-2">
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        data-bs-dismiss="modal">Cancelar</button>
+                <button type="button"
+                        id="confirmDeleteSavedTimetableBtn"
+                        class="btn btn-danger">Eliminar</button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -4,18 +4,18 @@ Domain models for subjects, including type/stage choices and time-preference sta
 
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import UniqueConstraint
-from django.db.models.functions import Lower
 
 from auditableEntity.models import AuditableEntity, TeamScopedModel
-from common.stages import EducationalStage
+from common.stages import EducationalStage, canonical_group_stage
+from namedEntity.models import team_scoped_case_insensitive_name_constraint
+
+__all__ = ["EducationalStage", "Subject", "SubjectType", "SubjectTimePreferenceState"]
 
 
 class SubjectType(models.TextChoices):
     """Type of subject."""
 
     NORMAL = "NORMAL", "Normal"
-    TC = "TC", "TC"
 
 
 class SubjectTimePreferenceState(models.TextChoices):
@@ -34,11 +34,6 @@ class Subject(TeamScopedModel, AuditableEntity):
     duration = models.FloatField(default=1.0)
     preferred_time_slot = models.CharField(max_length=150, blank=True)
     time_preferences = models.JSONField(default=dict, blank=True)
-    stage = models.CharField(
-        max_length=20,
-        choices=EducationalStage.choices,
-        default=EducationalStage.PRIMARY,
-    )
     type = models.CharField(
         max_length=20,
         choices=SubjectType.choices,
@@ -54,20 +49,19 @@ class Subject(TeamScopedModel, AuditableEntity):
         on_delete=models.CASCADE,
         related_name="subjects",
     )
-    allowed_classrooms = models.ManyToManyField(
+    mandatory_classroom = models.ForeignKey(
         "classroom.Classroom",
+        null=True,
         blank=True,
-        related_name="allowed_subjects",
+        on_delete=models.SET_NULL,
+        related_name="mandatory_subjects",
     )
 
     class Meta:
         db_table = "subject"
         ordering = ["name", "id"]
         constraints = [
-            UniqueConstraint(
-                Lower("name"),
-                name="subject_name_ci_unique",
-            )
+            team_scoped_case_insensitive_name_constraint("subject_team_name_ci_unique")
         ]
 
     def clean(self):
@@ -82,9 +76,14 @@ class Subject(TeamScopedModel, AuditableEntity):
                 {"weekly_hours": "Weekly hours must be greater than zero."}
             )
 
+    def get_stage_display(self):
+        group_stage = canonical_group_stage(
+            getattr(self.group, "stage", None), default=None
+        )
+        config = getattr(getattr(self, "team", None), "schedule_config", None) or {}
+        label = (config.get(group_stage) or {}).get("label")
+        return label or group_stage or ""
+
     def __str__(self):
-        """Return a human-readable representation including the subject's stage.
-        Input: self - Subject instance
-        Output: str in the format 'name (stage)'
-        """
-        return f"{self.name} ({self.stage})"
+        group_stage = getattr(self.group, "stage", "")
+        return f"{self.name} ({group_stage})"

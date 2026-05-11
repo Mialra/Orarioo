@@ -63,34 +63,7 @@
                         </div>
                         <div class="col-12 col-md-6">
                             <div class="d-flex align-items-center gap-1 mb-1">
-                                <label class="form-label fw-semibold mb-0" for="admin-subject-stage">Etapa</label>
-                                <span class="text-danger" aria-hidden="true">*</span>
-                            </div>
-                            <select class="form-select orarioo-custom-select"
-                                    id="admin-subject-stage"
-                                    required>
-                                <option value="PRESCHOOL">Infantil</option>
-                                <option value="PRIMARY" selected>Primaria</option>
-                                <option value="SECONDARY">Secundaria</option>
-                            </select>
-                            <div class="invalid-feedback" id="admin-subject-stage-error"></div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <div class="d-flex align-items-center gap-1 mb-1">
-                                <label class="form-label fw-semibold mb-0" for="admin-subject-type">Tipo</label>
-                                <span class="text-danger" aria-hidden="true">*</span>
-                            </div>
-                            <select class="form-select orarioo-custom-select"
-                                    id="admin-subject-type"
-                                    required>
-                                <option value="NORMAL" selected>Normal</option>
-                                <option value="TC">Trabajo de Centro</option>
-                            </select>
-                            <div class="invalid-feedback" id="admin-subject-type-error"></div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <div class="d-flex align-items-center gap-1 mb-1">
-                                <label class="form-label fw-semibold mb-0" for="admin-subject-teacher">Profesor asignado</label>
+                                <label class="form-label fw-semibold mb-0" for="admin-subject-teacher">Profesor</label>
                                 <span class="text-danger" aria-hidden="true">*</span>
                             </div>
                             <select class="form-select orarioo-custom-select"
@@ -101,7 +74,10 @@
                             <div class="invalid-feedback" id="admin-subject-teacher-error"></div>
                         </div>
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-subject-group">Curso</label>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0" for="admin-subject-group">Curso</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
                             <select class="form-select orarioo-custom-select"
                                     id="admin-subject-group"
                                     required>
@@ -110,11 +86,17 @@
                             <div class="invalid-feedback" id="admin-subject-group-error"></div>
                         </div>
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold" for="admin-subject-allowed-classrooms">Aulas permitidas</label>
-                            <div id="admin-subject-allowed-classrooms"
-                                 class="admin-checkbox-list"
-                                 role="group"
-                                 aria-label="Aulas permitidas"></div>
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <label class="form-label fw-semibold mb-0"
+                                       for="admin-subject-mandatory-classroom">Aula</label>
+                                <span class="text-danger" aria-hidden="true">*</span>
+                            </div>
+                            <select class="form-select orarioo-custom-select"
+                                    id="admin-subject-mandatory-classroom"
+                                    required>
+                                <option value="">Selecciona aula</option>
+                            </select>
+                            <div class="invalid-feedback" id="admin-subject-mandatory-classroom-error"></div>
                         </div>
                         <div class="col-12 mt-1">
                             <input type="hidden" id="admin-subject-time-preferences" value="{}">
@@ -146,6 +128,10 @@
                             <div class="invalid-feedback" id="admin-subject-time-preferences-error"></div>
                         </div>
                         <div class="col-12 admin-form-actions">
+                            <button type="button"
+                                    class="btn btn-outline-secondary px-4 admin-modal-action-btn"
+                                    id="admin-subject-cancel-btn"
+                                    data-bs-dismiss="modal">Cancelar</button>
                             <button type="submit"
                                     class="btn btn-primary px-4 admin-modal-action-btn"
                                     id="admin-subject-submit-btn">
@@ -154,10 +140,6 @@
                                       aria-hidden="true"></span>
                                 <span id="admin-subject-submit-text">Crear</span>
                             </button>
-                            <button type="button"
-                                    class="btn btn-light border px-4 admin-modal-action-btn"
-                                    id="admin-subject-cancel-btn"
-                                    data-bs-dismiss="modal">Cancelar</button>
                         </div>
                     </form>
                 </div>
@@ -186,7 +168,7 @@
                 </div>
                 <div class="modal-footer justify-content-center gap-2">
                     <button type="button"
-                            class="btn btn-light border"
+                            class="btn btn-outline-secondary"
                             id="admin-subject-delete-cancel-btn"
                             data-bs-dismiss="modal">Cancelar</button>
                     <button type="button"

@@ -9,6 +9,8 @@ from django.db import transaction
 from rest_framework import serializers
 
 from app.constants import STRING_MAX_LENGTH
+from common.errors import build_error_entry
+from common.stages import DEFAULT_STAGE_COLORS, STAGE_COLOR_CHOICES
 from common.validators import (
     normalize_optional_text,
     raise_non_field_error,
@@ -437,3 +439,230 @@ class LoginSerializer(serializers.Serializer):
         data["user"] = user
         data["email"] = email
         return data
+
+
+# ---------------------------------------------------------------------------
+# Schedule configuration serializers
+# ---------------------------------------------------------------------------
+
+
+def _validate_hhmm(value, field_label):
+    """Parse and validate a 'HH:MM' time string.
+    Input: value - str to validate; field_label - name used in error messages
+    Output: str value unchanged if valid; raises ValidationError otherwise
+    """
+    try:
+        h, m = value.split(":")
+        if not (0 <= int(h) <= 23 and 0 <= int(m) <= 59):
+            raise ValueError
+    except (ValueError, AttributeError):
+        raise serializers.ValidationError(
+            {field_label: f"'{value}' no es una hora válida en formato HH:MM."}
+        )
+    return value
+
+
+def _schedule_config_error_entry(stage_code, error_payload):
+    """Build a structured schedule-config validation entry from nested serializer errors."""
+
+    raw_message = _first_error_message(error_payload)
+    message = raw_message or "La configuración de los tramos no es válida."
+    code = "INVALID_SCHEDULE_CONFIG"
+
+    if (
+        message
+        == "El recreo debe estar dentro de la hora de entrada y salida de la etapa."
+    ):
+        code = "BREAK_OUTSIDE_STAGE_RANGE"
+    elif message == "La hora de fin del recreo debe ser posterior a la hora de inicio.":
+        code = "INVALID_BREAK_RANGE"
+    elif message == "Los recreos no pueden solaparse entre sí.":
+        code = "OVERLAPPING_BREAKS"
+    elif message == "La hora de fin debe ser posterior a la hora de inicio.":
+        code = "INVALID_TIME_RANGE"
+    elif message == "La duración de la sesión debe ser exactamente de 60 minutos.":
+        code = "INVALID_SESSION_DURATION"
+
+    return build_error_entry(
+        code,
+        message,
+        context={"stage": stage_code},
+    )
+
+
+def _first_error_message(value):
+    """Return the first text message from a nested DRF error payload."""
+
+    if isinstance(value, dict):
+        if "message" in value:
+            return str(value.get("message") or "")
+        for nested_value in value.values():
+            message = _first_error_message(nested_value)
+            if message:
+                return message
+        return ""
+
+    if isinstance(value, list):
+        for item in value:
+            message = _first_error_message(item)
+            if message:
+                return message
+        return ""
+
+    if value in (None, ""):
+        return ""
+
+    return str(value)
+
+
+class StageConfigSerializer(serializers.Serializer):
+    """Validate the schedule config for a single educational stage."""
+
+    label = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, default=""
+    )
+    color = serializers.ChoiceField(
+        choices=[(color, color) for color in STAGE_COLOR_CHOICES],
+        required=False,
+        default="blue",
+    )
+    start_time = serializers.CharField()
+    end_time = serializers.CharField()
+    breaks = serializers.ListField(
+        child=serializers.DictField(child=serializers.CharField()),
+        required=False,
+        default=list,
+    )
+    session_duration = serializers.IntegerField(min_value=60, max_value=60, default=60)
+
+    def validate(self, data):
+        """Cross-field validation: start < end, each break has valid times within range, no overlap.
+        Input: data - dict of field values
+        Output: validated data dict; raises ValidationError on constraint violations
+        """
+        from datetime import time as dt_time
+
+        def parse(v):
+            h, m = v.split(":")
+            return dt_time(int(h), int(m))
+
+        start = parse(_validate_hhmm(data["start_time"], "start_time"))
+        end = parse(_validate_hhmm(data["end_time"], "end_time"))
+        if end <= start:
+            raise serializers.ValidationError(
+                {"end_time": "La hora de fin debe ser posterior a la hora de inicio."}
+            )
+        if int(data.get("session_duration", 60)) != 60:
+            raise serializers.ValidationError(
+                {
+                    "session_duration": "La duración de la sesión debe ser exactamente de 60 minutos."
+                }
+            )
+
+        breaks = data.get("breaks") or []
+        parsed = []
+        for i, b in enumerate(breaks):
+            if "start" not in b or "end" not in b:
+                raise serializers.ValidationError(
+                    {
+                        f"breaks[{i}]": "Cada recreo debe tener las claves 'start' y 'end'."
+                    }
+                )
+            bs_t = parse(_validate_hhmm(b["start"], f"breaks[{i}].start"))
+            be_t = parse(_validate_hhmm(b["end"], f"breaks[{i}].end"))
+            if be_t <= bs_t:
+                raise serializers.ValidationError(
+                    {
+                        f"breaks[{i}]": "La hora de fin del recreo debe ser posterior a la hora de inicio."
+                    }
+                )
+            if bs_t < start or be_t > end:
+                raise serializers.ValidationError(
+                    {
+                        f"breaks[{i}]": "El recreo debe estar dentro de la hora de entrada y salida de la etapa."
+                    }
+                )
+            parsed.append((bs_t, be_t))
+
+        # Check for overlaps between breaks
+        parsed_sorted = sorted(parsed)
+        for j in range(1, len(parsed_sorted)):
+            if parsed_sorted[j][0] < parsed_sorted[j - 1][1]:
+                raise serializers.ValidationError(
+                    {"breaks": "Los recreos no pueden solaparse entre sí."}
+                )
+
+        return data
+
+
+class ScheduleConfigSerializer(serializers.Serializer):
+    """Validate a full schedule_config dict (stage_code → stage config)."""
+
+    schedule_config = serializers.DictField(
+        child=serializers.DictField(), required=True
+    )
+
+    def validate_schedule_config(self, value):
+        """Ensure each stage config passes StageConfigSerializer.
+        Input: value - dict {stage_code: {start_time, end_time, ...}}
+        Output: validated dict; raises ValidationError on any violation
+        """
+        if not isinstance(value, dict):
+            raise serializers.ValidationError(
+                "La configuración de tramos debe ser un objeto."
+            )
+        errors = {}
+        validated = {}
+        for stage, cfg in value.items():
+            s = StageConfigSerializer(data=cfg)
+            if not s.is_valid():
+                errors[stage] = _schedule_config_error_entry(stage, s.errors)
+                continue
+            stage_cfg = dict(s.validated_data)
+            stage_cfg["color"] = stage_cfg.get("color") or DEFAULT_STAGE_COLORS.get(
+                stage, "blue"
+            )
+            validated[stage] = stage_cfg
+        if errors:
+            raise serializers.ValidationError(list(errors.values()))
+        seen_labels = {}
+        for stage_code, stage_cfg in validated.items():
+            label = (stage_cfg.get("label") or "").strip().lower()
+            if not label:
+                continue
+            if label in seen_labels:
+                raise serializers.ValidationError(
+                    f"El nombre de tramo '{stage_cfg['label']}' ya está en uso."
+                )
+            seen_labels[label] = stage_code
+        return validated
+
+
+class OnboardingSerializer(serializers.Serializer):
+    """Validate onboarding payload: team name + optional schedule_config."""
+
+    team_name = serializers.CharField(max_length=STRING_MAX_LENGTH)
+    schedule_config = serializers.DictField(
+        child=serializers.DictField(), required=False, default=dict
+    )
+
+    def validate_team_name(self, value):
+        """Normalize and validate team name.
+        Input: value - str submitted name
+        Output: str normalized; raises ValidationError if blank
+        """
+        return validate_and_normalize_required_text(value, field_name="team_name")
+
+    def validate_schedule_config(self, value):
+        """Delegate to ScheduleConfigSerializer for stage-level validation.
+        Input: value - raw schedule_config dict
+        Output: validated dict
+        """
+        if not value:
+            return value
+        inner = ScheduleConfigSerializer(data={"schedule_config": value})
+        if not inner.is_valid():
+            raise serializers.ValidationError(
+                inner.errors.get("schedule_config", inner.errors)
+            )
+        return inner.validated_data["schedule_config"]

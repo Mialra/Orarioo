@@ -145,7 +145,9 @@
     }
 
     /**
-     * Returns a validator rule that checks a weekly-hours input is a positive integer below 168.
+     * Returns a validator rule that checks a weekly-hours input is a non-negative integer below 168.
+     * Accepts 0 to allow expressing load in minutes only (e.g. 0 h 30 min); the server
+     * rejects a combined total of 0 h 0 min with ZERO_WEEKLY_LOAD.
      * Input: getInput - function returning the input DOM element
      * Output: validator rule object
      */
@@ -157,7 +159,7 @@
                 if (!raw) {
                     return window.OrariooErrorHandler.translateEntry({ code: "REQUIRED_FIELD" });
                 }
-                if (!window.OrariooValidators.rules.positiveInteger(raw)) {
+                if (!window.OrariooValidators.rules.nonNegativeInteger(raw)) {
                     return window.OrariooErrorHandler.translateEntry({ code: "INVALID_INTEGER" });
                 }
                 if (Number(raw) >= 168) {

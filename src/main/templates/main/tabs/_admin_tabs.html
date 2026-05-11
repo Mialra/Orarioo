@@ -10,6 +10,13 @@
             </a>
         </li>
         <li class="nav-item" role="presentation">
+            <a class="nav-link admin-subtab {% if dashboard_admin_tab == 'schedule_config' %}active{% endif %}"
+               href="{% url 'dashboard-administration-schedule-config' %}">
+                <i data-lucide="clock-3" class="dash-nav-icon"></i>
+                Tramos
+            </a>
+        </li>
+        <li class="nav-item" role="presentation">
             <a class="nav-link admin-subtab {% if dashboard_admin_tab == 'teachers' %}active{% endif %}"
                href="{% url 'dashboard-administration-teachers' %}">
                 <i data-lucide="graduation-cap" class="dash-nav-icon"></i>
@@ -24,17 +31,17 @@
             </a>
         </li>
         <li class="nav-item" role="presentation">
-            <a class="nav-link admin-subtab {% if dashboard_admin_tab == 'subjects' %}active{% endif %}"
-               href="{% url 'dashboard-administration-subjects' %}">
-                <i data-lucide="book-open" class="dash-nav-icon"></i>
-                Asignaturas
-            </a>
-        </li>
-        <li class="nav-item" role="presentation">
             <a class="nav-link admin-subtab {% if dashboard_admin_tab == 'classrooms' %}active{% endif %}"
                href="{% url 'dashboard-administration-classrooms' %}">
                 <i data-lucide="door-open" class="dash-nav-icon"></i>
                 Aulas
+            </a>
+        </li>
+        <li class="nav-item" role="presentation">
+            <a class="nav-link admin-subtab {% if dashboard_admin_tab == 'subjects' %}active{% endif %}"
+               href="{% url 'dashboard-administration-subjects' %}">
+                <i data-lucide="book-open" class="dash-nav-icon"></i>
+                Asignaturas
             </a>
         </li>
     </ul>

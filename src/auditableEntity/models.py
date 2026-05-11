@@ -48,7 +48,7 @@ class AuditEntry(models.Model):
 
     team = models.ForeignKey(
         "user.CollaborationTeam",
-        on_delete=models.SET_NULL,
+        on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="audit_entries",

@@ -12,18 +12,24 @@ from django.utils import timezone
 from auditableEntity.audit import create_audit_entry, suppress_audit_events
 from auditableEntity.models import AuditActionType
 from classroom.models import Classroom
-from group.models import EducationalStage, Group
+from group.models import Group
 from schedule.algorithm.assignment import solve_session_assignment
-from schedule.algorithm.constraints import validate_group_and_teacher_capacity
+from schedule.algorithm.diagnostics import (
+    BOTTLENECK_RANK,
+    collect_generation_diagnostics,
+    raise_schedule_generation_diagnostics,
+)
 from schedule.algorithm.errors import ScheduleGenerationError
 from schedule.algorithm.slots import (
     build_weekly_slots,
+    parse_schedule_config_to_slot_windows,
     session_stage_code,
     slot_instance_key,
 )
-from schedule.constants import AUTO_GENERATED_OBSERVATION
-from schedule.models import Schedule
-from subject.models import Subject, SubjectType
+from schedule.algorithm.tc_assigner import assign_tc_sessions
+from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
+from schedule.models import Schedule, TCSession
+from subject.models import Subject
 from teacher.models import Teacher
 
 # ---------------------------------------------------------------------------
@@ -59,7 +65,7 @@ def _get_or_create_group(actor_email: str, team):
         return group
     return Group.objects.create(
         name="Auto Group",
-        stage=EducationalStage.PRIMARY,
+        stage="PRIMARY",
         team=team,
         created_by=actor_email,
         updated_by=actor_email,
@@ -102,7 +108,7 @@ class BasicScheduleGenerator:
                user - Django User instance (owner of the generated schedules);
                team - Team model instance;
                random_seed - optional integer seed for reproducibility;
-               generation_options - dict with generation parameters (include_tc, tc_capacity, etc.)
+               generation_options - dict with generation parameters
         Output: list of created Schedule instances; empty list if no sessions to schedule
         """
         generation_options = generation_options or {}
@@ -112,38 +118,58 @@ class BasicScheduleGenerator:
             team=team,
         )
 
-        teacher = Teacher.objects.filter(team=team).order_by("id").first()
-        if teacher is None:
-            raise ScheduleGenerationError(
-                "At least one teacher is required before generating a schedule.",
-                code="MISSING_TEACHERS",
-                suggestions=[
-                    "Create at least one teacher before generating the schedule.",
-                ],
-            )
-
+        teachers = list(Teacher.objects.filter(team=team).order_by("id"))
+        teacher = teachers[0] if teachers else None
         subjects = list(
             Subject.objects.filter(team=team)
-            .select_related("teacher", "group")
-            .prefetch_related("allowed_classrooms")
+            .select_related("teacher", "group", "mandatory_classroom")
             .order_by("id")
         )
-        include_tc = bool(generation_options.get("include_tc", True))
-        sessions = cls._build_sessions(
-            subjects=subjects,
-            fallback_teacher=teacher,
-            include_tc=include_tc,
-        )
-        if not sessions:
-            return []
-
         fallback_classroom = _get_or_create_classroom(actor_email, team)
-        group = _get_or_create_group(actor_email, team)
         classrooms = _build_classroom_pool(
             fallback_classroom=fallback_classroom,
             team=team,
         )
-        slots = build_weekly_slots()
+        custom_windows = parse_schedule_config_to_slot_windows(
+            getattr(team, "schedule_config", None)
+        )
+        slots = build_weekly_slots(stage_slot_windows=custom_windows)
+
+        if teacher is None or not subjects:
+            diagnostics = collect_generation_diagnostics(
+                subjects=subjects,
+                teachers=teachers,
+                sessions=[],
+                slots=slots,
+                classrooms=classrooms,
+                generation_options=generation_options or {},
+            )
+            if diagnostics:
+                raise_schedule_generation_diagnostics(
+                    diagnostics=diagnostics,
+                    detail="Could not generate a feasible schedule with current basic constraints.",
+                    code=diagnostics[0]["code"],
+                )
+
+        sessions = cls._build_sessions(
+            subjects=subjects,
+            fallback_teacher=teacher,
+        )
+        if not sessions:
+            raise_schedule_generation_diagnostics(
+                diagnostics=collect_generation_diagnostics(
+                    subjects=[],
+                    teachers=teachers,
+                    sessions=[],
+                    slots=slots,
+                    classrooms=classrooms,
+                    generation_options=generation_options or {},
+                ),
+                detail="Could not generate a feasible schedule with current basic constraints.",
+                code="MISSING_SUBJECTS",
+            )
+
+        group = _get_or_create_group(actor_email, team)
 
         rng = random.Random(random_seed)
         cls._randomize_generation_inputs(
@@ -153,18 +179,30 @@ class BasicScheduleGenerator:
             rng=rng,
         )
 
-        validate_group_and_teacher_capacity(
-            sessions=sessions,
-            slots=slots,
-            generation_options=generation_options,
-        )
-
-        slot_by_session, classroom_by_session = solve_session_assignment(
+        diagnostics = collect_generation_diagnostics(
+            subjects=subjects,
+            teachers=teachers,
             sessions=sessions,
             slots=slots,
             classrooms=classrooms,
-            random_seed=random_seed,
-            generation_options=generation_options,
+            generation_options=generation_options or {},
+        )
+        blocking = [d for d in diagnostics if d.get("rank", 90) < BOTTLENECK_RANK]
+        if blocking:
+            raise_schedule_generation_diagnostics(
+                diagnostics=blocking,
+                detail="Could not generate a feasible schedule with current basic constraints.",
+                code=blocking[0]["code"],
+            )
+
+        slot_by_session, classroom_by_session, is_optimal, soft_score_info = (
+            solve_session_assignment(
+                sessions=sessions,
+                slots=slots,
+                classrooms=classrooms,
+                random_seed=random_seed,
+                generation_options=generation_options,
+            )
         )
 
         created = []
@@ -192,16 +230,33 @@ class BasicScheduleGenerator:
                 )
             )
 
+        teachers_on_duty = generation_options.get("teachers_on_duty", 0)
+        tc_result = None
+        if teachers_on_duty > 0:
+            tc_result = assign_tc_sessions(
+                teachers=teachers,
+                existing_schedules=created,
+                weekly_slots=slots,
+                teachers_on_duty=teachers_on_duty,
+                team=team,
+            )
+
         created = cls._bulk_create_generated_schedules(
             schedules=created,
             user=user,
         )
 
+        TCSession.objects.filter(team=team).exclude(
+            observations__startswith=SAVED_TIMETABLE_PREFIX
+        ).delete()
+        if tc_result and tc_result.tc_sessions:
+            TCSession.objects.bulk_create(tc_result.tc_sessions)
+
         cls._create_generation_audit_entry(
             schedules=created,
             team=team,
         )
-        return created
+        return created, is_optimal, soft_score_info, tc_result
 
     @staticmethod
     def _clear_previous_generated_schedules(*, actor_email: str, user, team):
@@ -218,36 +273,17 @@ class BasicScheduleGenerator:
             ).delete()
 
     @staticmethod
-    def _build_sessions(*, subjects, fallback_teacher, include_tc=True):
+    def _build_sessions(*, subjects, fallback_teacher):
         """Build the list of session dicts to be scheduled from the subject list.
-        Input: subjects - list of Subject instances (with related teacher, group, allowed_classrooms);
-               fallback_teacher - Teacher instance used when subjects list is empty;
-               include_tc - if False, TC-type subjects are excluded
-        Output: list of session dicts; single fallback session if subjects is empty
+        Input: subjects - list of Subject instances (with related teacher, group, mandatory_classroom);
+               fallback_teacher - Teacher instance used when subjects list is empty
+        Output: list of session dicts; empty list if subjects is empty
         """
-        sessions = []
         if not subjects:
-            return [
-                {
-                    "teacher": fallback_teacher,
-                    "teacher_id": fallback_teacher.id,
-                    "subject": None,
-                    "name": "Session",
-                }
-            ]
-
-        eligible_subjects = list(subjects)
-        if not include_tc:
-            eligible_subjects = [
-                subject
-                for subject in eligible_subjects
-                if getattr(subject, "type", None) != SubjectType.TC
-            ]
-
-        if not eligible_subjects:
             return []
 
-        for subject in eligible_subjects:
+        sessions = []
+        for subject in subjects:
             session_count = max(1, int(subject.weekly_hours))
             for _ in range(session_count):
                 sessions.append(
@@ -256,8 +292,10 @@ class BasicScheduleGenerator:
                         "teacher_id": subject.teacher_id,
                         "group": subject.group,
                         "subject": subject,
-                        "allowed_classroom_ids": set(
-                            subject.allowed_classrooms.values_list("id", flat=True)
+                        "allowed_classroom_ids": (
+                            {subject.mandatory_classroom_id}
+                            if subject.mandatory_classroom_id
+                            else set()
                         ),
                         "name": subject.name,
                     }
@@ -307,7 +345,9 @@ class BasicScheduleGenerator:
             entity_id=schedules[0].id,
             entity_name="Generacion automatica",
             action_type=AuditActionType.CREATE,
-            detail=(f"Se genero un horario automatico con {len(schedules)} sesiones."),
+            detail=(
+                f"Se generó el horario {schedules[0].name} con {len(schedules)} sesiones."
+            ),
             changed_fields=[
                 {
                     "campo": "Sesiones generadas",
@@ -373,7 +413,10 @@ class ScheduleReplanner:
             fallback_classroom=fallback_classroom,
             team=team,
         )
-        slots = build_weekly_slots()
+        custom_windows = parse_schedule_config_to_slot_windows(
+            getattr(team, "schedule_config", None)
+        )
+        slots = build_weekly_slots(stage_slot_windows=custom_windows)
         slot_index_by_key = {
             slot_instance_key(slot=slot): idx for idx, slot in enumerate(slots)
         }
@@ -405,13 +448,15 @@ class ScheduleReplanner:
 
         fixed_assignments = {moved_session_idx: new_slot_index}
 
-        slot_by_session, classroom_by_session = solve_session_assignment(
-            sessions=sessions,
-            slots=slots,
-            classrooms=classrooms,
-            random_seed=None,
-            fixed_assignments=fixed_assignments,
-            previous_assignment_by_session=previous_assignment_by_session,
+        slot_by_session, classroom_by_session, _, _soft_score = (
+            solve_session_assignment(
+                sessions=sessions,
+                slots=slots,
+                classrooms=classrooms,
+                random_seed=None,
+                fixed_assignments=fixed_assignments,
+                previous_assignment_by_session=previous_assignment_by_session,
+            )
         )
 
         return cls._apply_assignment_updates(
@@ -438,6 +483,7 @@ class ScheduleReplanner:
                 team=team,
             )
             .select_related("teacher", "classroom", "group", "subject")
+            .select_related("subject__mandatory_classroom")
             .order_by("start_time", "id")
         )
 
@@ -461,6 +507,11 @@ class ScheduleReplanner:
                     "teacher_id": schedule.teacher_id,
                     "group": schedule.group,
                     "subject": schedule.subject,
+                    "allowed_classroom_ids": (
+                        {schedule.subject.mandatory_classroom_id}
+                        if schedule.subject and schedule.subject.mandatory_classroom_id
+                        else set()
+                    ),
                     "name": getattr(schedule.subject, "name", schedule.name),
                 }
             )

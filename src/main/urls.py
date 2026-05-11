@@ -5,9 +5,11 @@ Top-level URL configuration: auth, dashboard, administration tabs, and legal pag
 from django.urls import path
 
 from classroom.views import admin_classrooms
+from common.admin import build_admin_tab_view
 from group.views import admin_groups
 from main.views import (
     dashboard,
+    onboarding,
     privacy_policy,
     root_redirect,
     security_protocol,
@@ -76,4 +78,10 @@ urlpatterns = [
         name="dashboard-administration-classrooms",
     ),
     path("dashboard/audit/", dashboard, {"section": "audit"}, name="dashboard-audit"),
+    path(
+        "dashboard/administration/schedule-config/",
+        build_admin_tab_view("schedule_config"),
+        name="dashboard-administration-schedule-config",
+    ),
+    path("onboarding/", onboarding, name="onboarding"),
 ]

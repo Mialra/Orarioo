@@ -34,3 +34,31 @@ body {
 .orarioo-footer {
     background-color: #ffffff;
 }
+
+#orarioo-global-spinner {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+
+#orarioo-global-spinner.active {
+    display: flex;
+}
+
+.orarioo-spinner-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.orarioo-spinner-label {
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}

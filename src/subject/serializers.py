@@ -8,6 +8,7 @@ from app.constants import MAX_LENGTH_EXTENDED, STRING_MAX_LENGTH
 from classroom.models import Classroom
 from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
 from common.serializers import TeamScopedModelSerializerMixin
+from common.stages import DEFAULT_STAGE_COLORS, canonical_group_stage
 from common.validators import (
     normalize_optional_text,
     raise_validation_error,
@@ -26,14 +27,16 @@ SUBJECT_SERIALIZER_FIELDS = with_audit_fields(
     "preferred_time_slot",
     "time_preferences",
     "stage",
+    "stage_color",
     "type",
     "teacher",
     "teacher_name",
     "group",
     "group_name",
-    "allowed_classrooms",
-    "allowed_classroom_names",
+    "mandatory_classroom",
+    "mandatory_classroom_name",
 )
+# NOTE: `stage` and `stage_color` are read-only derived fields (from group.stage); not DB columns.
 
 
 class SubjectSerializer(
@@ -48,11 +51,15 @@ class SubjectSerializer(
     team_scoped_field_models = {
         "teacher": Teacher,
         "group": Group,
-        "allowed_classrooms": Classroom,
+        "mandatory_classroom": Classroom,
     }
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
-    allowed_classroom_names = serializers.SerializerMethodField(read_only=True)
+    mandatory_classroom_name = serializers.CharField(
+        source="mandatory_classroom.name", read_only=True, default=None
+    )
+    stage = serializers.SerializerMethodField(read_only=True)
+    stage_color = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Subject
@@ -62,7 +69,9 @@ class SubjectSerializer(
             "duration",
             "teacher_name",
             "group_name",
-            "allowed_classroom_names",
+            "mandatory_classroom_name",
+            "stage",
+            "stage_color",
         ]
 
     def validate_weekly_hours(self, value):
@@ -108,9 +117,15 @@ class SubjectSerializer(
             valid_states={state.value for state in SubjectTimePreferenceState},
         )
 
-    def get_allowed_classroom_names(self, obj):
-        """Return the list of names of classrooms allowed for this subject.
-        Input: obj - Subject instance
-        Output: list of str classroom names
-        """
-        return list(obj.allowed_classrooms.values_list("name", flat=True))
+    def get_stage(self, obj):
+        """Return the canonical stage code derived from the subject's group."""
+        return canonical_group_stage(getattr(obj.group, "stage", None), default=None)
+
+    def get_stage_color(self, obj):
+        """Return the configured color for the subject's educational stage (derived from group)."""
+        stage_code = canonical_group_stage(
+            getattr(obj.group, "stage", None), default=None
+        )
+        config = getattr(getattr(obj, "team", None), "schedule_config", None) or {}
+        stage_cfg = config.get(stage_code) or {}
+        return stage_cfg.get("color") or DEFAULT_STAGE_COLORS.get(stage_code, "blue")

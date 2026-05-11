@@ -7,6 +7,17 @@ from django.db.models import F, Q
 from auditableEntity.models import AuditableEntity, TeamScopedModel
 
 
+class TimeSlotMixin(models.Model):
+    """Abstract mixin with weekday + time-of-day fields for recurring weekly slots."""
+
+    day = models.SmallIntegerField()  # 0=lunes … 4=viernes
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+
+    class Meta:
+        abstract = True
+
+
 class Schedule(TeamScopedModel, AuditableEntity):
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
@@ -18,13 +29,17 @@ class Schedule(TeamScopedModel, AuditableEntity):
     )
     classroom = models.ForeignKey(
         "classroom.Classroom",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         related_name="schedules",
+        null=True,
+        blank=True,
     )
     group = models.ForeignKey(
         "group.Group",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         related_name="schedules",
+        null=True,
+        blank=True,
     )
     subject = models.ForeignKey(
         "subject.Subject",
@@ -62,6 +77,11 @@ class Schedule(TeamScopedModel, AuditableEntity):
                 {"end_time": "end_time must be greater than start_time."}
             )
 
+        if not self.classroom_id:
+            raise ValidationError({"classroom": "classroom is required."})
+        if not self.group_id:
+            raise ValidationError({"group": "group is required."})
+
     def save(self, *args, **kwargs):
         """Run full_clean before saving to enforce model-level validations.
         Input: args, kwargs - standard Model.save arguments
@@ -76,3 +96,35 @@ class Schedule(TeamScopedModel, AuditableEntity):
         Output: string in the format 'name: start_time - end_time'
         """
         return f"{self.name}: {self.start_time} - {self.end_time}"
+
+
+class TCSession(TimeSlotMixin, TeamScopedModel):
+    """Duty hour (Trabajo de Centro) for a teacher — available at school but not teaching.
+
+    Independent from Schedule. Never overlaps (teacher, day, start_time) with a Schedule
+    or another TCSession for the same teacher.
+
+    observations = ""                    → draft (last generation run, not yet saved)
+    observations = "Saved timetable: X"  → frozen with saved timetable "X"
+    """
+
+    teacher = models.ForeignKey(
+        "teacher.Teacher",
+        on_delete=models.CASCADE,
+        related_name="tc_sessions",
+    )
+    name = models.CharField(max_length=120, blank=True, default="")
+    observations = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "tc_session"
+        ordering = ["day", "start_time"]
+        indexes = [
+            models.Index(fields=["teacher", "day"]),
+            models.Index(fields=["team", "day"]),
+            models.Index(fields=["team", "observations"]),
+        ]
+
+    def __str__(self):
+        days = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+        return f"TC {self.teacher} — {days[self.day]} {self.start_time}–{self.end_time}"

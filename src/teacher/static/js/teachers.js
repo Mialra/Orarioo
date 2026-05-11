@@ -24,6 +24,11 @@
     nameInput: document.getElementById("admin-teacher-name"),
     surnamesInput: document.getElementById("admin-teacher-surnames"),
     maxWeeklyHoursInput: document.getElementById("admin-teacher-max-weekly-hours"),
+    maxWeeklyMinutesInput: document.getElementById("admin-teacher-max-weekly-minutes"),
+    weeklyHoursExactInput: document.getElementById("admin-teacher-weekly-hours-exact"),
+    modeMaxButton: document.getElementById("admin-teacher-mode-max"),
+    modeExactButton: document.getElementById("admin-teacher-mode-exact"),
+    weeklyLoadHint: document.getElementById("admin-teacher-weekly-load-hint"),
     workingHoursInput: document.getElementById("admin-teacher-working-hours"),
     timePreferencesInput: document.getElementById("admin-teacher-time-preferences"),
     preferenceBrushInput: document.getElementById("admin-teacher-preference-brush"),
@@ -44,6 +49,43 @@
     workingHoursError: document.getElementById("admin-teacher-working-hours-error"),
     timePreferencesError: document.getElementById("admin-teacher-time-preferences-error"),
   };
+
+  function _updateHoursModeUI() {
+    const isExact = elements.weeklyHoursExactInput.value === "true";
+    if (elements.modeMaxButton) {
+      elements.modeMaxButton.className = "btn btn-sm " + (isExact ? "btn-outline-secondary" : "btn-primary");
+    }
+    if (elements.modeExactButton) {
+      elements.modeExactButton.className = "btn btn-sm " + (isExact ? "btn-primary" : "btn-outline-secondary");
+    }
+    if (elements.weeklyLoadHint) {
+      const h = Number(elements.maxWeeklyHoursInput.value) || 0;
+      const m = Number(elements.maxWeeklyMinutesInput ? elements.maxWeeklyMinutesInput.value : 0) || 0;
+      const timeStr = m > 0 ? h + " h " + m + " min" : h + " h";
+      elements.weeklyLoadHint.innerHTML = isExact
+        ? "El algoritmo asignará <strong>exactamente " + timeStr + "</strong>."
+        : "El algoritmo asignará <strong>hasta " + timeStr + "</strong>, pudiendo ser menos si conviene al horario.";
+    }
+  }
+
+  if (elements.modeMaxButton) {
+    elements.modeMaxButton.addEventListener("click", function () {
+      elements.weeklyHoursExactInput.value = "false";
+      _updateHoursModeUI();
+    });
+  }
+  if (elements.modeExactButton) {
+    elements.modeExactButton.addEventListener("click", function () {
+      elements.weeklyHoursExactInput.value = "true";
+      _updateHoursModeUI();
+    });
+  }
+  if (elements.maxWeeklyHoursInput) {
+    elements.maxWeeklyHoursInput.addEventListener("input", _updateHoursModeUI);
+  }
+  if (elements.maxWeeklyMinutesInput) {
+    elements.maxWeeklyMinutesInput.addEventListener("change", _updateHoursModeUI);
+  }
 
   const prefManager = admin.createPreferencesManager({
     gridContainer: elements.preferencesGridContainer,
@@ -94,7 +136,13 @@
                           children: [
                             dom.createElement("span", {
                               className: "admin-pill variant-blue",
-                              text: teacher.max_weekly_hours + " h máximo",
+                              text: (function () {
+                                const mins = teacher.max_weekly_minutes || 0;
+                                const modeLabel = teacher.weekly_hours_exact ? "exactas" : "máximo";
+                                return mins > 0
+                                  ? teacher.max_weekly_hours + " h " + mins + " min " + modeLabel
+                                  : teacher.max_weekly_hours + " h " + modeLabel;
+                              }()),
                             }),
                           ],
                         }),
@@ -244,6 +292,7 @@
       clearValidationOnInput: [
         { input: elements.nameInput, feedback: elements.nameError, event: "input" },
         { input: elements.maxWeeklyHoursInput, feedback: elements.maxWeeklyHoursError, event: "input" },
+        { input: elements.maxWeeklyMinutesInput, feedback: elements.maxWeeklyHoursError, event: "change" },
         { input: elements.workingHoursInput, feedback: elements.workingHoursError, event: "change" },
         { input: elements.timePreferencesInput, feedback: elements.timePreferencesError, event: "input" },
       ],
@@ -254,7 +303,14 @@
           elements.surnamesInput.value = "";
         }
         elements.maxWeeklyHoursInput.value = "";
+        if (elements.maxWeeklyMinutesInput) {
+          elements.maxWeeklyMinutesInput.value = "0";
+        }
+        if (elements.weeklyHoursExactInput) {
+          elements.weeklyHoursExactInput.value = "false";
+        }
         elements.workingHoursInput.value = "0";
+        _updateHoursModeUI();
         prefManager.reset({});
       },
       setEditingId: function (id) {
@@ -275,7 +331,14 @@
             elements.surnamesInput.value = "";
           }
         }
-        elements.maxWeeklyHoursInput.value = item.max_weekly_hours ?? "";
+        elements.maxWeeklyHoursInput.value = item.max_weekly_hours ?? 0;
+        if (elements.maxWeeklyMinutesInput) {
+          elements.maxWeeklyMinutesInput.value = item.max_weekly_minutes ?? 0;
+        }
+        if (elements.weeklyHoursExactInput) {
+          elements.weeklyHoursExactInput.value = item.weekly_hours_exact ? "true" : "false";
+        }
+        _updateHoursModeUI();
         elements.workingHoursInput.value = item.working_hours ?? "";
         prefManager.reset(item.time_preferences || {});
       },
@@ -284,7 +347,9 @@
         const surnamesPart = elements.surnamesInput ? elements.surnamesInput.value.trim() : "";
         return {
           name: [namePart, surnamesPart].filter(Boolean).join(" "),
-          max_weekly_hours: Number(elements.maxWeeklyHoursInput.value),
+          max_weekly_hours: Number(elements.maxWeeklyHoursInput.value) || 0,
+          max_weekly_minutes: Number(elements.maxWeeklyMinutesInput ? elements.maxWeeklyMinutesInput.value : 0),
+          weekly_hours_exact: elements.weeklyHoursExactInput.value === "true",
           working_hours: Number(elements.workingHoursInput.value),
           time_preferences: admin.parsePreferences(elements.timePreferencesInput.value),
         };

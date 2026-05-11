@@ -217,10 +217,10 @@
       confirmButton: elements.deleteConfirmButton,
       spinnerElement: elements.deleteSpinner,
       labels: {
-        defaultName: "aula seleccionada",
-        defaultAction: "Eliminar",
-        withName: function () {
-          return "Eliminar";
+        defaultName: "seleccionada",
+        defaultAction: "Eliminar aula",
+        withName: function (name) {
+          return name ? "Eliminar " + name : "Eliminar aula";
         },
       },
     },

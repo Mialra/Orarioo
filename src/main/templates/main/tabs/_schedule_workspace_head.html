@@ -1,0 +1,101 @@
+<div class="schedule-workspace-head">
+    <div class="schedule-workspace-topbar">
+        <div class="schedule-workspace-brand">
+            <div class="schedule-workspace-brand-icon" aria-hidden="true">
+                <i data-lucide="{{ ws_icon }}" class="workspace-icon"></i>
+            </div>
+            <div class="schedule-workspace-heading">
+                <div class="schedule-workspace-title-row">
+                    {% if ws_dynamic_title %}
+                        <h3 id="{{ ws_prefix }}WorkspaceTitle" class="schedule-workspace-title">{{ ws_title }}</h3>
+                    {% else %}
+                        <h3 class="schedule-workspace-title">{{ ws_title }}</h3>
+                    {% endif %}
+                    <span id="{{ ws_prefix }}WorkspaceStateBadge"
+                          class="schedule-pill {{ ws_badge_class }}">{{ ws_badge_text }}</span>
+                </div>
+            </div>
+        </div>
+        {% if ws_show_save %}
+            <button type="button"
+                    id="{{ ws_prefix }}WorkspaceSaveBtn"
+                    class="btn schedule-toolbar-btn schedule-toolbar-btn-save">
+                <i data-lucide="save" class="btn-icon" aria-hidden="true"></i>
+                <span id="{{ ws_prefix }}WorkspaceSaveBtnLabel">Guardar</span>
+            </button>
+        {% elif ws_show_back %}
+            <button type="button"
+                    id="{{ ws_prefix }}WorkspaceBackBtn"
+                    class="btn schedule-toolbar-btn schedule-toolbar-btn-back">
+                <i data-lucide="arrow-left" class="btn-icon" aria-hidden="true"></i>
+                Volver
+            </button>
+        {% endif %}
+    </div>
+    <hr class="schedule-workspace-sep">
+    <div class="schedule-workspace-toolbar">
+        <div class="schedule-toolbar-filters">
+            <i data-lucide="filter"
+               class="schedule-toolbar-filter-icon"
+               aria-hidden="true"></i>
+            <select id="{{ ws_prefix }}WorkspaceCourseFilter"
+                    class="form-select schedule-toolbar-select"
+                    aria-label="Filtrar por curso">
+                <option value="">Todos los cursos</option>
+            </select>
+            <select id="{{ ws_prefix }}WorkspaceTeacherFilter"
+                    class="form-select schedule-toolbar-select"
+                    aria-label="Filtrar por profesor">
+                <option value="">Todos los profesores</option>
+            </select>
+            <select id="{{ ws_prefix }}WorkspaceClassroomFilter"
+                    class="form-select schedule-toolbar-select"
+                    aria-label="Filtrar por aula">
+                <option value="">Todas las aulas</option>
+            </select>
+            <select id="{{ ws_prefix }}WorkspaceSubjectFilter"
+                    class="form-select schedule-toolbar-select"
+                    aria-label="Filtrar por asignatura">
+                <option value="">Todas las asignaturas</option>
+            </select>
+        </div>
+        <div class="schedule-toolbar-buttons">
+            <button type="button"
+                    id="{{ ws_prefix }}DefectsBtn"
+                    class="btn schedule-toolbar-btn schedule-toolbar-btn-analyze"
+                    title="Ver todos los problemas detectados en el horario">
+                <i data-lucide="search" class="btn-icon" aria-hidden="true"></i>
+                <span id="{{ ws_prefix }}DefectsBtnLabel">Analizar</span>
+            </button>
+            <button type="button"
+                    id="{{ ws_prefix }}WorkspaceExportBtn"
+                    class="btn schedule-toolbar-btn schedule-toolbar-btn-export">
+                <i data-lucide="download" class="btn-icon" aria-hidden="true"></i>
+                Exportar
+            </button>
+            {% if ws_show_regenerate %}
+                <button type="button"
+                        id="{{ ws_prefix }}WorkspaceRegenerateBtn"
+                        class="btn schedule-toolbar-btn schedule-toolbar-btn-regenerate">
+                    <i data-lucide="sparkles" class="btn-icon" aria-hidden="true"></i>
+                    Regenerar
+                </button>
+            {% endif %}
+        </div>
+    </div>
+    <div class="schedule-workspace-hint-row">
+        <p class="schedule-workspace-hint mb-0"
+           title="Puedes arrastrar y soltar una sesión para recolocarla dentro del horario.">
+            <i data-lucide="move"
+               class="schedule-workspace-hint-icon"
+               aria-hidden="true"></i>
+            Filtra por curso, profesor, aula o asignatura. Luego, arrastra y suelta una sesión para sustituirla por otra si se cumplen las restricciones.
+        </p>
+        <button type="button"
+                id="{{ ws_prefix }}WorkspaceTCBtn"
+                class="btn schedule-toolbar-btn schedule-toolbar-btn-tc"
+                title="Ver solo horas de guardia TC">
+            <i data-lucide="shield-check" aria-hidden="true"></i>
+        </button>
+    </div>
+</div>

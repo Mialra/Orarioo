@@ -3,6 +3,8 @@ from django.urls import reverse
 
 
 class MainSmokeTests(TestCase):
+    """Smoke tests for main public and dashboard routes."""
+
     def test_placeholder(self):
         self.assertTrue(True)
 

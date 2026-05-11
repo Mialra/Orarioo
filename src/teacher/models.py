@@ -4,10 +4,9 @@ Domain model for teachers, including time-preference states and hour constraints
 
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import UniqueConstraint
-from django.db.models.functions import Lower
 
 from auditableEntity.models import AuditableEntity, TeamScopedModel
+from namedEntity.models import team_scoped_case_insensitive_name_constraint
 
 
 class TeacherTimePreferenceState(models.TextChoices):
@@ -23,6 +22,8 @@ class Teacher(TeamScopedModel, AuditableEntity):
     """Teacher model representing a staff member with scheduling constraints."""
 
     max_weekly_hours = models.PositiveIntegerField()
+    max_weekly_minutes = models.PositiveIntegerField(default=0)
+    weekly_hours_exact = models.BooleanField(default=False)
     working_hours = models.PositiveIntegerField(default=0)
     time_preferences = models.JSONField(default=dict, blank=True)
 
@@ -30,17 +31,20 @@ class Teacher(TeamScopedModel, AuditableEntity):
         db_table = "teacher"
         ordering = ["name", "id"]
         constraints = [
-            UniqueConstraint(
-                Lower("name"),
-                name="teacher_name_ci_unique",
-            )
+            team_scoped_case_insensitive_name_constraint("teacher_team_name_ci_unique")
         ]
 
     def clean(self):
-        """Enforce that working_hours does not exceed max_weekly_hours.
+        """Enforce workload field constraints.
         Input: self - Teacher instance being validated
-        Output: None; raises ValidationError if working_hours > max_weekly_hours
+        Output: None; raises ValidationError on constraint violations
         """
+        if self.max_weekly_minutes not in (0, 30):
+            raise ValidationError({"max_weekly_minutes": "Minutes must be 0 or 30."})
+        if self.max_weekly_hours == 0 and self.max_weekly_minutes == 0:
+            raise ValidationError(
+                {"max_weekly_hours": "Total weekly load cannot be zero."}
+            )
         if self.working_hours > self.max_weekly_hours:
             raise ValidationError(
                 {

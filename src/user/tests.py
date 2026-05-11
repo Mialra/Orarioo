@@ -819,6 +819,8 @@ class CollaborationTeamApiTests(APITestCase):
         self.assertFalse(self.team.members.filter(id=self.member.id).exists())
 
     def test_leave_team_removes_membership(self):
+        second_team = CollaborationTeam.objects.create(name="Equipo Segundo")
+        second_team.members.add(self.member)
         self.client.force_authenticate(user=self.member)
         response = self.client.post(
             reverse("leave-collaboration-team"),
@@ -828,6 +830,214 @@ class CollaborationTeamApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(self.team.members.filter(id=self.member.id).exists())
+
+
+class ScheduleConfigApiTests(APITestCase):
+    """Tests for onboarding and schedule-config stage metadata."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email="tramos@test.com",
+            password="Tramos123!",
+            given_name="Tramos",
+        )
+        self.team = CollaborationTeam.objects.create(name="Equipo Tramos")
+        self.team.members.add(self.user)
+        self.user.active_team = self.team
+        self.user.save(update_fields=["active_team"])
+        self.client.force_authenticate(user=self.user)
+        self.schedule_config_url = "/api/schedule-config/"
+        self.onboarding_url = "/api/onboarding/"
+
+    def test_get_schedule_config_returns_empty_config_when_no_stages_exist(self):
+        response = self.client.get(self.schedule_config_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("stage_colors", response.data)
+        self.assertEqual(response.data["schedule_config"], {})
+
+    def test_put_schedule_config_rejects_invalid_color(self):
+        payload = {
+            "schedule_config": {
+                "PRIMARY": {
+                    "label": "Primaria",
+                    "color": "turquoise",
+                    "start_time": "09:00",
+                    "end_time": "14:00",
+                    "breaks": [],
+                    "session_duration": 60,
+                }
+            }
+        }
+
+        response = self.client.put(self.schedule_config_url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("schedule_config", response.data)
+
+    def test_put_schedule_config_persists_color_and_stage_colors_map(self):
+        payload = {
+            "schedule_config": {
+                "PRIMARY": {
+                    "label": "Primaria",
+                    "color": "pink",
+                    "start_time": "09:00",
+                    "end_time": "14:00",
+                    "breaks": [],
+                    "session_duration": 60,
+                }
+            }
+        }
+
+        response = self.client.put(self.schedule_config_url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.team.refresh_from_db()
+        self.assertEqual(self.team.schedule_config["PRIMARY"]["color"], "pink")
+        self.assertEqual(response.data["stage_colors"]["PRIMARY"], "pink")
+
+    def test_put_schedule_config_rejects_non_sixty_minute_session_duration(self):
+        payload = {
+            "schedule_config": {
+                "PRIMARY": {
+                    "label": "Primaria",
+                    "color": "blue",
+                    "start_time": "09:00",
+                    "end_time": "14:00",
+                    "breaks": [],
+                    "session_duration": 45,
+                }
+            }
+        }
+
+        response = self.client.put(self.schedule_config_url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("schedule_config", response.data)
+
+    def test_put_schedule_config_returns_code_for_break_outside_stage_range(self):
+        payload = {
+            "schedule_config": {
+                "PRIMARY": {
+                    "label": "Primaria",
+                    "color": "blue",
+                    "start_time": "09:00",
+                    "end_time": "14:00",
+                    "breaks": [{"start": "08:30", "end": "09:15"}],
+                    "session_duration": 60,
+                }
+            }
+        }
+
+        response = self.client.put(self.schedule_config_url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        error_entry = response.data["errors"]["schedule_config"][0]
+        self.assertEqual(error_entry["code"], "BREAK_OUTSIDE_STAGE_RANGE")
+        self.assertEqual(
+            error_entry["message"],
+            "El recreo debe estar dentro de la hora de entrada y salida de la etapa.",
+        )
+
+    def test_onboarding_applies_default_stage_color_when_missing(self):
+        onboarding_user = User.objects.create_user(
+            email="nuevo-centro@test.com",
+            password="NuevoCentro123!",
+            given_name="Centro",
+        )
+        self.client.force_authenticate(user=onboarding_user)
+
+        response = self.client.post(
+            self.onboarding_url,
+            {
+                "team_name": "Centro Nuevo",
+                "schedule_config": {
+                    "PRIMARY": {
+                        "label": "Primaria",
+                        "start_time": "09:00",
+                        "end_time": "14:00",
+                        "breaks": [],
+                        "session_duration": 60,
+                    }
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        onboarding_user.refresh_from_db()
+        self.assertEqual(
+            onboarding_user.active_team.schedule_config["PRIMARY"]["color"],
+            "blue",
+        )
+
+    def test_onboarding_allows_empty_schedule_config(self):
+        onboarding_user = User.objects.create_user(
+            email="centro-sin-tramos@test.com",
+            password="NuevoCentro123!",
+            given_name="Centro",
+        )
+        self.client.force_authenticate(user=onboarding_user)
+
+        response = self.client.post(
+            self.onboarding_url,
+            {
+                "team_name": "Centro Sin Tramos",
+                "schedule_config": {},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        onboarding_user.refresh_from_db()
+        self.assertEqual(onboarding_user.active_team.name, "Centro Sin Tramos")
+        self.assertEqual(onboarding_user.active_team.schedule_config, {})
+
+    def test_put_schedule_config_blocks_deleting_stage_in_use(self):
+        self.team.schedule_config = {
+            "PRIMARY": {
+                "label": "Primaria",
+                "color": "blue",
+                "start_time": "09:00",
+                "end_time": "14:00",
+                "breaks": [],
+                "session_duration": 60,
+            },
+            "SECONDARY": {
+                "label": "ESO",
+                "color": "orange",
+                "start_time": "08:00",
+                "end_time": "14:30",
+                "breaks": [],
+                "session_duration": 60,
+            },
+        }
+        self.team.save(update_fields=["schedule_config"])
+        Group.objects.create(
+            name="1A",
+            team=self.team,
+            stage=GroupEducationalStage.PRIMARY,
+        )
+
+        payload = {
+            "schedule_config": {
+                "SECONDARY": {
+                    "label": "ESO",
+                    "color": "orange",
+                    "start_time": "08:00",
+                    "end_time": "14:30",
+                    "breaks": [],
+                    "session_duration": 60,
+                }
+            }
+        }
+
+        response = self.client.put(self.schedule_config_url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("schedule_config", response.data)
+        self.assertIn("No se puede eliminar una etapa", response.data["detail"])
 
 
 class PermissionsTests(APITestCase):

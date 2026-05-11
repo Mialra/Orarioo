@@ -55,6 +55,13 @@
       }
       return /^[1-9]\d*$/.test(text);
     },
+    nonNegativeInteger: function (value) {
+      const text = normalizeText(value).trim();
+      if (!text) {
+        return false;
+      }
+      return /^\d+$/.test(text);
+    },
     checked: function (value) {
       return normalizeBoolean(value);
     },

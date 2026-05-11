@@ -82,6 +82,7 @@
    * Input: users - array of user objects
    */
   function renderUsers(users) {
+    listContainer.classList.remove("justify-content-center");
     listRenderer.renderCollection(listContainer, users, renderUserItem);
     uiState.refreshIconsIfNeeded(listContainer);
   }
@@ -94,7 +95,6 @@
     const targetPage = Number(page) || paginationController.getCurrentPage() || 1;
     uiState.hideAlert(alertBox);
     uiState.setBusy(listContainer, true);
-    uiState.renderLoadingState(listContainer, "Cargando usuarios...");
 
     const response = await api.get("/api/users/?page=" + targetPage + "&page_size=" + paginationController.pageSize);
 

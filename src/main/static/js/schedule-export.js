@@ -31,9 +31,15 @@
      * Output: array of entity objects
      */
     function getEntitiesByType(entityType) {
-      if (entityType === "group") { return state.currentGroups; }
-      if (entityType === "teacher") { return state.currentTeachers; }
-      if (entityType === "classroom") { return state.currentClassrooms; }
+      if (entityType === "group") {
+        return state.currentGroups;
+      }
+      if (entityType === "teacher") {
+        return state.currentTeachers;
+      }
+      if (entityType === "classroom") {
+        return state.currentClassrooms;
+      }
       return [];
     }
 
@@ -51,7 +57,7 @@
       var checkedValues = new Set(
         Array.from(container.querySelectorAll("input[type='checkbox']:checked")).map(function (input) {
           return input.value;
-        })
+        }),
       );
       container.innerHTML = getEntitiesByType(entityType)
         .slice()
@@ -62,9 +68,20 @@
           var checked = checkedValues.has(String(entity.id)) ? " checked" : "";
           return (
             '<div class="checkbox-item">' +
-            '<input type="checkbox" id="check-' + entityType + "-" + entity.id +
-            '" value="' + entity.id + '"' + checked + ">" +
-            '<label for="check-' + entityType + "-" + entity.id + '">' +
+            '<input type="checkbox" id="check-' +
+            entityType +
+            "-" +
+            entity.id +
+            '" value="' +
+            entity.id +
+            '"' +
+            checked +
+            ">" +
+            '<label for="check-' +
+            entityType +
+            "-" +
+            entity.id +
+            '">' +
             (entity.name || "#" + entity.id) +
             "</label></div>"
           );
@@ -95,8 +112,12 @@
         return [];
       }
       return Array.from(container.querySelectorAll("input[type='checkbox']:checked"))
-        .map(function (checkbox) { return Number.parseInt(checkbox.value, 10); })
-        .filter(function (value) { return Number.isInteger(value) && value > 0; });
+        .map(function (checkbox) {
+          return Number.parseInt(checkbox.value, 10);
+        })
+        .filter(function (value) {
+          return Number.isInteger(value) && value > 0;
+        });
     }
 
     /**
@@ -136,7 +157,9 @@
       var response = await window.orariooAuth.apiFetch("/api" + endpoint, { method: "GET" });
       if (!response.ok) {
         var errorData = {};
-        try { errorData = await response.json(); } catch (_e) {}
+        try {
+          errorData = await response.json();
+        } catch (_e) {}
         throw new Error(extractApiErrorMessage(errorData, "No se pudo exportar."));
       }
       var disposition = response.headers.get("Content-Disposition") || "";
@@ -189,7 +212,9 @@
           showAlert("warning", "No se pudieron cargar las opciones de exportacion.");
           return false;
         })
-        .finally(function () { state.exportOptionsPromise = null; });
+        .finally(function () {
+          state.exportOptionsPromise = null;
+        });
       return state.exportOptionsPromise;
     }
 
@@ -200,10 +225,14 @@
      */
     async function openExportModal(exportConfig) {
       var modal = document.getElementById("exportModal");
-      var contextText = document.getElementById("exportContextText");
       var exportFormat = document.getElementById("exportFormat");
-      if (!modal || !contextText || !exportFormat) {
+      if (!modal || !exportFormat) {
         return;
+      }
+      var modalAlert = document.getElementById("export-modal-alert");
+      if (modalAlert) {
+        modalAlert.textContent = "";
+        modalAlert.className = "alert d-none mb-3";
       }
       var safeConfig = exportConfig || {};
       state.currentExportSource = safeConfig.source || "generated";
@@ -211,15 +240,11 @@
       if (state.currentExportSource === "saved") {
         var activeName = state.currentExportSavedName || state.selectedSavedTimetableName || state.generatedSavedName;
         state.currentExportSavedName = activeName || "";
-        contextText.textContent = activeName
-          ? 'Exportar sesiones de "' + activeName + '"'
-          : "Exportar sesiones de horarios guardados";
-      } else {
-        contextText.textContent = "Exportar sesiones de horario generado";
       }
       state.exportEntityState.group = false;
       state.exportEntityState.teacher = false;
       state.exportEntityState.classroom = false;
+      state.exportEntityState.tc = false;
       exportFormat.value = safeConfig.format || "csv";
       exportFormat.disabled = !!safeConfig.lockFormat;
       await loadExportEntityOptions();
@@ -258,7 +283,7 @@
      */
     async function handleExportConfirm() {
       if (!hasAnyExportSelection()) {
-        showAlert("error", "Marca al menos una entidad o selecciona objetos concretos para exportar.");
+        showAlert("error", "Marca al menos un elemento para exportar.");
         return;
       }
       var exportFormat = document.getElementById("exportFormat");
@@ -273,12 +298,19 @@
       params.set("group_all", state.exportEntityState.group ? "1" : "0");
       params.set("teacher_all", state.exportEntityState.teacher ? "1" : "0");
       params.set("classroom_all", state.exportEntityState.classroom ? "1" : "0");
+      params.set("include_tc", state.exportEntityState.tc ? "1" : "0");
       if (state.currentExportSource === "saved" && state.currentExportSavedName) {
         params.set("saved_timetable_name", state.currentExportSavedName);
       }
-      if (selectedGroupIds.length) { params.set("group_ids", selectedGroupIds.join(",")); }
-      if (selectedTeacherIds.length) { params.set("teacher_ids", selectedTeacherIds.join(",")); }
-      if (selectedClassroomIds.length) { params.set("classroom_ids", selectedClassroomIds.join(",")); }
+      if (selectedGroupIds.length) {
+        params.set("group_ids", selectedGroupIds.join(","));
+      }
+      if (selectedTeacherIds.length) {
+        params.set("teacher_ids", selectedTeacherIds.join(","));
+      }
+      if (selectedClassroomIds.length) {
+        params.set("classroom_ids", selectedClassroomIds.join(","));
+      }
       try {
         await downloadFileFromApi("/schedules/export/?" + params.toString());
         closeExportModal();
@@ -314,6 +346,16 @@
           }
           state.exportEntityState[entityType] = !state.exportEntityState[entityType];
           renderExportEntityCards();
+          var selectId = button.dataset.exportSelect;
+          if (selectId) {
+            var container = document.getElementById(selectId);
+            if (container) {
+              var nowActive = state.exportEntityState[entityType];
+              container.querySelectorAll("input[type='checkbox']").forEach(function (cb) {
+                cb.checked = nowActive;
+              });
+            }
+          }
         });
       });
     }

@@ -46,16 +46,12 @@
   }
 
   /**
-   * Normalizes a stage value to a known lowercase key.
+   * Normalizes a stage value to uppercase, passing through any custom code.
    * Input: stage - raw stage string from the API or form
-   * Output: string one of "preschool", "primary", or "secondary"; defaults to "primary"
+   * Output: string uppercased stage code
    */
   function normalizeStage(stage) {
-    const value = (stage || "").toString().trim().toLowerCase();
-    if (value === "preschool" || value === "primary" || value === "secondary") {
-      return value;
-    }
-    return "primary";
+    return (stage || "").toString().trim().toUpperCase();
   }
 
   /**
@@ -69,19 +65,48 @@
   }
 
   /**
-   * Returns the display label and pill variant for a stage value.
-   * Input: stage - stage string (preschool, primary, or secondary)
-   * Output: object with label (string) and variant (CSS class suffix)
+   * Returns the display label and configured color for a stage value.
+   * Input: stage - stage string
+   * Output: object with label (string) and color (palette key)
    */
-  function getStageMeta(stage) {
-    const normalized = normalizeStage(stage);
-    if (normalized === "preschool") {
-      return { label: "Infantil", variant: "variant-gray" };
+  function getStageMeta(stage, explicitColor) {
+    const code = normalizeStage(stage);
+    const stageConstants = window.OrariooAdmin && window.OrariooAdmin.constants;
+    const label = stageConstants && typeof stageConstants.getStageLabel === "function"
+      ? stageConstants.getStageLabel(code)
+      : code;
+    const color = explicitColor || (stageConstants && typeof stageConstants.getStageColor === "function"
+      ? stageConstants.getStageColor(code)
+      : "blue");
+    return { label: label, color: color };
+  }
+
+  /**
+   * Populates the stage select from STAGE_LABELS constants.
+   * Input: none
+   * Output: options are added to elements.stageInput
+   */
+  function fillStageSelect(stageLabels) {
+    const entries = Object.entries(stageLabels);
+    while (elements.stageInput.options.length > 0) { elements.stageInput.remove(0); }
+    entries.forEach(function ([code, label]) {
+      var opt = document.createElement("option"); opt.value = code; opt.textContent = label; elements.stageInput.appendChild(opt);
+    });
+    refreshCustomSelect(elements.stageInput);
+  }
+
+  function populateStageSelect() {
+    const constants = window.OrariooAdmin && window.OrariooAdmin.constants;
+    const stageLabels = (constants && constants.STAGE_LABELS) || {};
+    if (Object.keys(stageLabels).length > 0) {
+      fillStageSelect(stageLabels);
+    } else {
+      // Labels not yet loaded — show placeholders and update when ready
+      fillStageSelect((constants && constants.FALLBACK_STAGE_LABELS) || { PRESCHOOL: "Infantil", PRIMARY: "Primaria", SECONDARY: "ESO", ALEVELS: "Bachillerato" });
+      if (constants && typeof constants.onStageLabelsReady === "function") {
+        constants.onStageLabelsReady(fillStageSelect);
+      }
     }
-    if (normalized === "secondary") {
-      return { label: "Secundaria", variant: "variant-purple" };
-    }
-    return { label: "Primaria", variant: "variant-blue" };
   }
 
   /**
@@ -89,11 +114,26 @@
    * Input: stage - stage string from the API
    * Output: DOM span element with the appropriate admin-pill variant
    */
-  function stagePill(stage) {
-    const meta = getStageMeta(stage);
+  function stagePill(stage, explicitColor) {
+    const meta = getStageMeta(stage, explicitColor);
     return dom.createElement("span", {
-      className: "admin-pill " + meta.variant,
+      className: "admin-pill admin-stage-pill stage-color-" + meta.color,
+      dataset: {
+        stageCode: normalizeStage(stage),
+      },
       text: meta.label,
+    });
+  }
+
+  /**
+   * Refreshes stage pills already rendered in the list when metadata changes.
+   */
+  function refreshStagePills() {
+    document.querySelectorAll(".admin-group-card .admin-stage-pill").forEach(function (pill) {
+      const code = normalizeStage(pill.dataset.stageCode);
+      const meta = getStageMeta(code);
+      pill.className = "admin-pill admin-stage-pill stage-color-" + meta.color;
+      pill.textContent = meta.label;
     });
   }
 
@@ -127,7 +167,7 @@
                         }),
                         dom.createElement("div", {
                           className: "admin-card-meta",
-                          children: [stagePill(group.stage)],
+                          children: [stagePill(group.stage, group.stage_color)],
                         }),
                       ],
                     }),
@@ -241,7 +281,10 @@
       resetValues: function () {
         elements.groupIdInput.value = "";
         elements.nameInput.value = "";
-        elements.stageInput.value = "primary";
+        populateStageSelect();
+        if (elements.stageInput.options.length > 0) {
+          elements.stageInput.value = elements.stageInput.options[0].value;
+        }
         refreshCustomSelect(elements.stageInput);
       },
       setEditingId: function (id) {
@@ -252,13 +295,14 @@
       },
       fillValues: function (item) {
         elements.nameInput.value = item.name || "";
+        populateStageSelect();
         elements.stageInput.value = normalizeStage(item.stage);
         refreshCustomSelect(elements.stageInput);
       },
       buildPayload: function () {
         return {
           name: elements.nameInput.value.trim(),
-          stage: normalizeStage(elements.stageInput.value),
+          stage: normalizeStage(elements.stageInput.value),  // uppercase pass-through
         };
       },
     },
@@ -276,5 +320,10 @@
         },
       },
     },
+  });
+
+  window.addEventListener("orarioo:stage-metadata-changed", function () {
+    populateStageSelect();
+    refreshStagePills();
   });
 })();

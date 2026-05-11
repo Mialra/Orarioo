@@ -10,7 +10,6 @@
     return;
   }
 
-  const WORK_CENTER_SUBJECT = "Trabajo de Centro";
   const errorHandler = window.OrariooErrorHandler || {};
 
   const generatedFilterIds = {
@@ -32,6 +31,11 @@
     currentClassrooms: [],
     currentGroups: [],
     latestGeneratedSchedules: [],
+    latestTCSessions: [],
+    tcSessionsContext: null,
+    generatedTCViewMode: false,
+    savedTCViewMode: false,
+    generatedUnavailability: null,
     generatedDetailPage: 1,
     savedDetailPage: 1,
     detailPageSize: 20,
@@ -66,6 +70,7 @@
     savedSummaryPromise: null,
     exportOptionsLoaded: false,
     exportOptionsPromise: null,
+    scheduleConfig: null,
     exportEntityState: {
       group: false,
       teacher: false,
@@ -76,24 +81,18 @@
   // ── Sub-module imports ─────────────────────────────────────────────────────
   const {
     normalizeForCompare,
-    isWorkCenterSubjectValue,
-    getSubjectTypeValue,
     toIsoDateDisplay,
     toDateMillis,
     buildTeacherWorkloadsByNameFromApi,
     buildTeacherWorkloadsByNameFromSessions,
-    hasWorkCenterSubjects,
     getCollectionCount,
     buildSummaryPath,
   } = window.ScheduleUtils;
 
   const { renderScheduleBoard } = window.ScheduleBoard;
 
-  const {
-    initScheduleFilterDropdowns,
-    syncScheduleFilterDropdown,
-    enhanceScheduleFilterSelect,
-  } = window.ScheduleFilterDropdown;
+  const { initScheduleFilterDropdowns, syncScheduleFilterDropdown, enhanceScheduleFilterSelect } =
+    window.ScheduleFilterDropdown;
 
   // ── Saved / export managers ────────────────────────────────────────────────
   const savedManager = window.ScheduleSaved.createSavedManager({
@@ -105,14 +104,20 @@
     onShowSavedWorkspace: showSavedWorkspace,
     onShowSavedPicker: showSavedPicker,
     onRenderSavedWorkspace: renderSavedWorkspace,
-    onPopulateFilters: populateWorkspaceFiltersFromSessions,
+    onPopulateFilters: populateFiltersWithTC,
     savedFilterIds: savedFilterIds,
   });
 
   const exportManager = window.ScheduleExport.createExportManager({
     state: state,
     apiJson: apiJson,
-    showAlert: showAlert,
+    showAlert: function (type, message) {
+      if (type === "error" || type === "warning") {
+        showExportModalAlert(type, message);
+      } else {
+        showAlert(type, message);
+      }
+    },
     extractApiErrorMessage: extractApiErrorMessage,
     showModalElement: showModalElement,
     hideModalElement: hideModalElement,
@@ -124,49 +129,90 @@
     outputId: "generatedWorkspaceOutput",
     filterIds: generatedFilterIds,
     detailTitle: "Detalle de sesiones generadas",
-    getDetailPage: function () { return state.generatedDetailPage; },
-    setDetailPage: function (p) { state.generatedDetailPage = p; },
-    getDetailPageSize: function () { return state.detailPageSize; },
-    getMoveInFlight: function () { return state.generatedMoveInFlight; },
-    setMoveInFlight: function (v) { state.generatedMoveInFlight = v; },
-    getDragState: function () { return state.generatedDragState; },
+    getDetailPage: function () {
+      return state.generatedDetailPage;
+    },
+    setDetailPage: function (p) {
+      state.generatedDetailPage = p;
+    },
+    getDetailPageSize: function () {
+      return state.detailPageSize;
+    },
+    getMoveInFlight: function () {
+      return state.generatedMoveInFlight;
+    },
+    setMoveInFlight: function (v) {
+      state.generatedMoveInFlight = v;
+    },
+    getDragState: function () {
+      return state.generatedDragState;
+    },
     resetDragState: resetGeneratedDragState,
-    getSessions: function () { return state.latestGeneratedSchedules; },
+    getSessions: function () {
+      return state.latestGeneratedSchedules;
+    },
     upsertSessions: upsertGeneratedSchedules,
-    getTeacherWorkloads: function () { return state.generatedTeacherWorkloadsByName; },
-    setTeacherWorkloads: function (w) { state.generatedTeacherWorkloadsByName = w; },
+    getTeacherWorkloads: function () {
+      return state.generatedTeacherWorkloadsByName;
+    },
+    setTeacherWorkloads: function (w) {
+      state.generatedTeacherWorkloadsByName = w;
+    },
     onDropComplete: function () {},
     showAlert: showAlert,
     apiJson: apiJson,
     getFilteredSessions: getFilteredSessions,
-    populateFilters: populateWorkspaceFiltersFromSessions,
-    getSessionSubjectType: getSessionSubjectType,
+    populateFilters: populateFiltersWithTC,
+    getUnavailability: function () {
+      return state.generatedUnavailability;
+    },
   });
 
   const savedWorkspace = window.ScheduleWorkspace.createScheduleWorkspace({
     outputId: "savedWorkspaceOutput",
     filterIds: savedFilterIds,
     detailTitle: "Detalle de sesiones guardadas",
-    getDetailPage: function () { return state.savedDetailPage; },
-    setDetailPage: function (p) { state.savedDetailPage = p; },
-    getDetailPageSize: function () { return state.detailPageSize; },
-    getMoveInFlight: function () { return state.savedMoveInFlight; },
-    setMoveInFlight: function (v) { state.savedMoveInFlight = v; },
-    getDragState: function () { return state.savedDragState; },
+    getDetailPage: function () {
+      return state.savedDetailPage;
+    },
+    setDetailPage: function (p) {
+      state.savedDetailPage = p;
+    },
+    getDetailPageSize: function () {
+      return state.detailPageSize;
+    },
+    getMoveInFlight: function () {
+      return state.savedMoveInFlight;
+    },
+    setMoveInFlight: function (v) {
+      state.savedMoveInFlight = v;
+    },
+    getDragState: function () {
+      return state.savedDragState;
+    },
     resetDragState: resetSavedDragState,
     getSessions: function () {
       const group = savedManager.getSelectedSavedGroup();
       return group && Array.isArray(group.sessions) ? group.sessions : [];
     },
     upsertSessions: upsertSelectedSavedSchedules,
-    getTeacherWorkloads: function () { return state.savedTeacherWorkloadsByName; },
-    setTeacherWorkloads: function (w) { state.savedTeacherWorkloadsByName = w; },
-    onDropComplete: function () { savedManager.onAfterDropComplete(); },
+    getTeacherWorkloads: function () {
+      return state.savedTeacherWorkloadsByName;
+    },
+    setTeacherWorkloads: function (w) {
+      state.savedTeacherWorkloadsByName = w;
+    },
+    onDropComplete: function () {
+      savedManager.onAfterDropComplete();
+    },
     showAlert: showAlert,
     apiJson: apiJson,
     getFilteredSessions: getFilteredSessions,
-    populateFilters: populateWorkspaceFiltersFromSessions,
-    getSessionSubjectType: getSessionSubjectType,
+    populateFilters: populateFiltersWithTC,
+    getUnavailability: function () {
+      const group = savedManager.getSelectedSavedGroup();
+      return (group && group.unavailability) || null;
+    },
   });
 
   // ── Workspace state helpers ────────────────────────────────────────────────
@@ -389,7 +435,7 @@
   }
 
   /**
-   * Displays a contextual alert banner that auto-dismisses after 4.5 seconds.
+   * Displays a contextual alert banner. Errors stay visible until a later alert replaces them.
    * Input: type - "success" | "error" | "info" | "warning"
    *        message - string or error info object (rendered via errorHandler.renderAlertContent)
    */
@@ -419,9 +465,45 @@
     }
     alert.classList.remove("d-none");
     window.clearTimeout(showAlert._timer);
-    showAlert._timer = window.setTimeout(function () {
-      alert.classList.add("d-none");
-    }, 4500);
+    showAlert._timer = null;
+    if (type !== "error") {
+      showAlert._timer = window.setTimeout(function () {
+        alert.classList.add("d-none");
+      }, 4500);
+    }
+  }
+
+  /**
+   * Displays a contextual alert banner in the export modal.
+   * Input: type - "success" | "error" | "info" | "warning"
+   *        message - string or error info object (rendered via errorHandler.renderAlertContent)
+   */
+  function showExportModalAlert(type, message) {
+    const alert = document.getElementById("export-modal-alert");
+    if (!alert) {
+      showAlert(type, message);
+      return;
+    }
+    const classMap = {
+      success: "alert-success",
+      error: "alert-danger",
+      info: "alert-info",
+      warning: "alert-warning",
+    };
+    alert.className = "alert " + (classMap[type] || "alert-info");
+    if (
+      message &&
+      typeof message === "object" &&
+      errorHandler &&
+      typeof errorHandler.renderAlertContent === "function"
+    ) {
+      alert.innerHTML = errorHandler.renderAlertContent(message);
+    } else if (errorHandler && typeof errorHandler.escapeHtml === "function") {
+      alert.innerHTML = window.OrariooErrorHandler.escapeHtml(message);
+    } else {
+      alert.textContent = message;
+    }
+    alert.classList.remove("d-none");
   }
 
   // ── API helpers ────────────────────────────────────────────────────────────
@@ -474,11 +556,14 @@
    * Input: path - API path after "/api"; method - HTTP verb; body - optional request body
    * Output: Promise<{ok, status, data, response}>
    */
-  async function apiJson(path, method, body) {
-    const options = {
-      method: method || "GET",
-      headers: { "Content-Type": "application/json" },
-    };
+  async function apiJson(path, method, body, fetchOptions) {
+    const options = Object.assign(
+      {
+        method: method || "GET",
+        headers: { "Content-Type": "application/json" },
+      },
+      fetchOptions || {},
+    );
     if (body !== undefined && body !== null) {
       options.body = JSON.stringify(body);
     }
@@ -528,15 +613,6 @@
   }
 
   // ── Subject / session type helpers ────────────────────────────────────────
-
-  /**
-   * Resolves the subject type code directly from the session payload.
-   * Input: session - raw session object with optional subject_type field
-   * Output: uppercase subject type string (e.g., "TC") or empty string
-   */
-  function getSessionSubjectType(session) {
-    return getSubjectTypeValue(session);
-  }
 
   // ── Filter helpers ─────────────────────────────────────────────────────────
 
@@ -593,10 +669,22 @@
   function populateWorkspaceFiltersFromSessions(sessions, filterIds, options) {
     const safeOptions = options || {};
     const courseNames = Array.from(
-      new Set((sessions || []).map(function (s) { return s.group_name; }).filter(Boolean)),
+      new Set(
+        (sessions || [])
+          .map(function (s) {
+            return s.group_name;
+          })
+          .filter(Boolean),
+      ),
     );
     const teacherNames = Array.from(
-      new Set((sessions || []).map(function (s) { return s.teacher_name; }).filter(Boolean)),
+      new Set(
+        (sessions || [])
+          .map(function (s) {
+            return s.teacher_name;
+          })
+          .filter(Boolean),
+      ),
     );
     const teacherWorkloadsByName =
       safeOptions.teacherWorkloadsByName || buildTeacherWorkloadsByNameFromSessions(sessions);
@@ -610,18 +698,158 @@
       return acc;
     }, {});
     const classroomNames = Array.from(
-      new Set((sessions || []).map(function (s) { return s.classroom_name; }).filter(Boolean)),
+      new Set(
+        (sessions || [])
+          .map(function (s) {
+            return s.classroom_name;
+          })
+          .filter(Boolean),
+      ),
     );
     const subjectNames = Array.from(
-      new Set((sessions || []).map(function (s) { return s.subject_name; }).filter(Boolean)),
+      new Set(
+        (sessions || [])
+          .map(function (s) {
+            return s.subject_name;
+          })
+          .filter(Boolean),
+      ),
     );
-    if (hasWorkCenterSubjects(sessions) && subjectNames.indexOf(WORK_CENTER_SUBJECT) < 0) {
-      subjectNames.push(WORK_CENTER_SUBJECT);
-    }
     setSelectOptions(filterIds.courseId, courseNames, "Todos los cursos");
     setSelectOptions(filterIds.teacherId, teacherNames, "Todos los profesores", teacherLabelsByName);
     setSelectOptions(filterIds.classroomId, classroomNames, "Todas las aulas");
     setSelectOptions(filterIds.subjectId, subjectNames, "Todas las asignaturas");
+  }
+
+  // Reference Monday (2024-01-01 = Monday) used to convert TC day+time to UTC datetime strings.
+  var TC_REFERENCE_MONDAY_MS = Date.UTC(2024, 0, 1); // 2024-01-01 00:00:00 UTC
+
+  /**
+   * Converts a TCSession API object to a pseudo-schedule object that renderScheduleBoard can render.
+   * TC sessions have day (0-4) + TimeField; the board expects UTC ISO datetime strings.
+   * Input: tcSession - TCSession object from GET /tc-sessions/
+   * Output: pseudo-schedule object with is_tc: true and fake ISO datetimes
+   */
+  function tcSessionToScheduleFormat(tcSession) {
+    var dayOffsetMs = tcSession.day * 24 * 60 * 60 * 1000;
+    var timeParts = (tcSession.start_time || "00:00:00").split(":");
+    var endParts = (tcSession.end_time || "00:00:00").split(":");
+    var startMs =
+      TC_REFERENCE_MONDAY_MS +
+      dayOffsetMs +
+      parseInt(timeParts[0], 10) * 3600000 +
+      parseInt(timeParts[1], 10) * 60000;
+    var endMs =
+      TC_REFERENCE_MONDAY_MS +
+      dayOffsetMs +
+      parseInt(endParts[0], 10) * 3600000 +
+      parseInt(endParts[1], 10) * 60000;
+    return {
+      id: tcSession.id,
+      teacher: tcSession.teacher,
+      teacher_name: tcSession.teacher_name || "-",
+      group: null,
+      group_name: "-",
+      classroom: null,
+      classroom_name: "-",
+      subject: null,
+      subject_name: "Guardia TC",
+      start_time: new Date(startMs).toISOString(),
+      end_time: new Date(endMs).toISOString(),
+      is_tc: true,
+    };
+  }
+
+  /**
+   * Returns TC sessions to overlay on the board based on active filters.
+   * Hidden when filtering by course, classroom or subject (those views don't include TC).
+   * Filtered by teacher when a teacher filter is active; all TC sessions otherwise.
+   * Input: filterIds - workspace filter IDs object
+   * Output: filtered array of pseudo-schedule TC session objects, or []
+   */
+  function getFilteredTCSessions(filterIds) {
+    if (getFilterValue(filterIds.courseId) || getFilterValue(filterIds.classroomId) || getFilterValue(filterIds.subjectId)) {
+      return [];
+    }
+    var pool = state.latestTCSessions || [];
+    var selectedTeacher = getFilterValue(filterIds.teacherId);
+    if (selectedTeacher) {
+      return pool
+        .filter(function (tc) {
+          return normalizeForCompare(tc.teacher_name) === normalizeForCompare(selectedTeacher);
+        })
+        .map(tcSessionToScheduleFormat);
+    }
+    return pool.map(tcSessionToScheduleFormat);
+  }
+
+  /**
+   * Adds TC session minutes to a base workload-by-name object and returns a new merged object.
+   * Input: baseWorkloads - object { teacherName: hoursNumber } from regular sessions
+   *        tcSessions    - array of raw TC session objects from state.latestTCSessions
+   * Output: new object with TC hours added on top of regular hours
+   */
+  function mergeTCWorkloads(baseWorkloads, tcSessions) {
+    var merged = Object.assign({}, baseWorkloads);
+    (tcSessions || []).forEach(function (tc) {
+      var name = String(tc.teacher_name || "").trim();
+      if (!name) {
+        return;
+      }
+      var startParts = (tc.start_time || "00:00:00").split(":");
+      var endParts = (tc.end_time || "00:00:00").split(":");
+      var durationMinutes =
+        (parseInt(endParts[0], 10) * 60 + parseInt(endParts[1], 10)) -
+        (parseInt(startParts[0], 10) * 60 + parseInt(startParts[1], 10));
+      if (durationMinutes > 0) {
+        merged[name] = (merged[name] || 0) + durationMinutes / 60;
+      }
+    });
+    return merged;
+  }
+
+  /**
+   * Re-populates both workspace filter dropdowns with workloads that include TC hours.
+   * Call this whenever state.latestTCSessions changes.
+   * Input: none
+   * Output: void
+   */
+  function refreshFilterWorkloads() {
+    const generatedWorkloads = mergeTCWorkloads(
+      state.generatedTeacherWorkloadsByName,
+      state.latestTCSessions,
+    );
+    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds, {
+      teacherWorkloadsByName: generatedWorkloads,
+    });
+    const savedGroup = savedManager.getSelectedSavedGroup();
+    if (savedGroup) {
+      const savedWorkloads = mergeTCWorkloads(
+        state.savedTeacherWorkloadsByName,
+        state.latestTCSessions,
+      );
+      populateWorkspaceFiltersFromSessions(
+        Array.isArray(savedGroup.sessions) ? savedGroup.sessions : [],
+        savedFilterIds,
+        { teacherWorkloadsByName: savedWorkloads },
+      );
+    }
+  }
+
+  /**
+   * TC-aware wrapper for populateWorkspaceFiltersFromSessions.
+   * Automatically merges latestTCSessions into teacherWorkloadsByName before populating.
+   * Use this everywhere instead of calling populateWorkspaceFiltersFromSessions directly
+   * (except inside refreshFilterWorkloads which already does the merge manually).
+   */
+  function populateFiltersWithTC(sessions, filterIds, options) {
+    var opts = options || {};
+    var base = opts.teacherWorkloadsByName || {};
+    populateWorkspaceFiltersFromSessions(
+      sessions,
+      filterIds,
+      Object.assign({}, opts, { teacherWorkloadsByName: mergeTCWorkloads(base, state.latestTCSessions) }),
+    );
   }
 
   /**
@@ -647,9 +875,6 @@
       }
       if (!selectedSubject) {
         return true;
-      }
-      if (isWorkCenterSubjectValue(selectedSubject)) {
-        return getSessionSubjectType(session) === "TC";
       }
       return normalizeForCompare(session.subject_name) === normalizeForCompare(selectedSubject);
     });
@@ -712,6 +937,7 @@
    */
   function showGeneratedWorkspace() {
     toggleSection("generatedLandingSection", false);
+    toggleSection("generatedProgressSection", false);
     toggleSection("generatedWorkspaceSection", true);
   }
 
@@ -722,7 +948,149 @@
    */
   function showGeneratedLanding() {
     toggleSection("generatedLandingSection", true);
+    toggleSection("generatedProgressSection", false);
     toggleSection("generatedWorkspaceSection", false);
+  }
+
+  // ── Generation progress animation ─────────────────────────────────────────
+  var _genProgressPhase2Timer = null;
+  var _genProgressPhase1Timer = null;
+  var GEN_PHASE1_FAKE_MS = 5000; // estimated Phase 1 duration shown before Phase 2 starts
+
+  function _genProgressSetPhase1Active() {
+    var step1 = document.getElementById("genProgressStep1");
+    var icon1 = document.getElementById("genProgressIcon1");
+    var bar1 = document.getElementById("genProgressBar1");
+    if (step1) {
+      step1.classList.remove("gen-progress-step--pending");
+    }
+    if (icon1) {
+      icon1.className = "gen-progress-step-icon gen-progress-step-icon--active";
+      icon1.innerHTML = "<div class='gen-spinner'></div>";
+    }
+    if (bar1) {
+      bar1.className = "progress-bar progress-bar-striped progress-bar-animated";
+      bar1.style.width = "100%";
+    }
+  }
+
+  function _genProgressSetPhase1Done() {
+    var icon1 = document.getElementById("genProgressIcon1");
+    var bar1 = document.getElementById("genProgressBar1");
+    if (icon1) {
+      icon1.className = "gen-progress-step-icon gen-progress-step-icon--done";
+      icon1.innerHTML = "<i data-lucide='check' style='width:1rem;height:1rem;color:#fff'></i>";
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+    if (bar1) {
+      bar1.className = "progress-bar bg-primary";
+      bar1.style.width = "100%";
+    }
+  }
+
+  function _genProgressStartPhase2(timeoutMinutes) {
+    var step2 = document.getElementById("genProgressStep2");
+    var icon2 = document.getElementById("genProgressIcon2");
+    var bar2Wrap = document.getElementById("genProgressBar2Wrap");
+    var bar2 = document.getElementById("genProgressBar2");
+    var label = document.getElementById("genProgressTimeLabel");
+
+    if (step2) {
+      step2.classList.remove("gen-progress-step--pending");
+    }
+
+    if (timeoutMinutes) {
+      if (label) {
+        label.textContent = "(" + timeoutMinutes + " min)";
+      }
+      if (icon2) {
+        icon2.className = "gen-progress-step-icon gen-progress-step-icon--active";
+        icon2.innerHTML = "<div class='gen-spinner'></div>";
+      }
+      if (bar2Wrap) {
+        bar2Wrap.classList.remove("d-none");
+      }
+
+      var totalMs = timeoutMinutes * 60 * 1000;
+      var startMs = Date.now();
+      _genProgressPhase2Timer = setInterval(function () {
+        var pct = Math.min(100, ((Date.now() - startMs) / totalMs) * 100);
+        if (bar2) {
+          bar2.style.width = pct + "%";
+          bar2.setAttribute("aria-valuenow", Math.round(pct));
+        }
+        if (pct >= 100) {
+          clearInterval(_genProgressPhase2Timer);
+          _genProgressPhase2Timer = null;
+        }
+      }, 200);
+    } else {
+      if (label) {
+        label.textContent = "(sin límite)";
+      }
+      if (icon2) {
+        icon2.className = "gen-progress-step-icon gen-progress-step-icon--active";
+        icon2.innerHTML = "<div class='gen-spinner'></div>";
+      }
+      if (bar2Wrap) {
+        bar2Wrap.classList.remove("d-none");
+      }
+      if (bar2) {
+        bar2.className = "progress-bar progress-bar-striped progress-bar-animated bg-success";
+        bar2.style.width = "100%";
+      }
+    }
+  }
+
+  function startGenerationProgress(timeoutMinutes) {
+    clearInterval(_genProgressPhase2Timer);
+    clearTimeout(_genProgressPhase1Timer);
+    _genProgressPhase2Timer = null;
+    _genProgressPhase1Timer = null;
+
+    // Reset step 2 to pending state
+    var step2 = document.getElementById("genProgressStep2");
+    var icon2 = document.getElementById("genProgressIcon2");
+    var bar2Wrap = document.getElementById("genProgressBar2Wrap");
+    var bar2 = document.getElementById("genProgressBar2");
+    var label = document.getElementById("genProgressTimeLabel");
+    if (step2) {
+      step2.classList.add("gen-progress-step--pending");
+    }
+    if (icon2) {
+      icon2.className = "gen-progress-step-icon";
+      icon2.innerHTML = "<span class='gen-progress-step-num'>2</span>";
+    }
+    if (bar2Wrap) {
+      bar2Wrap.classList.add("d-none");
+    }
+    if (bar2) {
+      bar2.className = "progress-bar bg-success";
+      bar2.style.width = "0%";
+    }
+    if (label) {
+      label.textContent = "";
+    }
+
+    _genProgressSetPhase1Active();
+    toggleSection("generatedLandingSection", false);
+    toggleSection("generatedProgressSection", true);
+    toggleSection("generatedWorkspaceSection", false);
+
+    _genProgressPhase1Timer = setTimeout(function () {
+      _genProgressSetPhase1Done();
+      _genProgressStartPhase2(timeoutMinutes);
+    }, GEN_PHASE1_FAKE_MS);
+  }
+
+  function stopGenerationProgress() {
+    clearInterval(_genProgressPhase2Timer);
+    clearTimeout(_genProgressPhase1Timer);
+    _genProgressPhase2Timer = null;
+    _genProgressPhase1Timer = null;
+    toggleSection("generatedProgressSection", false);
   }
 
   /**
@@ -741,6 +1109,18 @@
    * Output: void
    */
   function showSavedPicker() {
+    if (state.tcSessionsContext !== "") {
+      state.tcSessionsContext = "";
+      state.latestTCSessions = [];
+      if (state.latestGeneratedSchedules.length > 0) {
+        apiJson("/tc-sessions/").then(function (res) {
+          if (res.ok) {
+            state.latestTCSessions = (res.data && (res.data.results || res.data)) || [];
+            refreshFilterWorkloads();
+          }
+        });
+      }
+    }
     toggleSection("savedPickerSection", true);
     toggleSection("savedWorkspaceSection", false);
     savedWorkspace.clearDropFeedback();
@@ -754,18 +1134,38 @@
    */
   function renderGeneratedWorkspace() {
     updateGeneratedWorkspaceHeader();
-    const selectedSubject = getFilterValue(generatedFilterIds.subjectId);
-    const filtered = getFilteredSessions(state.latestGeneratedSchedules, generatedFilterIds);
-    const detail = renderScheduleBoard(filtered, "generatedWorkspaceOutput", {
-      forceWorkCenterSubjectLabel: isWorkCenterSubjectValue(selectedSubject),
-      getSessionSubjectType: getSessionSubjectType,
+    const tcBtn = document.getElementById("generatedWorkspaceTCBtn");
+    var boardSessions;
+    var tcSessions;
+    var enableTcCreate;
+    if (state.generatedTCViewMode) {
+      boardSessions = [];
+      tcSessions = (state.latestTCSessions || []).map(tcSessionToScheduleFormat);
+      enableTcCreate = false;
+      if (tcBtn) {
+        tcBtn.classList.add("schedule-toolbar-btn-tc--active");
+      }
+    } else {
+      boardSessions = getFilteredSessions(state.latestGeneratedSchedules, generatedFilterIds);
+      tcSessions = getFilteredTCSessions(generatedFilterIds);
+      enableTcCreate = !!getFilterValue(generatedFilterIds.teacherId);
+      if (tcBtn) {
+        tcBtn.classList.remove("schedule-toolbar-btn-tc--active");
+      }
+    }
+    const detail = renderScheduleBoard(boardSessions.concat(tcSessions), "generatedWorkspaceOutput", {
       detailTitle: "Detalle de sesiones generadas",
       detailPage: state.generatedDetailPage,
       detailPageSize: state.detailPageSize,
-      enableDragDrop: true,
+      enableDragDrop: !state.generatedTCViewMode,
       teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
+      scheduleConfig: state.scheduleConfig,
+      enableTcCreate: enableTcCreate,
     });
     state.generatedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
+    if (window.orariooAuth && typeof window.orariooAuth.initLucideIcons === "function") {
+      window.orariooAuth.initLucideIcons();
+    }
   }
 
   /**
@@ -782,19 +1182,57 @@
       }
       return;
     }
-    const selectedSubject = getFilterValue(savedFilterIds.subjectId);
+
+    const currentTimetableName = String(selectedGroup.name || "");
+    if (state.tcSessionsContext !== currentTimetableName) {
+      state.tcSessionsContext = currentTimetableName;
+      state.latestTCSessions = [];
+      if (currentTimetableName) {
+        apiJson("/tc-sessions/?timetable_name=" + encodeURIComponent(currentTimetableName)).then(function (res) {
+          if (res.ok) {
+            state.latestTCSessions = (res.data && (res.data.results || res.data)) || [];
+            refreshFilterWorkloads();
+            renderSavedWorkspace();
+          }
+        });
+      }
+      return;
+    }
+
     const sourceSessions = Array.isArray(selectedGroup.sessions) ? selectedGroup.sessions : [];
     const filtered = getFilteredSessions(sourceSessions, savedFilterIds);
-    const detail = renderScheduleBoard(filtered, "savedWorkspaceOutput", {
-      forceWorkCenterSubjectLabel: isWorkCenterSubjectValue(selectedSubject),
-      getSessionSubjectType: getSessionSubjectType,
+    const tcBtn = document.getElementById("savedWorkspaceTCBtn");
+    var boardSessions;
+    var tcSessions;
+    var enableTcCreate;
+    if (state.savedTCViewMode) {
+      boardSessions = [];
+      tcSessions = (state.latestTCSessions || []).map(tcSessionToScheduleFormat);
+      enableTcCreate = false;
+      if (tcBtn) {
+        tcBtn.classList.add("schedule-toolbar-btn-tc--active");
+      }
+    } else {
+      boardSessions = filtered;
+      tcSessions = getFilteredTCSessions(savedFilterIds);
+      enableTcCreate = !!getFilterValue(savedFilterIds.teacherId);
+      if (tcBtn) {
+        tcBtn.classList.remove("schedule-toolbar-btn-tc--active");
+      }
+    }
+    const detail = renderScheduleBoard(boardSessions.concat(tcSessions), "savedWorkspaceOutput", {
       detailTitle: "Detalle de sesiones guardadas",
       detailPage: state.savedDetailPage,
       detailPageSize: state.detailPageSize,
-      enableDragDrop: true,
+      enableDragDrop: !state.savedTCViewMode,
       teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
+      scheduleConfig: state.scheduleConfig,
+      enableTcCreate: enableTcCreate,
     });
     state.savedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
+    if (window.orariooAuth && typeof window.orariooAuth.initLucideIcons === "function") {
+      window.orariooAuth.initLucideIcons();
+    }
   }
 
   // ── Save generated modal ───────────────────────────────────────────────────
@@ -846,9 +1284,9 @@
     const modal = document.getElementById("scheduleGenerateModal");
     const title = document.getElementById("scheduleGenerateModalTitle");
     const text = document.getElementById("scheduleGenerateModalText");
-    const hint = document.getElementById("scheduleGenerateModalHint");
+    const hintText = document.getElementById("scheduleGenerateModalHintText");
     const confirmButton = document.getElementById("confirmScheduleGenerateBtn");
-    if (!modal || !title || !text || !hint || !confirmButton) {
+    if (!modal || !title || !text || !confirmButton) {
       handleGenerate();
       return;
     }
@@ -858,16 +1296,25 @@
       text.textContent = state.generatedSaved
         ? "Se generará una nueva propuesta en borrador. El horario guardado actual seguirá disponible."
         : "Se generará una nueva propuesta y reemplazará el borrador actual que estás viendo.";
-      hint.textContent = "Usará las restricciones actuales y puede tardar unos segundos si el problema es complejo.";
+      if (hintText) {
+        hintText.textContent =
+          "Usará las restricciones actuales y puede tardar unos segundos si el problema es complejo.";
+      }
       confirmButton.textContent = "Regenerar horario";
     } else {
       title.textContent = "Generar horario";
-      text.textContent = "Se lanzará una nueva generación automática del horario con las restricciones actuales.";
-      hint.textContent = "Este proceso puede tardar unos segundos si el problema es complejo.";
+      text.textContent = "Se lanzará una nueva generación con las restricciones actuales.";
+      if (hintText) {
+        hintText.textContent = "Este proceso puede tardar bastante tiempo si el problema es complejo.";
+      }
       confirmButton.textContent = "Generar horario";
     }
+    resetGenerationTimeoutControls();
     showModalElement(modal, function () {
       confirmButton.focus();
+      if (window.orariooAuth && typeof window.orariooAuth.initBootstrapTooltips === "function") {
+        window.orariooAuth.initBootstrapTooltips();
+      }
     });
   }
 
@@ -914,34 +1361,53 @@
     const timetableName = String(nameInput ? nameInput.value : "").trim();
     if (!timetableName) {
       showAlert("warning", "Indica un nombre para guardar el horario.");
-      if (nameInput) { nameInput.focus(); }
+      if (nameInput) {
+        nameInput.focus();
+      }
       return;
     }
     const hasSavedSummary = await savedManager.ensureSavedSchedulesLoaded().catch(function () {
       return false;
     });
     if (hasSavedSummary && savedManager.hasSavedTimetableNameCollision(timetableName)) {
-      showAlert("error", "Ya existe un horario guardado con ese nombre. Usa otro nombre o elimina el horario anterior.");
-      if (nameInput) { nameInput.focus(); nameInput.select(); }
+      showAlert(
+        "error",
+        "Ya existe un horario guardado con ese nombre. Usa otro nombre o elimina el horario anterior.",
+      );
+      if (nameInput) {
+        nameInput.focus();
+        nameInput.select();
+      }
       return;
     }
     const scheduleIds = state.latestGeneratedSchedules
-      .map(function (session) { return session.id; })
-      .filter(function (id) { return Number.isInteger(id); });
+      .map(function (session) {
+        return session.id;
+      })
+      .filter(function (id) {
+        return Number.isInteger(id);
+      });
     if (!scheduleIds.length) {
       showAlert("error", "No se encontraron sesiones para guardar.");
       return;
     }
-    if (confirmButton) { confirmButton.disabled = true; }
+    if (confirmButton) {
+      confirmButton.disabled = true;
+    }
     const result = await apiJson("/schedules/save-generated/", "POST", {
       timetable_name: timetableName,
       schedule_ids: scheduleIds,
       user_ids: [],
     });
-    if (confirmButton) { confirmButton.disabled = false; }
+    if (confirmButton) {
+      confirmButton.disabled = false;
+    }
     if (!result.ok) {
       showAlert("error", extractApiErrorMessage(result.data, "No se pudo guardar el horario generado."));
-      if (nameInput) { nameInput.focus(); nameInput.select(); }
+      if (nameInput) {
+        nameInput.focus();
+        nameInput.select();
+      }
       return;
     }
     closeSaveGeneratedModal();
@@ -952,9 +1418,7 @@
       result.data && Array.isArray(result.data.teacher_workloads)
         ? buildTeacherWorkloadsByNameFromApi(result.data.teacher_workloads)
         : buildTeacherWorkloadsByNameFromSessions(state.latestGeneratedSchedules);
-    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds, {
-      teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
-    });
+    refreshFilterWorkloads();
     renderGeneratedWorkspace();
     savedManager.rememberSavedTimetableSummary(timetableName, state.latestGeneratedSchedules);
     showAlert("success", 'Horario guardado como "' + timetableName + '".');
@@ -977,8 +1441,170 @@
   function setGenerateActionButtonsDisabled(disabled) {
     ["generateBtn", "generatedWorkspaceRegenerateBtn", "confirmScheduleGenerateBtn"].forEach(function (id) {
       const button = document.getElementById(id);
-      if (button) { button.disabled = disabled; }
+      if (button) {
+        button.disabled = disabled;
+      }
     });
+  }
+
+  /**
+   * Restores the generation timeout controls to the default state.
+   * Input: none
+   * Output: void
+   */
+  function resetGenerationTimeoutControls() {
+    var limitedRadio = document.getElementById("gen-timeout-limited");
+    var unlimitedRadio = document.getElementById("gen-timeout-unlimited");
+    var timeoutInput = document.getElementById("gen-timeout-minutes");
+
+    if (limitedRadio) {
+      limitedRadio.checked = true;
+    }
+    if (unlimitedRadio) {
+      unlimitedRadio.checked = false;
+    }
+    if (timeoutInput) {
+      timeoutInput.value = "15";
+    }
+    syncGenerationTimeoutControls();
+  }
+
+  /**
+   * Enables or disables the timeout input depending on the selected mode.
+   * Input: none
+   * Output: void
+   */
+  function syncGenerationTimeoutControls() {
+    var limitedRadio = document.getElementById("gen-timeout-limited");
+    var timeoutInput = document.getElementById("gen-timeout-minutes");
+    var isLimited = !limitedRadio || limitedRadio.checked;
+
+    if (timeoutInput) {
+      timeoutInput.disabled = !isLimited;
+    }
+  }
+
+  /**
+   * Reads the state of the generation options checkboxes and returns an options object.
+   * Input: none
+   * Output: object with boolean fields for each generation option
+   */
+  function _readGenerationOptions() {
+    function checked(id) {
+      var el = document.getElementById(id);
+      return el ? el.checked : true;
+    }
+    var dutyEl = document.getElementById("gen-opt-teachers-on-duty");
+    return {
+      enable_no_intraday_gaps: checked("gen-opt-no-intraday-gaps"),
+      enable_subject_unavailable_times: checked("gen-opt-subject-unavailable"),
+      enable_teacher_unavailable_times: checked("gen-opt-teacher-unavailable"),
+      enable_subject_time_preferences: checked("gen-opt-subject-preferences"),
+      enable_teacher_time_preferences: checked("gen-opt-teacher-preferences"),
+      enable_subject_day_spread: checked("gen-opt-day-spread"),
+      enable_teacher_gap_minimization: checked("gen-opt-gap-minimization"),
+      teachers_on_duty: dutyEl ? parseInt(dutyEl.value, 10) || 0 : 0,
+    };
+  }
+
+  /**
+   * Reads the user-selected timeout mode and returns the generation payload fragment.
+   * Input: none
+   * Output: object containing timeout_minutes only when the limited mode is selected
+   */
+  function readGenerationTimeoutOption() {
+    var limitedRadio = document.getElementById("gen-timeout-limited");
+    var timeoutInput = document.getElementById("gen-timeout-minutes");
+
+    if (!limitedRadio || !limitedRadio.checked) {
+      return {};
+    }
+
+    return {
+      timeout_minutes: timeoutInput ? timeoutInput.value : "",
+    };
+  }
+
+  /**
+   * Resolves a teacher name to its numeric ID from the latest generated sessions.
+   * Input: teacherName - string
+   * Output: integer teacher ID, or null if not found
+   */
+  function resolveTeacherId(teacherName) {
+    const savedGroup = savedManager.getSelectedSavedGroup();
+    const savedSessions = savedGroup && Array.isArray(savedGroup.sessions) ? savedGroup.sessions : [];
+    const allSessions = (state.latestGeneratedSchedules || [])
+      .concat(savedSessions)
+      .concat(state.latestTCSessions || []);
+    const found = allSessions.find(function (s) {
+      return normalizeForCompare(s.teacher_name) === normalizeForCompare(teacherName);
+    });
+    return found ? found.teacher : null;
+  }
+
+  /**
+   * Creates a TC session for the active teacher at the given cell slot.
+   * Input: day - weekday name string (e.g. "Lunes"), startHm - "HH:MM", endHm - "HH:MM",
+   *        filterIds - workspace filter IDs object
+   * Output: Promise<void>
+   */
+  async function handleTCSessionCreate(day, startHm, endHm, filterIds) {
+    const teacherName = getFilterValue(filterIds.teacherId);
+    if (!teacherName) {
+      return;
+    }
+    const teacherId = resolveTeacherId(teacherName);
+    if (!teacherId) {
+      showAlert("error", "No se pudo identificar al profesor seleccionado.");
+      return;
+    }
+    const dayIndex = { Lunes: 0, Martes: 1, "Miércoles": 2, Jueves: 3, Viernes: 4 }[day];
+    if (dayIndex === undefined) {
+      return;
+    }
+    const result = await apiJson("/tc-sessions/create/", "POST", {
+      teacher: teacherId,
+      day: dayIndex,
+      start_time: startHm + ":00",
+      end_time: endHm + ":00",
+    });
+    if (!result.ok) {
+      const msg = (result.data && result.data.detail) || "No se pudo crear la guardia TC.";
+      showAlert("error", msg);
+      return;
+    }
+    const created = result.data && result.data.tc_session;
+    if (created) {
+      state.latestTCSessions = (state.latestTCSessions || []).concat([created]);
+    }
+    if (result.data && result.data.warning) {
+      showAlert("warning", result.data.warning);
+    }
+    refreshFilterWorkloads();
+    renderGeneratedWorkspace();
+    renderSavedWorkspace();
+  }
+
+  /**
+   * Deletes a TC session by ID, updates state, and re-renders both workspaces.
+   * Input: tcSessionId - integer PK of the TCSession to delete
+   * Output: Promise<void>
+   */
+  async function handleTCSessionDelete(tcSessionId) {
+    if (!tcSessionId) {
+      return;
+    }
+    const result = await apiJson("/tc-sessions/" + tcSessionId + "/", "DELETE");
+    if (!result.ok) {
+      showAlert("error", "No se pudo eliminar la guardia TC.");
+      return;
+    }
+    state.latestTCSessions = (state.latestTCSessions || []).filter(function (tc) {
+      return tc.id !== tcSessionId;
+    });
+    refreshFilterWorkloads();
+    renderGeneratedWorkspace();
+    renderSavedWorkspace();
   }
 
   /**
@@ -990,7 +1616,11 @@
     setGenerateActionButtonsDisabled(true);
     generatedWorkspace.clearDropFeedback();
     resetGeneratedDragState();
-    const result = await apiJson("/schedules/generate/", "POST", {});
+    const timeoutOpt = readGenerationTimeoutOption();
+    const payload = Object.assign({}, _readGenerationOptions(), timeoutOpt);
+    startGenerationProgress(timeoutOpt.timeout_minutes ? parseInt(timeoutOpt.timeout_minutes, 10) : null);
+    const result = await apiJson("/schedules/generate/", "POST", payload, { _skipSpinner: true });
+    stopGenerationProgress();
     setGenerateActionButtonsDisabled(false);
     if (!result.ok) {
       state.latestGeneratedSchedules = [];
@@ -1002,6 +1632,16 @@
       return;
     }
     state.latestGeneratedSchedules = (result.data && result.data.schedules) || [];
+    state.latestTCSessions = [];
+    state.tcSessionsContext = "";
+    apiJson("/tc-sessions/").then(function (tcResult) {
+      if (tcResult.ok) {
+        state.latestTCSessions = (tcResult.data && (tcResult.data.results || tcResult.data)) || [];
+        refreshFilterWorkloads();
+        renderGeneratedWorkspace();
+      }
+    });
+    state.generatedUnavailability = (result.data && result.data.unavailability) || null;
     state.generatedDetailPage = 1;
     state.generatedSaved = false;
     state.generatedSavedName = "";
@@ -1010,14 +1650,21 @@
         ? buildTeacherWorkloadsByNameFromApi(result.data.teacher_workloads)
         : buildTeacherWorkloadsByNameFromSessions(state.latestGeneratedSchedules);
     state.generatedMoveInFlight = false;
-    populateWorkspaceFiltersFromSessions(state.latestGeneratedSchedules, generatedFilterIds, {
-      teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
-    });
+    refreshFilterWorkloads();
     showGeneratedWorkspace();
     renderGeneratedWorkspace();
     const generatedCount =
       result.data && result.data.generated_count ? result.data.generated_count : state.latestGeneratedSchedules.length;
     showAlert("success", "Se generaron " + generatedCount + " sesiones.");
+    const tcWarnings = (result.data && result.data.tc_warnings) || [];
+    if (tcWarnings.length > 0) {
+      const days = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+      const lines = tcWarnings.map(function (w) {
+        const dayName = days[w.day] || "Día " + w.day;
+        return dayName + " " + w.start_time.slice(0, 5) + ": " + w.assigned + "/" + w.required + " docentes TC";
+      });
+      showAlert("warning", "Guardias TC con cobertura incompleta:\n" + lines.join("\n"));
+    }
   }
 
   /**
@@ -1101,7 +1748,20 @@
 
       generatedOutput.addEventListener("click", function (event) {
         const target = event.target;
-        if (!(target instanceof HTMLElement)) {
+        if (!(target instanceof Element)) {
+          return;
+        }
+        const tcDeleteBtn = target.closest("button[data-tc-delete-id]");
+        if (tcDeleteBtn) {
+          handleTCSessionDelete(Number.parseInt(tcDeleteBtn.dataset.tcDeleteId, 10));
+          return;
+        }
+        const tcAddBtn = target.closest("button[data-add-tc]");
+        if (tcAddBtn) {
+          const cell = tcAddBtn.closest("td[data-board-day]");
+          if (cell) {
+            handleTCSessionCreate(cell.dataset.boardDay, cell.dataset.boardStart, cell.dataset.boardEnd, generatedFilterIds);
+          }
           return;
         }
         const pageButton = target.closest("button[data-detail-page]");
@@ -1155,6 +1815,24 @@
     if (confirmGenerateButton) {
       confirmGenerateButton.addEventListener("click", handleGenerateModalConfirm);
     }
+
+    ["gen-timeout-limited", "gen-timeout-unlimited"].forEach(function (id) {
+      const radio = document.getElementById(id);
+      if (!radio) {
+        return;
+      }
+      radio.addEventListener("change", syncGenerationTimeoutControls);
+    });
+
+    syncGenerationTimeoutControls();
+
+    const tcBtn = document.getElementById("generatedWorkspaceTCBtn");
+    if (tcBtn) {
+      tcBtn.addEventListener("click", function () {
+        state.generatedTCViewMode = !state.generatedTCViewMode;
+        renderGeneratedWorkspace();
+      });
+    }
   }
 
   /**
@@ -1165,11 +1843,24 @@
     if (cardsContainer) {
       cardsContainer.addEventListener("click", async function (event) {
         const target = event.target;
-        if (!(target instanceof HTMLElement)) {
+        if (!(target instanceof Element)) {
+          return;
+        }
+        const renameButton = target.closest("button[data-action='rename'][data-index]");
+        if (renameButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          const renameIndex = Number.parseInt(renameButton.dataset.index || "", 10);
+          if (Number.isNaN(renameIndex) || renameIndex < 0) {
+            return;
+          }
+          savedManager.renameSavedTimetable(renameIndex);
           return;
         }
         const deleteButton = target.closest("button[data-action='delete'][data-index]");
         if (deleteButton) {
+          event.preventDefault();
+          event.stopPropagation();
           const deleteIndex = Number.parseInt(deleteButton.dataset.index || "", 10);
           if (Number.isNaN(deleteIndex) || deleteIndex < 0) {
             return;
@@ -1197,7 +1888,7 @@
 
       cardsContainer.addEventListener("keydown", async function (event) {
         const target = event.target;
-        if (!(target instanceof HTMLElement)) {
+        if (!(target instanceof Element)) {
           return;
         }
         if (target.closest("button")) {
@@ -1245,7 +1936,20 @@
 
       savedOutput.addEventListener("click", function (event) {
         const target = event.target;
-        if (!(target instanceof HTMLElement)) {
+        if (!(target instanceof Element)) {
+          return;
+        }
+        const tcDeleteBtn = target.closest("button[data-tc-delete-id]");
+        if (tcDeleteBtn) {
+          handleTCSessionDelete(Number.parseInt(tcDeleteBtn.dataset.tcDeleteId, 10));
+          return;
+        }
+        const tcAddBtn = target.closest("button[data-add-tc]");
+        if (tcAddBtn) {
+          const cell = tcAddBtn.closest("td[data-board-day]");
+          if (cell) {
+            handleTCSessionCreate(cell.dataset.boardDay, cell.dataset.boardStart, cell.dataset.boardEnd, savedFilterIds);
+          }
           return;
         }
         const pageButton = target.closest("button[data-detail-page]");
@@ -1277,6 +1981,14 @@
           source: "saved",
           savedName: state.selectedSavedTimetableName || "",
         });
+      });
+    }
+
+    const tcBtn = document.getElementById("savedWorkspaceTCBtn");
+    if (tcBtn) {
+      tcBtn.addEventListener("click", function () {
+        state.savedTCViewMode = !state.savedTCViewMode;
+        renderSavedWorkspace();
       });
     }
   }
@@ -1323,9 +2035,15 @@
         if (!state.latestGeneratedSchedules || state.latestGeneratedSchedules.length === 0) {
           return;
         }
-        const scheduleIds = state.latestGeneratedSchedules.map(function (s) { return s.id; });
+        const scheduleIds = state.latestGeneratedSchedules.map(function (s) {
+          return s.id;
+        });
         window.ScheduleAnalysis.showAnalysisModal(
-          scheduleIds, "scheduleAnalysisModal", "Análisis del Horario", "schedule-analysis-content", apiJson
+          scheduleIds,
+          "scheduleAnalysisModal",
+          "Análisis del Horario",
+          "schedule-analysis-content",
+          apiJson,
         );
       });
     }
@@ -1340,9 +2058,15 @@
           showAlert("info", "No hay horarios guardados seleccionados.");
           return;
         }
-        const scheduleIds = schedules.map(function (s) { return s.id; });
+        const scheduleIds = schedules.map(function (s) {
+          return s.id;
+        });
         window.ScheduleAnalysis.showAnalysisModal(
-          scheduleIds, "savedAnalysisModal", "Análisis del Horario Guardado", "saved-analysis-content", apiJson
+          scheduleIds,
+          "savedAnalysisModal",
+          "Análisis del Horario Guardado",
+          "saved-analysis-content",
+          apiJson,
         );
       });
     }
@@ -1378,6 +2102,22 @@
     if (savedSection) {
       initTasks.push(savedManager.ensureSavedSchedulesLoaded());
     }
+    initTasks.push(
+      apiJson("/schedule-config/").then(function (res) {
+        if (res.ok && res.data && res.data.schedule_config) {
+          state.scheduleConfig = res.data.schedule_config;
+        }
+      }),
+    );
+    state.tcSessionsContext = "";
+    initTasks.push(
+      apiJson("/tc-sessions/").then(function (res) {
+        if (res.ok) {
+          state.latestTCSessions = (res.data && (res.data.results || res.data)) || [];
+          refreshFilterWorkloads();
+        }
+      }),
+    );
     await Promise.all(initTasks);
 
     if (window.orariooAuth && typeof window.orariooAuth.initLucideIcons === "function") {

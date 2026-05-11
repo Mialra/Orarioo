@@ -99,11 +99,19 @@ def parse_generation_bool(payload, field_name):
 
 
 def parse_base_generation_bool_options(payload, options):
-    """Parse boolean generation options (include_tc) from the payload into options dict.
+    """Parse boolean generation options from the payload into options dict.
     Input: payload - request data dict; options - mutable options dict to update
     Output: None on success, or Response with HTTP 400 on validation failure
     """
-    for field_name in ["include_tc"]:
+    for field_name in [
+        "enable_no_intraday_gaps",
+        "enable_subject_unavailable_times",
+        "enable_teacher_unavailable_times",
+        "enable_subject_time_preferences",
+        "enable_teacher_time_preferences",
+        "enable_subject_day_spread",
+        "enable_teacher_gap_minimization",
+    ]:
         parsed, error_response = parse_generation_bool(payload, field_name)
         if error_response is not None:
             return error_response
@@ -113,17 +121,16 @@ def parse_base_generation_bool_options(payload, options):
 
 
 def parse_base_generation_int_options(payload, options):
-    """Parse integer generation options (recess supervisors, tc_capacity) from the payload.
+    """Parse integer generation options from the payload.
     Input: payload - request data dict; options - mutable options dict to update
     Output: None on success, or Response with HTTP 400 on validation failure
     """
     int_fields = {
         "recess_supervisors_preschool": (0, 20),
         "recess_supervisors_primary": (0, 20),
+        "timeout_minutes": (1, 1440),
+        "teachers_on_duty": (0, 20),
     }
-
-    if options.get("include_tc", True):
-        int_fields["tc_capacity"] = (1, 10)
 
     for field_name, bounds in int_fields.items():
         parsed, error_response = parse_generation_int(
@@ -142,8 +149,14 @@ def parse_base_generation_int_options(payload, options):
 DEFAULT_GENERATION_OPTIONS = {
     "recess_supervisors_preschool": 0,
     "recess_supervisors_primary": 0,
-    "include_tc": True,
-    "tc_capacity": 1,
+    "teachers_on_duty": 0,
+    "enable_no_intraday_gaps": True,
+    "enable_subject_unavailable_times": True,
+    "enable_teacher_unavailable_times": True,
+    "enable_subject_time_preferences": True,
+    "enable_teacher_time_preferences": True,
+    "enable_subject_day_spread": True,
+    "enable_teacher_gap_minimization": True,
 }
 
 

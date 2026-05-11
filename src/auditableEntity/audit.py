@@ -29,6 +29,7 @@ AUDITABLE_ENTITY_TYPES = frozenset(
         "subject",
         "schedule",
         "user",
+        "collaborationteam",
     }
 )
 AUDIT_EXCLUDED_FIELD_NAMES = frozenset(
@@ -46,15 +47,19 @@ AUDIT_EXCLUDED_FIELD_NAMES = frozenset(
         "first_name",
         "last_name",
         "is_active",
+        "working_hours",
+        "type",
+        "duration",
     }
 )
 ENTITY_LABELS = {
     "teacher": "Profesor",
     "classroom": "Aula",
-    "group": "Grupo",
+    "group": "Curso",
     "subject": "Asignatura",
     "schedule": "Horario",
     "user": "Usuario",
+    "collaborationteam": "Tramo",
 }
 ACTION_LABELS = {
     AuditActionType.CREATE: "Creación",
@@ -64,10 +69,11 @@ ACTION_LABELS = {
 ENTITY_PHRASES = {
     "teacher": "el profesor",
     "classroom": "el aula",
-    "group": "el grupo",
+    "group": "el curso",
     "subject": "la asignatura",
     "schedule": "el horario",
     "user": "el usuario",
+    "collaborationteam": "el tramo",
 }
 FIELD_LABELS = {
     "name": "Nombre",
@@ -75,6 +81,8 @@ FIELD_LABELS = {
     "email": "Correo",
     "is_enabled": "Activo",
     "max_weekly_hours": "Máximo de horas semanales",
+    "max_weekly_minutes": "Minutos semanales",
+    "weekly_hours_exact": "Carga horaria exacta",
     "working_hours": "Horas de trabajo",
     "time_preferences": "Preferencias horarias",
     "is_shared": "Compartida",
@@ -84,19 +92,25 @@ FIELD_LABELS = {
     "preferred_time_slot": "Franja horaria preferida",
     "type": "Tipo",
     "teacher": "Profesor",
-    "group": "Grupo",
-    "allowed_classrooms": "Aulas permitidas",
+    "group": "Curso",
+    "mandatory_classroom": "Aula",
     "observations": "Observaciones",
     "start_time": "Hora de inicio",
     "end_time": "Hora de fin",
     "classroom": "Aula",
     "subject": "Asignatura",
     "users": "Usuarios",
+    "schedule_config": "Configuración de tramos",
 }
 DISPLAY_VALUE_TRANSLATIONS = {
-    "Preschool": "Infantil",
-    "Primary": "Primaria",
-    "Secondary": "Secundaria",
+    "PRESCHOOL": "Infantil",
+    "preschool": "Infantil",
+    "PRIMARY": "Primaria",
+    "primary": "Primaria",
+    "SECONDARY": "ESO",
+    "secondary": "ESO",
+    "ALEVELS": "Bachillerato",
+    "alevels": "Bachillerato",
     "Normal": "Normal",
     "TC": "TC",
 }
@@ -106,6 +120,23 @@ PREFERENCE_GROUPS = (
     ("PREFER_NO", "Poco preferidas"),
     ("UNAVAILABLE", "No disponibles"),
 )
+SCHEDULE_STAGE_SUBFIELD_LABELS = {
+    "label": "Nombre",
+    "color": "Color",
+    "start_time": "Hora de inicio",
+    "end_time": "Hora de fin",
+    "breaks": "Recreos",
+}
+SCHEDULE_COLOR_LABELS = {
+    "red": "Rojo",
+    "blue": "Azul",
+    "green": "Verde",
+    "orange": "Naranja",
+    "purple": "Morado",
+    "yellow": "Amarillo",
+    "pink": "Rosa",
+    "gray": "Gris",
+}
 PREFERENCE_DAY_NAMES = {
     "MON": "Lunes",
     "TUE": "Martes",
@@ -209,7 +240,7 @@ def _serialize_scalar(value):
     if value is None:
         return None
     if isinstance(value, bool):
-        return "Si" if value else "No"
+        return "Sí" if value else "No"
     if isinstance(value, (datetime, date, time)):
         return value.isoformat()
     if isinstance(value, (Decimal, UUID)):
@@ -252,16 +283,112 @@ def snapshot_instance(instance):
     return snapshot
 
 
+def _format_break(break_dict):
+    if not isinstance(break_dict, dict):
+        return str(break_dict)
+    return f"{break_dict.get('start', '?')}–{break_dict.get('end', '?')}"
+
+
+def _diff_schedule_stage(before_stage, after_stage):
+    changes = []
+    for key, field_label in SCHEDULE_STAGE_SUBFIELD_LABELS.items():
+        before_val = (before_stage or {}).get(key)
+        after_val = (after_stage or {}).get(key)
+        if before_val == after_val:
+            continue
+        if key == "color":
+            changes.append(
+                {
+                    "campo": field_label,
+                    "valor_anterior": SCHEDULE_COLOR_LABELS.get(before_val, before_val),
+                    "valor_nuevo": SCHEDULE_COLOR_LABELS.get(after_val, after_val),
+                }
+            )
+        elif key == "breaks":
+            before_set = {_format_break(b) for b in (before_val or [])}
+            after_set = {_format_break(b) for b in (after_val or [])}
+            added = sorted(after_set - before_set)
+            removed = sorted(before_set - after_set)
+            if added:
+                changes.append({"campo": "Recreo añadido", "valor_nuevo": added})
+            if removed:
+                changes.append({"campo": "Recreo eliminado", "valor_anterior": removed})
+        else:
+            changes.append(
+                {
+                    "campo": field_label,
+                    "valor_anterior": before_val,
+                    "valor_nuevo": after_val,
+                }
+            )
+    return changes
+
+
+def _stage_create_rows(stage_data):
+    rows = []
+    for key, field_label in SCHEDULE_STAGE_SUBFIELD_LABELS.items():
+        value = (stage_data or {}).get(key)
+        if value in (None, "", [], {}):
+            continue
+        if key == "color":
+            value = SCHEDULE_COLOR_LABELS.get(value, value)
+        elif key == "breaks":
+            value = [_format_break(b) for b in value]
+        rows.append({"campo": field_label, "valor_nuevo": value})
+    return rows
+
+
+def create_stage_audit_entries(model, before_config, after_config, team, *, actor=None):
+    """Create one audit entry per stage that was added, modified, or removed.
+    Input: model - the model class (CollaborationTeam); before_config - previous schedule_config;
+           after_config - new schedule_config; team - CollaborationTeam instance;
+           actor - explicit User instance (falls back to get_current_actor if omitted)
+    Output: None; creates AuditEntry rows as side effects
+    """
+    resolved_actor = actor if actor is not None else get_current_actor()
+    with audit_actor_context(user=resolved_actor):
+        before_config = before_config or {}
+        after_config = after_config or {}
+        for code in sorted(set(before_config) | set(after_config)):
+            before_stage = before_config.get(code)
+            after_stage = after_config.get(code)
+            stage_label = (after_stage or before_stage or {}).get("label") or code
+            if before_stage is None:
+                changed_fields = _stage_create_rows(after_stage)
+                action_type = AuditActionType.CREATE
+            elif after_stage is None:
+                changed_fields = [
+                    {"campo": get_field_label("name"), "valor_anterior": stage_label}
+                ]
+                action_type = AuditActionType.DELETE
+            else:
+                changed_fields = _diff_schedule_stage(before_stage, after_stage)
+                if not changed_fields:
+                    continue
+                action_type = AuditActionType.UPDATE
+            create_audit_entry(
+                model=model,
+                entity_id=team.pk,
+                entity_name=stage_label,
+                action_type=action_type,
+                detail=build_action_detail(
+                    action_type=action_type,
+                    model=model,
+                    entity_name=stage_label,
+                    changed_fields=changed_fields,
+                ),
+                changed_fields=changed_fields,
+                team=team,
+            )
+
+
 def build_create_changed_fields(after_snapshot):
     """Build change rows for a creation event from the post-save snapshot.
     Input: after_snapshot - dict of field name to serialized value after save
     Output: list of dicts with 'campo' and 'valor_nuevo' keys for non-empty fields
     """
     return [
-        {
-            "campo": get_field_label(field_name),
-            "valor_nuevo": value,
-        }
+        {"campo": get_field_label(field_name), "valor_nuevo": value}
         for field_name, value in after_snapshot.items()
         if value not in (None, "", [], {})
     ]

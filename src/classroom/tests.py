@@ -108,3 +108,22 @@ class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("name", response.data)
+
+    def test_allow_same_name_in_different_team(self):
+        Classroom.objects.create(name="Aula Sur", team=self.team)
+        other_user, other_team = self.create_isolated_user(
+            email_prefix="classroom-api-other"
+        )
+        self.client.force_authenticate(other_user)
+
+        response = self.client.post(
+            reverse("classroom-list"),
+            {"name": "aula sur"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Classroom.objects.filter(name__iexact="Aula Sur").count(), 2)
+        self.assertTrue(
+            Classroom.objects.filter(name__iexact="Aula Sur", team=other_team).exists()
+        )

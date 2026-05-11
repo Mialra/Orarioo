@@ -3,6 +3,7 @@ Serializer mixin for name validation shared by all NamedEntity-backed serializer
 """
 
 from app.constants import STRING_MAX_LENGTH
+from common.tenancy import get_active_team
 from common.validators import (
     validate_and_normalize_required_text,
     validate_case_insensitive_unique,
@@ -41,10 +42,17 @@ class NamedEntityNameValidationMixin:
         if model is None:
             return normalized
 
+        request = self.context.get("request")
+        if request is not None and getattr(request, "user", None) is not None:
+            active_team = get_active_team(request)
+            queryset = model.objects.filter(team=active_team)
+        else:
+            queryset = model.objects.all()
+
         return validate_case_insensitive_unique(
             normalized,
             field_name="name",
-            queryset=model.objects.all(),
+            queryset=queryset,
             instance=getattr(self, "instance", None),
             label="name",
         )

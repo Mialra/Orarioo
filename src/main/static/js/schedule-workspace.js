@@ -9,8 +9,17 @@
   var board = window.ScheduleBoard;
 
   var BOARD_DAY_INDEX = { Lunes: 1, Martes: 2, "Miércoles": 3, Jueves: 4, Viernes: 5 };
+  var DAY_NAME_TO_CODE = { Lunes: "MON", Martes: "TUE", "Miércoles": "WED", Jueves: "THU", Viernes: "FRI" };
   var CELL_UPDATE_ANIMATION_MS = 420;
   var MOVE_API_PATH = "/schedules/move/";
+
+  var DROP_REASON_MESSAGES = {
+    teacher_conflict: "El profesor ya tiene otra sesión en ese hueco horario.",
+    group_conflict: "El curso ya tiene otra sesión en ese hueco horario.",
+    classroom_conflict: "El aula ya está ocupada en ese hueco horario.",
+    teacher_unavailable: "El profesor no está disponible en ese hueco horario.",
+    subject_unavailable: "La asignatura no está disponible en ese hueco horario.",
+  };
 
   /**
    * Creates a workspace controller that manages drag-drop state and board cell updates
@@ -323,6 +332,42 @@
         }
       }
 
+      var unavailability = config.getUnavailability ? config.getUnavailability() : null;
+      if (unavailability) {
+        var targetPrefKey = DAY_NAME_TO_CODE[targetDay] ? DAY_NAME_TO_CODE[targetDay] + "_" + targetStart : null;
+        var sourcePrefKey =
+          DAY_NAME_TO_CODE[dragState.sourceDay] ? DAY_NAME_TO_CODE[dragState.sourceDay] + "_" + dragState.sourceStart : null;
+
+        if (targetPrefKey) {
+          var srcTeacherId = String(sourceMapped.teacherId || "");
+          var srcSubjectId = String(sourceMapped.subjectId || "");
+          var teacherSlots = (unavailability.teachers && unavailability.teachers[srcTeacherId]) || [];
+          var subjectSlots = (unavailability.subjects && unavailability.subjects[srcSubjectId]) || [];
+          if (teacherSlots.indexOf(targetPrefKey) !== -1) {
+            return { valid: false, reason: "teacher_unavailable" };
+          }
+          if (subjectSlots.indexOf(targetPrefKey) !== -1) {
+            return { valid: false, reason: "subject_unavailable" };
+          }
+        }
+
+        if (mode === "swap" && sourcePrefKey) {
+          var targetMappedForUnavail = mappedById.get(String(targetScheduleId));
+          if (targetMappedForUnavail) {
+            var tgtTeacherId = String(targetMappedForUnavail.teacherId || "");
+            var tgtSubjectId = String(targetMappedForUnavail.subjectId || "");
+            var tgtTeacherSlots = (unavailability.teachers && unavailability.teachers[tgtTeacherId]) || [];
+            var tgtSubjectSlots = (unavailability.subjects && unavailability.subjects[tgtSubjectId]) || [];
+            if (tgtTeacherSlots.indexOf(sourcePrefKey) !== -1) {
+              return { valid: false, reason: "teacher_unavailable" };
+            }
+            if (tgtSubjectSlots.indexOf(sourcePrefKey) !== -1) {
+              return { valid: false, reason: "subject_unavailable" };
+            }
+          }
+        }
+      }
+
       return {
         valid: true,
         mode: mode,
@@ -521,7 +566,10 @@
           if (preview.reason === "same_slot") {
             config.showAlert("info", "La sesión ya está en esa misma celda.");
           } else {
-            config.showAlert("warning", "Movimiento no válido con las reglas actuales del horario.");
+            config.showAlert(
+              "warning",
+              DROP_REASON_MESSAGES[preview.reason] || "Movimiento no válido con las reglas actuales del horario.",
+            );
           }
           outputEl.querySelectorAll(".schedule-board-card-dragging").forEach(function (card) {
             card.classList.remove("schedule-board-card-dragging");

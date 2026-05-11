@@ -13,7 +13,7 @@ from schedule.algorithm.slots import (
     session_stage_code,
     slot_time_bounds,
 )
-from subject.models import SubjectTimePreferenceState, SubjectType
+from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 
 PRESCHOOL_AND_PRIMARY_STAGES = {
@@ -181,7 +181,8 @@ def _accumulate_teacher_capacity(*, session, sessions_by_teacher):
         teacher.id,
         {
             "name": teacher.name,
-            "max_weekly_hours": teacher.max_weekly_hours,
+            "max_weekly_hours": teacher.max_weekly_hours
+            + teacher.max_weekly_minutes / 60.0,
             "assigned_hours": 0,
         },
     )
@@ -303,6 +304,18 @@ def add_resource_non_overlap_constraints(
             continue
 
 
+def add_recess_slot_hard_constraints(*, model, x, sessions, slots):
+    """Forbid any session from being placed in recess slots.
+    Input: model - CP-SAT CpModel; x - slot decision variables;
+           sessions - list of session dicts; slots - list of slot dicts
+    Output: None; side-effect: adds x[s,p]==0 for every (session, recess_slot) pair
+    """
+    for p_idx, slot in enumerate(slots):
+        if slot.get("is_recess"):
+            for s_idx in range(len(sessions)):
+                model.Add(x[(s_idx, p_idx)] == 0)
+
+
 def add_stage_slot_hard_constraints(*, model, x, sessions, slots):
     """Forbid each session from being placed in slots outside its stage's allowed windows.
     Input: model - CP-SAT CpModel; x - slot decision variables;
@@ -317,38 +330,6 @@ def add_stage_slot_hard_constraints(*, model, x, sessions, slots):
         for p_idx in range(len(slots)):
             if p_idx not in allowed_slots:
                 model.Add(x[(s_idx, p_idx)] == 0)
-
-
-def add_tc_slot_capacity_constraints(*, model, x, sessions, slots, generation_options):
-    """Limit the number of TC sessions that can occupy the same slot simultaneously.
-    Input: model - CP-SAT CpModel; x - slot decision variables;
-           sessions - list of session dicts; slots - list of slot dicts;
-           generation_options - dict with optional 'tc_capacity' and 'include_tc' keys
-    Output: None; side-effect: adds at-most-k constraints per slot for TC sessions
-    """
-    if not generation_options:
-        return
-
-    if not bool(generation_options.get("include_tc", True)):
-        return
-
-    try:
-        tc_capacity = int(generation_options.get("tc_capacity", 1) or 1)
-    except (TypeError, ValueError):
-        tc_capacity = 1
-    tc_capacity = max(1, tc_capacity)
-
-    tc_session_indices = []
-    for s_idx, session in enumerate(sessions):
-        subject = session.get("subject")
-        if getattr(subject, "type", None) == SubjectType.TC:
-            tc_session_indices.append(s_idx)
-
-    if not tc_session_indices:
-        return
-
-    for p_idx in range(len(slots)):
-        model.Add(sum(x[(s_idx, p_idx)] for s_idx in tc_session_indices) <= tc_capacity)
 
 
 def add_group_daily_capacity_constraints(*, model, x, sessions, slots):
@@ -405,6 +386,7 @@ def add_group_no_intraday_gap_constraints(*, model, x, sessions, slots):
                 slot_idx
                 for slot_idx in day_slot_list
                 if slot_idx in stage_allowed_slots
+                and not slots[slot_idx].get("is_recess")
             ]
             if len(filtered_day_slots) < 3:
                 continue

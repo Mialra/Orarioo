@@ -45,12 +45,15 @@
         '<div class="modal-dialog modal-dialog-centered modal-lg">' +
         '<div class="modal-content">' +
         '<div class="modal-header">' +
+        '<div>' +
         '<h5 class="modal-title">' + modalTitle + "</h5>" +
+        '<p class="text-secondary small mb-0 mt-1">Analiza el horario para detectar posibles problemas de distribución.</p>' +
+        "</div>" +
         '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>' +
         "</div>" +
         '<div class="modal-body"><div id="' + contentId + '"></div></div>' +
         '<div class="modal-footer">' +
-        '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>' +
+        '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>' +
         "</div></div></div>";
       document.body.appendChild(modal);
     }
@@ -72,15 +75,27 @@
       content.innerHTML =
         '<p class="text-success text-center py-4">El horario parece estar bien distribuido sin problemas evidentes.</p>';
     } else {
+      var severityStyles = {
+        HIGH:   { bg: "#fff0f0", border: "#dc3545", nameColor: "#b02a37", descColor: "#6f1c23" },
+        MEDIUM: { bg: "#fff8f0", border: "#ff9800", nameColor: "#d97706", descColor: "#92400e" },
+        LOW:    { bg: "#fffbea", border: "#f0c040", nameColor: "#92680a", descColor: "#6b4e0a" },
+      };
+      var entityLabels = { teacher: "Profesor", group: "Curso" };
+
       var html =
         '<h6 class="mb-3">Se encontraron los siguientes problemas:</h6>' +
         '<ul style="list-style: none; padding: 0;">';
 
       result.forEach(function (defect) {
+        var sev = severityStyles[defect.severity] || severityStyles.MEDIUM;
+        var label = entityLabels[defect.entity_type] || defect.entity_type || "";
         html +=
-          '<li style="margin-bottom: 12px; padding: 12px; background: #fff8f0; border-left: 3px solid #ff9800; border-radius: 4px;">' +
-          '<strong style="color: #d97706;">' + escapeHtml(defect.entity_name) + "</strong><br>" +
-          '<small style="color: #92400e;">' + escapeHtml(defect.description) + "</small>" +
+          '<li style="margin-bottom: 12px; padding: 12px; background: ' + sev.bg + '; border-left: 3px solid ' + sev.border + '; border-radius: 4px;">' +
+          '<div style="display:flex; gap:6px; align-items:baseline; margin-bottom:2px;">' +
+          '<strong style="color: ' + sev.nameColor + ';">' + escapeHtml(defect.entity_name) + "</strong>" +
+          (label ? '<span style="font-size:0.72rem; color:' + sev.nameColor + '; opacity:0.75;">(' + escapeHtml(label) + ")</span>" : "") +
+          "</div>" +
+          '<small style="color: ' + sev.descColor + ';">' + escapeHtml(defect.description) + "</small>" +
           "</li>";
       });
 

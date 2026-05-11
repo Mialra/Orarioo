@@ -21,33 +21,49 @@ DAY_CODE_BY_WEEKDAY = {
 STAGE_PRESCHOOL = EducationalStage.PRESCHOOL
 STAGE_PRIMARY = EducationalStage.PRIMARY
 STAGE_SECONDARY = EducationalStage.SECONDARY
+STAGE_ALEVELS = EducationalStage.ALEVELS
+BASE_SESSION_DURATION_MINUTES = 60
 
+# Default time windows per stage. Each tuple is (start, end, is_recess).
 STAGE_SLOT_WINDOWS = {
     # Infantil: 9:00-14:00 with breaks 10:30-11:00 and 13:30-14:00.
-    # We model 5 daily instructional periods.
     STAGE_PRESCHOOL: [
-        (time(hour=9, minute=0), time(hour=10, minute=0)),
-        (time(hour=10, minute=0), time(hour=10, minute=30)),
-        (time(hour=11, minute=0), time(hour=12, minute=0)),
-        (time(hour=12, minute=0), time(hour=13, minute=0)),
-        (time(hour=13, minute=0), time(hour=13, minute=30)),
+        (time(hour=9, minute=0), time(hour=10, minute=0), False),
+        (time(hour=10, minute=0), time(hour=10, minute=30), False),
+        (time(hour=10, minute=30), time(hour=11, minute=0), True),
+        (time(hour=11, minute=0), time(hour=12, minute=0), False),
+        (time(hour=12, minute=0), time(hour=13, minute=0), False),
+        (time(hour=13, minute=0), time(hour=13, minute=30), False),
+        (time(hour=13, minute=30), time(hour=14, minute=0), True),
     ],
     # Primaria: 9:00-14:00 with break 11:30-12:00.
     STAGE_PRIMARY: [
-        (time(hour=9, minute=0), time(hour=10, minute=0)),
-        (time(hour=10, minute=0), time(hour=11, minute=0)),
-        (time(hour=11, minute=0), time(hour=11, minute=30)),
-        (time(hour=12, minute=0), time(hour=13, minute=0)),
-        (time(hour=13, minute=0), time(hour=14, minute=0)),
+        (time(hour=9, minute=0), time(hour=10, minute=0), False),
+        (time(hour=10, minute=0), time(hour=11, minute=0), False),
+        (time(hour=11, minute=0), time(hour=11, minute=30), False),
+        (time(hour=11, minute=30), time(hour=12, minute=0), True),
+        (time(hour=12, minute=0), time(hour=13, minute=0), False),
+        (time(hour=13, minute=0), time(hour=14, minute=0), False),
     ],
     # ESO: 8:00-14:30 with break 11:00-11:30.
     STAGE_SECONDARY: [
-        (time(hour=8, minute=0), time(hour=9, minute=0)),
-        (time(hour=9, minute=0), time(hour=10, minute=0)),
-        (time(hour=10, minute=0), time(hour=11, minute=0)),
-        (time(hour=11, minute=30), time(hour=12, minute=30)),
-        (time(hour=12, minute=30), time(hour=13, minute=30)),
-        (time(hour=13, minute=30), time(hour=14, minute=30)),
+        (time(hour=8, minute=0), time(hour=9, minute=0), False),
+        (time(hour=9, minute=0), time(hour=10, minute=0), False),
+        (time(hour=10, minute=0), time(hour=11, minute=0), False),
+        (time(hour=11, minute=0), time(hour=11, minute=30), True),
+        (time(hour=11, minute=30), time(hour=12, minute=30), False),
+        (time(hour=12, minute=30), time(hour=13, minute=30), False),
+        (time(hour=13, minute=30), time(hour=14, minute=30), False),
+    ],
+    # Bachillerato: same defaults as ESO.
+    STAGE_ALEVELS: [
+        (time(hour=8, minute=0), time(hour=9, minute=0), False),
+        (time(hour=9, minute=0), time(hour=10, minute=0), False),
+        (time(hour=10, minute=0), time(hour=11, minute=0), False),
+        (time(hour=11, minute=0), time(hour=11, minute=30), True),
+        (time(hour=11, minute=30), time(hour=12, minute=30), False),
+        (time(hour=12, minute=30), time(hour=13, minute=30), False),
+        (time(hour=13, minute=30), time(hour=14, minute=30), False),
     ],
 }
 
@@ -80,39 +96,28 @@ def _slot_stage(slot):
     return None
 
 
-def _normalize_stage_code(*, group_stage=None, subject_stage=None):
-    """Map a group or subject stage to the algorithm's internal stage code.
-    Input: group_stage - EducationalStage value from the group, or None;
-           subject_stage - EducationalStage value from the subject, or None
-    Output: one of STAGE_PRESCHOOL, STAGE_PRIMARY, STAGE_SECONDARY;
-            STAGE_PRIMARY as fallback when neither matches
+def session_stage_code(*, session):
+    """Determine the educational stage code for a session from its group.
+    Input: session - dict with optional key 'group'
+    Output: stage code (STAGE_PRESCHOOL, STAGE_PRIMARY or STAGE_SECONDARY)
     """
+    group = session.get("group")
     return canonical_educational_stage(
-        group_stage=group_stage,
-        subject_stage=subject_stage,
+        group_stage=getattr(group, "stage", None),
         default=STAGE_PRIMARY,
     )
 
 
-def session_stage_code(*, session):
-    """Determine the educational stage code for a session from its group or subject.
-    Input: session - dict with optional keys 'group' and 'subject'
-    Output: stage code (STAGE_PRESCHOOL, STAGE_PRIMARY or STAGE_SECONDARY)
+def build_weekly_slots(*, stage_slot_windows=None):
+    """Build timetable slots for the next working week (Monday to Friday).
+    Input: stage_slot_windows - optional dict {stage_code: [(start, end, is_recess), ...]};
+           defaults to STAGE_SLOT_WINDOWS when None
+    Output: list of dicts with keys 'start', 'end', 'stage', 'day_code', 'is_recess'
     """
-    group = session.get("group")
-    subject = session.get("subject")
-    return _normalize_stage_code(
-        group_stage=getattr(group, "stage", None),
-        subject_stage=getattr(subject, "stage", None),
+    windows = (
+        stage_slot_windows if stage_slot_windows is not None else STAGE_SLOT_WINDOWS
     )
 
-
-def build_weekly_slots():
-    """Build timetable slots for the next working week (Monday to Friday).
-    Input: none; uses the current server date
-    Output: list of dicts with keys 'start', 'end', 'stage' and 'day_code' for
-            every combination of day and time window per educational stage
-    """
     now = timezone.localtime()
     days_until_next_monday = (7 - now.weekday()) % 7
     if days_until_next_monday == 0:
@@ -124,8 +129,9 @@ def build_weekly_slots():
 
     for _ in range(5):
         day_code = DAY_CODE_BY_WEEKDAY.get(day_cursor.weekday())
-        for stage_code, windows in STAGE_SLOT_WINDOWS.items():
-            for start_t, end_t in windows:
+        for stage_code, stage_windows in windows.items():
+            for entry in stage_windows:
+                start_t, end_t, is_recess = entry
                 start_dt = timezone.make_aware(
                     datetime.combine(day_cursor, start_t),
                     timezone.get_current_timezone(),
@@ -140,6 +146,7 @@ def build_weekly_slots():
                         "end": end_dt,
                         "stage": stage_code,
                         "day_code": day_code,
+                        "is_recess": is_recess,
                     }
                 )
         day_cursor += timedelta(days=1)
@@ -290,11 +297,98 @@ def slot_time_bounds(*, slot):
 def build_slot_preference_index(*, slots):
     """Build an index of slot_idx → time-preference key (e.g. 'MON_09:00').
     Input: slots - list of slots
-    Output: dict {slot_idx: preference_key} excluding weekend slots
+    Output: dict {slot_idx: preference_key} excluding weekend slots and recess slots
     """
     preference_index = {}
     for slot_idx, slot in enumerate(slots):
+        if isinstance(slot, dict) and slot.get("is_recess"):
+            continue
         key = slot_preference_key_from_datetime(slot=slot)
         if key is not None:
             preference_index[slot_idx] = key
     return preference_index
+
+
+def _parse_hhmm(value):
+    """Parse a 'HH:MM' string to a time object.
+    Input: value - string in 'HH:MM' format
+    Output: datetime.time instance
+    """
+    h, m = value.split(":")
+    return time(int(h), int(m))
+
+
+def build_windows_from_stage_config(cfg):
+    """Generate (start_t, end_t, is_recess) tuples from a stage config dict.
+
+    Slots are produced independently within each break-separated segment so that
+    break boundaries never create partial orphan slots.  For example, a secondary
+    day from 08:00 to 14:30 with a break at 11:00-11:30 yields three full-hour
+    slots before the break (08:00-11:00) and three after (11:30-14:30).
+
+    Also accepts the legacy single-break keys break_start / break_end for backward compat.
+
+    Input: cfg - dict with keys start_time, end_time, session_duration (int, minutes),
+                 and optional breaks (list of {start: HH:MM, end: HH:MM})
+    Output: list of (time, time, bool) tuples; bool is True for the recess slot
+    """
+    from datetime import date as _date
+
+    base = _date.today()
+    start_t = _parse_hhmm(cfg["start_time"])
+    end_t = _parse_hhmm(cfg["end_time"])
+    dur = timedelta(minutes=BASE_SESSION_DURATION_MINUTES)
+
+    # Normalise breaks: support both new list format and legacy single-break keys
+    raw_breaks = cfg.get("breaks") or []
+    if not raw_breaks and cfg.get("break_start") and cfg.get("break_end"):
+        raw_breaks = [{"start": cfg["break_start"], "end": cfg["break_end"]}]
+
+    parsed_breaks = []
+    for b in raw_breaks:
+        bs_t = _parse_hhmm(b["start"])
+        be_t = _parse_hhmm(b["end"])
+        parsed_breaks.append(
+            (datetime.combine(base, bs_t), datetime.combine(base, be_t))
+        )
+    parsed_breaks.sort(key=lambda x: x[0])
+
+    start_dt = datetime.combine(base, start_t)
+    end_dt = datetime.combine(base, end_t)
+
+    # Alternate session segments and recess segments, computing slots within each
+    # session segment independently so break boundaries never create partial slots.
+    segment_start = start_dt
+    result = []
+    for bs_dt, be_dt in parsed_breaks:
+        seg_end = bs_dt
+        cursor = segment_start
+        while cursor < seg_end:
+            slot_end = min(cursor + dur, seg_end)
+            result.append((cursor.time(), slot_end.time(), False))
+            cursor = slot_end
+        result.append((bs_dt.time(), be_dt.time(), True))
+        segment_start = be_dt
+
+    cursor = segment_start
+    while cursor < end_dt:
+        slot_end = min(cursor + dur, end_dt)
+        result.append((cursor.time(), slot_end.time(), False))
+        cursor = slot_end
+
+    return result
+
+
+def parse_schedule_config_to_slot_windows(schedule_config):
+    """Convert a team's schedule_config JSON to the STAGE_SLOT_WINDOWS format.
+
+    Input: schedule_config - dict {stage_code: {start_time, end_time, ...}}
+           as stored in CollaborationTeam.schedule_config
+    Output: dict {stage_code: [(start_t, end_t, is_recess), ...]} or None when empty
+    """
+    if not schedule_config:
+        return None
+    return {
+        stage: build_windows_from_stage_config(cfg)
+        for stage, cfg in schedule_config.items()
+    }

@@ -133,6 +133,58 @@
     background-color: #eef2f7;
 }
 
+.admin-pill.admin-stage-pill {
+    border: 1px solid transparent;
+}
+
+.stage-color-red {
+    color: #b42318 !important;
+    background-color: #fee4e2 !important;
+    border-color: #fecdca !important;
+}
+
+.stage-color-yellow {
+    color: #a15c07 !important;
+    background-color: #fef0c7 !important;
+    border-color: #fde68a !important;
+}
+
+.stage-color-orange {
+    color: #c2410c !important;
+    background-color: #ffedd5 !important;
+    border-color: #fdba74 !important;
+}
+
+.stage-color-green {
+    color: #166534 !important;
+    background-color: #dcfce7 !important;
+    border-color: #86efac !important;
+}
+
+.stage-color-blue {
+    color: #1d4ed8 !important;
+    background-color: #dbeafe !important;
+    border-color: #93c5fd !important;
+}
+
+.stage-color-purple {
+    color: #7e22ce !important;
+    background-color: #f3e8ff !important;
+    border-color: #d8b4fe !important;
+}
+
+.stage-color-pink {
+    color: #be185d !important;
+    background-color: #fce7f3 !important;
+    border-color: #f9a8d4 !important;
+}
+
+.stage-color-gray {
+    color: #374151 !important;
+    background-color: #f3f4f6 !important;
+    border-color: #d1d5db !important;
+}
+
 .admin-actions {
     display: inline-flex;
     align-items: flex-start;

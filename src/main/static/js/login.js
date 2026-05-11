@@ -77,7 +77,7 @@
     const password = passwordInput.value;
 
     if (!email || !password) {
-      showAlert("Completa correo y contraseña.", "error");
+      showAlert("Introduce tu correo y contraseña.", "error");
       return;
     }
 

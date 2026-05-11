@@ -23,16 +23,19 @@ from group.models import Group
 from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
 from schedule.algorithm.evaluator import ScheduleEvaluator
 from schedule.algorithm.generator import ScheduleReplanner
+from schedule.algorithm.slots import parse_schedule_config_to_slot_windows
 from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule
 from schedule.serializers import ScheduleSerializer
 from schedule.views_export import (
+    _DAY_ORDER,
     build_csv_response_for_schedule,
     build_excel_response,
     build_export_filename,
     build_export_rows,
     build_export_units,
     build_pdf_units_response,
+    build_tc_export_rows,
     build_teacher_workloads,
     resolve_saved_schedule_name,
 )
@@ -51,10 +54,48 @@ from schedule.views_move import (
     resolve_slot_datetimes_for_source_week,
     validate_minimal_move_constraints,
 )
-from teacher.models import Teacher
+from subject.models import SubjectTimePreferenceState
+from teacher.models import Teacher, TeacherTimePreferenceState
 from user.models import User
 
 logger = logging.getLogger(__name__)
+
+
+def build_unavailability_index(schedules):
+    """Build a dict of UNAVAILABLE slot keys per teacher and subject for client-side pre-validation.
+    Input: schedules - list of Schedule instances with teacher and subject select_related
+    Output: dict {"teachers": {str(id): [slot_key, ...]}, "subjects": {str(id): [slot_key, ...]}}
+            Only teachers/subjects with at least one UNAVAILABLE slot appear in the result.
+    """
+    teacher_unavail = {}
+    subject_unavail = {}
+    seen_teachers = set()
+    seen_subjects = set()
+
+    for schedule in schedules or []:
+        teacher = getattr(schedule, "teacher", None)
+        if teacher is not None and schedule.teacher_id not in seen_teachers:
+            seen_teachers.add(schedule.teacher_id)
+            slots = [
+                k
+                for k, v in (teacher.time_preferences or {}).items()
+                if v == TeacherTimePreferenceState.UNAVAILABLE
+            ]
+            if slots:
+                teacher_unavail[str(schedule.teacher_id)] = slots
+
+        subject = getattr(schedule, "subject", None)
+        if subject is not None and schedule.subject_id not in seen_subjects:
+            seen_subjects.add(schedule.subject_id)
+            slots = [
+                k
+                for k, v in (subject.time_preferences or {}).items()
+                if v == SubjectTimePreferenceState.UNAVAILABLE
+            ]
+            if slots:
+                subject_unavail[str(schedule.subject_id)] = slots
+
+    return {"teachers": teacher_unavail, "subjects": subject_unavail}
 
 
 class ScheduleViewSet(TeamScopedAuditableModelViewSet):
@@ -247,6 +288,8 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             request.query_params.get("saved_timetable_name") or ""
         ).strip()
 
+        include_tc = request.query_params.get("include_tc", "0") == "1"
+
         if request.query_params.get("selection_mode") == "cards":
             card_filters, card_filter_error = cls._parse_card_filters(request)
             if card_filter_error is not None:
@@ -258,6 +301,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "scope": "cards",
                 "card_filters": card_filters,
                 "saved_timetable_name": saved_timetable_name,
+                "include_tc": include_tc,
             }, None
 
         scope = (request.query_params.get("scope") or "all").strip().lower()
@@ -304,7 +348,48 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             "entity_type": entity_type,
             "entity_id": entity_id,
             "saved_timetable_name": saved_timetable_name,
+            "include_tc": include_tc,
         }, None
+
+    def _apply_export_queryset_filters(self, queryset, params, saved_name, request):
+        if params["source"] == "generated":
+            queryset = queryset.filter(users=request.user)
+        elif params["source"] == "saved":
+            if saved_name:
+                queryset = queryset.filter(
+                    observations=f"{SAVED_TIMETABLE_PREFIX}: {saved_name}"
+                )
+            else:
+                queryset = queryset.filter(users=request.user)
+        if params["scope"] == "entity":
+            queryset = self._resolve_entity_filtered_queryset(
+                queryset, params["entity_type"], params["entity_id"]
+            )
+        elif params["scope"] == "cards":
+            queryset = self._filter_queryset_with_cards(
+                queryset, params["card_filters"]["filters"]
+            )
+        return queryset
+
+    def _fetch_tc_sessions_for_export(self, params, saved_name):
+        from schedule.models import TCSession
+
+        tc_qs = TCSession.objects.filter(team=self.get_active_team()).select_related(
+            "teacher"
+        )
+        source = params["source"]
+        if source == "generated":
+            tc_qs = tc_qs.filter(observations="")
+        elif source == "saved":
+            if saved_name:
+                tc_qs = tc_qs.filter(
+                    observations=f"{SAVED_TIMETABLE_PREFIX}: {saved_name}"
+                )
+            else:
+                tc_qs = tc_qs.filter(
+                    observations__startswith=f"{SAVED_TIMETABLE_PREFIX}: "
+                )
+        return list(tc_qs.order_by("day", "start_time"))
 
     def export(self, request):
         """Export schedules as CSV, Excel or PDF.
@@ -315,19 +400,23 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         if error_response is not None:
             return error_response
 
+        saved_name = (params.get("saved_timetable_name") or "").strip()
         queryset = self.get_queryset().order_by("start_time", "id")
         queryset = self._resolve_source_queryset(queryset, params["source"])
-        if params["scope"] == "entity":
-            queryset = self._resolve_entity_filtered_queryset(
-                queryset,
-                params["entity_type"],
-                params["entity_id"],
-            )
-        elif params["scope"] == "cards":
-            queryset = self._filter_queryset_with_cards(
-                queryset,
-                params["card_filters"]["filters"],
-            )
+        queryset = self._apply_export_queryset_filters(
+            queryset, params, saved_name, request
+        )
+
+        include_tc = bool(params.get("include_tc"))
+        card_filters = params.get("card_filters") or {}
+        teacher_filter = (card_filters.get("filters") or {}).get("teacher") or {}
+        has_teacher_cards = params.get("scope") == "cards" and (
+            teacher_filter.get("include_all") or bool(teacher_filter.get("ids"))
+        )
+
+        tc_sessions = None
+        if include_tc or has_teacher_cards:
+            tc_sessions = self._fetch_tc_sessions_for_export(params, saved_name)
 
         saved_schedule_name = resolve_saved_schedule_name(params, queryset)
         units = build_export_units(
@@ -335,14 +424,22 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             params,
             active_team=self.get_active_team(),
             export_entity_config=self.EXPORT_ENTITY_CONFIG,
+            tc_sessions=tc_sessions,
+            add_tc_roster=include_tc,
         )
-        rows = build_export_rows(queryset)
         filename = build_export_filename(params, saved_schedule_name)
 
         if params["format"] == "csv":
             if params.get("scope") == "cards":
                 excel_filename = filename.rsplit(".", 1)[0] + ".xlsx"
                 return build_excel_response(units, excel_filename)
+            rows = build_export_rows(queryset)
+            if tc_sessions:
+                tc_rows = build_tc_export_rows(tc_sessions)
+                rows = sorted(
+                    rows + tc_rows,
+                    key=lambda r: (_DAY_ORDER.get(r["day"], 99), r["start"]),
+                )
             return build_csv_response_for_schedule(rows, filename)
         return build_pdf_units_response(units, filename)
 
@@ -375,12 +472,14 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 )
 
         try:
-            schedules = BasicScheduleGenerator.generate(
-                actor_email=actor,
-                user=request.user,
-                team=active_team,
-                random_seed=generation_seed,
-                generation_options=generation_options,
+            schedules, is_optimal, soft_score_info, tc_result = (
+                BasicScheduleGenerator.generate(
+                    actor_email=actor,
+                    user=request.user,
+                    team=active_team,
+                    random_seed=generation_seed,
+                    generation_options=generation_options,
+                )
             )
         except ScheduleGenerationError as exc:
             logger.warning(
@@ -396,32 +495,29 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "detail": "Schedule generated successfully.",
                 "seed": generation_seed,
                 "generation_options": generation_options,
+                "optimization_is_optimal": is_optimal,
+                "soft_score": soft_score_info,
                 "schedules": serialized.data,
                 "generated_count": len(serialized.data),
                 "teacher_workloads": build_teacher_workloads(schedules),
+                "unavailability": build_unavailability_index(schedules),
+                "tc_warnings": tc_result.warnings if tc_result else [],
             },
             status=status.HTTP_201_CREATED,
         )
 
-    def _saved_queryset_for_user(self, request_user):
-        """Return a queryset of all saved (non-auto-generated) schedules for a user.
-        Input: request_user - User instance
-        Output: Schedule queryset excluding auto-generated observations
+    def _saved_queryset(self):
+        """Return a queryset of all saved (non-auto-generated) schedules for the active team.
+        Output: Schedule queryset excluding auto-generated observations, scoped to the team
         """
-        return (
-            self.get_queryset()
-            .exclude(observations=AUTO_GENERATED_OBSERVATION)
-            .filter(users=request_user)
-        )
+        return self.get_queryset().exclude(observations=AUTO_GENERATED_OBSERVATION)
 
     def saved(self, request):
-        """Return all saved schedules for the current user.
+        """Return all saved schedules for the active team.
         Input: request - DRF Request
         Output: Response with count, results and teacher workloads (HTTP 200)
         """
-        saved_queryset = self._saved_queryset_for_user(request.user).order_by(
-            "start_time", "id"
-        )
+        saved_queryset = self._saved_queryset().order_by("start_time", "id")
         saved_schedules = list(saved_queryset)
         serialized = self.get_serializer(saved_schedules, many=True)
         return Response(
@@ -439,7 +535,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         Output: Response with count and results (name + updated_at per timetable) (HTTP 200)
         """
         summary_queryset = (
-            self._saved_queryset_for_user(request.user)
+            self._saved_queryset()
             .exclude(name__isnull=True)
             .exclude(name__exact="")
             .values("name")
@@ -468,7 +564,6 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             )
 
         schedules, error_response = self._fetch_saved_timetable_schedules(
-            request_user=request.user,
             timetable_name=timetable_name,
             team=self.get_active_team(),
         )
@@ -481,6 +576,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "count": len(serialized.data),
                 "results": serialized.data,
                 "teacher_workloads": build_teacher_workloads(schedules),
+                "unavailability": build_unavailability_index(schedules),
             },
             status=status.HTTP_200_OK,
         )
@@ -500,10 +596,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         return timetable_name, None
 
     @staticmethod
-    def _fetch_saved_timetable_schedules(*, request_user, timetable_name, team):
+    def _fetch_saved_timetable_schedules(*, timetable_name, team):
         """Fetch all schedules belonging to a saved timetable by name.
-        Input: request_user - User instance; timetable_name - saved timetable name;
-               team - Team instance
+        Input: timetable_name - saved timetable name; team - Team instance
         Output: tuple (schedules, None) on success, or (None, Response) with HTTP 404 if not found
         """
         saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
@@ -511,7 +606,6 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             Schedule.objects.select_related("teacher", "classroom", "group", "subject")
             .prefetch_related("users")
             .filter(
-                users=request_user,
                 observations=saved_observation,
                 team=team,
             )
@@ -524,6 +618,73 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             )
         return schedules, None
 
+    @action(detail=False, methods=["post"], url_path="rename-saved-timetable")
+    def rename_saved_timetable(self, request):
+        """Rename a saved timetable by updating all its schedules' observations field.
+        Input: request - DRF Request with old_name and new_name in body
+        Output: Response with detail and updated_count (HTTP 200), or 400/404 on error
+        """
+        active_team = self.get_active_team()
+        old_name = (request.data.get("old_name") or "").strip()
+        if not old_name:
+            return Response(
+                {"old_name": "old_name is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        new_name = (request.data.get("new_name") or "").strip()
+        if not new_name:
+            return Response(
+                {"new_name": "new_name is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not self._saved_timetable_name_exists(
+            timetable_name=old_name, team=active_team
+        ):
+            return Response(
+                {"detail": "Saved timetable not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if self._saved_timetable_name_exists(timetable_name=new_name, team=active_team):
+            return Response(
+                {
+                    "new_name": (
+                        "Ya existe un horario guardado con ese nombre. "
+                        "Usa otro nombre o elimina el horario anterior."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        old_obs = f"{SAVED_TIMETABLE_PREFIX}: {old_name}"
+        new_obs = f"{SAVED_TIMETABLE_PREFIX}: {new_name}"
+        updated_count = Schedule.objects.filter(
+            observations=old_obs, team=active_team
+        ).update(observations=new_obs)
+        create_audit_entry(
+            model=Schedule,
+            entity_id=0,
+            entity_name=new_name,
+            action_type=AuditActionType.UPDATE,
+            detail=(
+                f'Se renombró el horario guardado "{old_name}" a "{new_name}" '
+                f"({updated_count} sesiones actualizadas)."
+            ),
+            changed_fields=[
+                {
+                    "campo": "Nombre del horario",
+                    "valor_anterior": old_name,
+                    "valor_nuevo": new_name,
+                }
+            ],
+            team=active_team,
+        )
+        return Response(
+            {
+                "detail": "Saved timetable renamed successfully.",
+                "updated_count": updated_count,
+            },
+            status=status.HTTP_200_OK,
+        )
+
     @action(detail=False, methods=["post"], url_path="delete-saved-timetable")
     def delete_saved_timetable(self, request):
         """Delete a saved timetable and all its schedules.
@@ -535,7 +696,6 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             return error_response
 
         schedules, error_response = self._fetch_saved_timetable_schedules(
-            request_user=request.user,
             timetable_name=timetable_name,
             team=self.get_active_team(),
         )
@@ -554,7 +714,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             entity_name=timetable_name,
             action_type=AuditActionType.DELETE,
             detail=(
-                f'Se elimino el horario guardado "{timetable_name}" '
+                f'Se eliminó el horario guardado "{timetable_name}" '
                 f"con {deleted_count} sesiones."
             ),
             changed_fields=[
@@ -729,15 +889,13 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 through_model.objects.bulk_create(missing_pairs, ignore_conflicts=True)
 
     @staticmethod
-    def _saved_timetable_name_exists(*, request_user, timetable_name, team):
-        """Check whether a saved timetable with the given name already exists.
-        Input: request_user - User instance; timetable_name - name to check;
-               team - Team instance
+    def _saved_timetable_name_exists(*, timetable_name, team):
+        """Check whether a saved timetable with the given name already exists for the team.
+        Input: timetable_name - name to check; team - Team instance
         Output: True if a matching saved timetable exists, False otherwise
         """
         saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
         return Schedule.objects.filter(
-            users=request_user,
             observations=saved_observation,
             team=team,
         ).exists()
@@ -758,7 +916,6 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             )
 
         if self._saved_timetable_name_exists(
-            request_user=request.user,
             timetable_name=timetable_name,
             team=active_team,
         ):
@@ -816,6 +973,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             actor_email=actor,
             target_users=target_users,
         )
+        self._persist_saved_tc_sessions(timetable_name=timetable_name, team=active_team)
 
         serialized = self.get_serializer(schedules, many=True)
         return Response(
@@ -827,6 +985,30 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
+
+    @staticmethod
+    def _persist_saved_tc_sessions(*, timetable_name, team):
+        """Copy draft TC sessions (observations="") to a saved timetable name.
+        Deletes any existing TC sessions for that name first, then duplicates the drafts.
+        Input: timetable_name - name of the saved timetable; team - CollaborationTeam instance
+        Output: None
+        """
+        from schedule.constants import SAVED_TIMETABLE_PREFIX
+        from schedule.models import TCSession
+
+        saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}"
+        TCSession.objects.filter(team=team, observations=saved_observation).delete()
+        drafts = list(
+            TCSession.objects.filter(team=team).exclude(
+                observations__startswith=SAVED_TIMETABLE_PREFIX
+            )
+        )
+        if drafts:
+            for tc in drafts:
+                tc.pk = None
+                tc.name = timetable_name
+                tc.observations = saved_observation
+            TCSession.objects.bulk_create(drafts)
 
     def _resolve_timetable_scope_queryset(
         self,
@@ -1187,6 +1369,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             scope_schedules=scope_schedules,
             assignments=assignments,
             changed_ids=changed_ids,
+            slot_windows=parse_schedule_config_to_slot_windows(
+                getattr(active_team, "schedule_config", None)
+            ),
         )
         if validation_error is not None:
             return validation_error
@@ -1272,7 +1457,29 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         Output: list of defect dicts; raises ValidationAppError if analysis fails
         """
         try:
-            return ScheduleEvaluator.analyze_schedules(schedules)
+            from schedule.constants import SAVED_TIMETABLE_PREFIX
+            from schedule.models import TCSession
+
+            team = schedules[0].team if schedules else None
+            if not team:
+                tc_sessions = []
+            else:
+                first_obs = (schedules[0].observations or "") if schedules else ""
+                if first_obs.startswith(SAVED_TIMETABLE_PREFIX):
+                    tc_sessions = list(
+                        TCSession.objects.filter(
+                            team=team, observations=first_obs
+                        ).select_related("teacher")
+                    )
+                else:
+                    tc_sessions = list(
+                        TCSession.objects.filter(
+                            team=team, observations=""
+                        ).select_related("teacher")
+                    )
+            return ScheduleEvaluator.analyze_schedules(
+                schedules, tc_sessions=tc_sessions
+            )
         except Exception as exc:
             logger.exception("Error analyzing schedules: %s", str(exc))
             raise ValidationAppError(
