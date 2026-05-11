@@ -244,6 +244,7 @@
       state.exportEntityState.group = false;
       state.exportEntityState.teacher = false;
       state.exportEntityState.classroom = false;
+      state.exportEntityState.tc = false;
       exportFormat.value = safeConfig.format || "csv";
       exportFormat.disabled = !!safeConfig.lockFormat;
       await loadExportEntityOptions();
@@ -297,6 +298,7 @@
       params.set("group_all", state.exportEntityState.group ? "1" : "0");
       params.set("teacher_all", state.exportEntityState.teacher ? "1" : "0");
       params.set("classroom_all", state.exportEntityState.classroom ? "1" : "0");
+      params.set("include_tc", state.exportEntityState.tc ? "1" : "0");
       if (state.currentExportSource === "saved" && state.currentExportSavedName) {
         params.set("saved_timetable_name", state.currentExportSavedName);
       }

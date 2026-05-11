@@ -28,12 +28,14 @@ from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFI
 from schedule.models import Schedule
 from schedule.serializers import ScheduleSerializer
 from schedule.views_export import (
+    _DAY_ORDER,
     build_csv_response_for_schedule,
     build_excel_response,
     build_export_filename,
     build_export_rows,
     build_export_units,
     build_pdf_units_response,
+    build_tc_export_rows,
     build_teacher_workloads,
     resolve_saved_schedule_name,
 )
@@ -286,6 +288,8 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             request.query_params.get("saved_timetable_name") or ""
         ).strip()
 
+        include_tc = request.query_params.get("include_tc", "0") == "1"
+
         if request.query_params.get("selection_mode") == "cards":
             card_filters, card_filter_error = cls._parse_card_filters(request)
             if card_filter_error is not None:
@@ -297,6 +301,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "scope": "cards",
                 "card_filters": card_filters,
                 "saved_timetable_name": saved_timetable_name,
+                "include_tc": include_tc,
             }, None
 
         scope = (request.query_params.get("scope") or "all").strip().lower()
@@ -343,7 +348,48 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             "entity_type": entity_type,
             "entity_id": entity_id,
             "saved_timetable_name": saved_timetable_name,
+            "include_tc": include_tc,
         }, None
+
+    def _apply_export_queryset_filters(self, queryset, params, saved_name, request):
+        if params["source"] == "generated":
+            queryset = queryset.filter(users=request.user)
+        elif params["source"] == "saved":
+            if saved_name:
+                queryset = queryset.filter(
+                    observations=f"{SAVED_TIMETABLE_PREFIX}: {saved_name}"
+                )
+            else:
+                queryset = queryset.filter(users=request.user)
+        if params["scope"] == "entity":
+            queryset = self._resolve_entity_filtered_queryset(
+                queryset, params["entity_type"], params["entity_id"]
+            )
+        elif params["scope"] == "cards":
+            queryset = self._filter_queryset_with_cards(
+                queryset, params["card_filters"]["filters"]
+            )
+        return queryset
+
+    def _fetch_tc_sessions_for_export(self, params, saved_name):
+        from schedule.models import TCSession
+
+        tc_qs = TCSession.objects.filter(
+            team=self.get_active_team()
+        ).select_related("teacher")
+        source = params["source"]
+        if source == "generated":
+            tc_qs = tc_qs.filter(observations="")
+        elif source == "saved":
+            if saved_name:
+                tc_qs = tc_qs.filter(
+                    observations=f"{SAVED_TIMETABLE_PREFIX}: {saved_name}"
+                )
+            else:
+                tc_qs = tc_qs.filter(
+                    observations__startswith=f"{SAVED_TIMETABLE_PREFIX}: "
+                )
+        return list(tc_qs.order_by("day", "start_time"))
 
     def export(self, request):
         """Export schedules as CSV, Excel or PDF.
@@ -354,19 +400,21 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         if error_response is not None:
             return error_response
 
+        saved_name = (params.get("saved_timetable_name") or "").strip()
         queryset = self.get_queryset().order_by("start_time", "id")
         queryset = self._resolve_source_queryset(queryset, params["source"])
-        if params["scope"] == "entity":
-            queryset = self._resolve_entity_filtered_queryset(
-                queryset,
-                params["entity_type"],
-                params["entity_id"],
-            )
-        elif params["scope"] == "cards":
-            queryset = self._filter_queryset_with_cards(
-                queryset,
-                params["card_filters"]["filters"],
-            )
+        queryset = self._apply_export_queryset_filters(queryset, params, saved_name, request)
+
+        include_tc = bool(params.get("include_tc"))
+        card_filters = params.get("card_filters") or {}
+        teacher_filter = (card_filters.get("filters") or {}).get("teacher") or {}
+        has_teacher_cards = params.get("scope") == "cards" and (
+            teacher_filter.get("include_all") or bool(teacher_filter.get("ids"))
+        )
+
+        tc_sessions = None
+        if include_tc or has_teacher_cards:
+            tc_sessions = self._fetch_tc_sessions_for_export(params, saved_name)
 
         saved_schedule_name = resolve_saved_schedule_name(params, queryset)
         units = build_export_units(
@@ -374,14 +422,22 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             params,
             active_team=self.get_active_team(),
             export_entity_config=self.EXPORT_ENTITY_CONFIG,
+            tc_sessions=tc_sessions,
+            add_tc_roster=include_tc,
         )
-        rows = build_export_rows(queryset)
         filename = build_export_filename(params, saved_schedule_name)
 
         if params["format"] == "csv":
             if params.get("scope") == "cards":
                 excel_filename = filename.rsplit(".", 1)[0] + ".xlsx"
                 return build_excel_response(units, excel_filename)
+            rows = build_export_rows(queryset)
+            if tc_sessions:
+                tc_rows = build_tc_export_rows(tc_sessions)
+                rows = sorted(
+                    rows + tc_rows,
+                    key=lambda r: (_DAY_ORDER.get(r["day"], 99), r["start"]),
+                )
             return build_csv_response_for_schedule(rows, filename)
         return build_pdf_units_response(units, filename)
 

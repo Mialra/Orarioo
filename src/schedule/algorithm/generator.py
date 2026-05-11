@@ -20,7 +20,6 @@ from schedule.algorithm.diagnostics import (
     raise_schedule_generation_diagnostics,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
-from schedule.algorithm.postprocessing import apply_teacher_gap_local_search
 from schedule.algorithm.slots import (
     build_weekly_slots,
     parse_schedule_config_to_slot_windows,
@@ -204,13 +203,6 @@ class BasicScheduleGenerator:
                 random_seed=random_seed,
                 generation_options=generation_options,
             )
-        )
-
-        slot_by_session, classroom_by_session = apply_teacher_gap_local_search(
-            slot_by_session=slot_by_session,
-            classroom_by_session=classroom_by_session,
-            sessions=sessions,
-            slots=slots,
         )
 
         created = []

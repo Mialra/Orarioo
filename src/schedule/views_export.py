@@ -35,6 +35,7 @@ except ImportError:
 EXPORT_ENTITY_ORDER = ["teacher", "classroom", "group"]
 
 _DAY_ORDER = {"Lunes": 0, "Martes": 1, "Miércoles": 2, "Jueves": 3, "Viernes": 4}
+_TC_DAY_NAMES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
 
 
 def build_teacher_workloads(schedules):
@@ -126,28 +127,99 @@ def build_export_rows(schedules):
     return rows
 
 
-def build_export_units(queryset, params, active_team, export_entity_config):
-    """Build the list of export units (one per card/entity or one global unit).
-    Input: queryset - filtered Schedule queryset;
-           params - parsed export params dict;
-           active_team - Team instance;
-           export_entity_config - dict of entity configs from ScheduleViewSet
-    Output: list of unit dicts with entity_type, header, rows, schedules
+def build_tc_export_rows(tc_sessions):
+    """Convert TCSession instances to row dicts compatible with CSV/Excel export.
+    Input: tc_sessions - iterable of TCSession instances with teacher, day, start_time, end_time
+    Output: list of dicts with keys: day, start, end, subject, teacher, group, classroom
     """
-    units = []
-    if params.get("scope") != "cards":
-        rows = build_export_rows(queryset)
-        units.append(
+    rows = []
+    for tc in tc_sessions:
+        day_name = _TC_DAY_NAMES[tc.day] if 0 <= tc.day <= 4 else ""
+        teacher_name = (tc.teacher.name if tc.teacher else "") or ""
+        rows.append(
             {
-                "entity_type": "mixed",
-                "header": "",
-                "rows": rows,
-                "schedules": list(queryset),
+                "day": day_name,
+                "start": tc.start_time.strftime("%H:%M") if tc.start_time else "",
+                "end": tc.end_time.strftime("%H:%M") if tc.end_time else "",
+                "subject": "Guardia",
+                "teacher": teacher_name,
+                "group": "",
+                "classroom": "",
             }
         )
-        return units
+    return rows
 
-    filters = params["card_filters"]["filters"]
+
+def collect_tc_slots_and_content(tc_sessions, show_teacher_names=False):
+    """Collect TC session time slots and cell content for timetable grid rendering.
+    Input: tc_sessions - iterable of TCSession instances;
+           show_teacher_names - if True cell content is the teacher name, else 'Guardia'
+    Output: tuple (slot_keys, cell_content) where slot_keys is a list of (start, end)
+            tuples and cell_content is a dict {(day_name, slot): [content_str, ...]}
+    """
+    slot_keys = []
+    cell_content = {}
+    for tc in tc_sessions:
+        if not (0 <= tc.day <= 4):
+            continue
+        day_name = _TC_DAY_NAMES[tc.day]
+        slot = (
+            tc.start_time.strftime("%H:%M") if tc.start_time else "",
+            tc.end_time.strftime("%H:%M") if tc.end_time else "",
+        )
+        if slot not in slot_keys:
+            slot_keys.append(slot)
+        key = (day_name, slot)
+        content = (
+            (tc.teacher.name if tc.teacher else "?")
+            if show_teacher_names
+            else "Guardia"
+        )
+        entry_list = cell_content.setdefault(key, [])
+        if content not in entry_list:
+            entry_list.append(content)
+    return slot_keys, cell_content
+
+
+def _build_tc_roster_unit(tc_sessions):
+    """Build an export unit representing the full duty-hour roster.
+    Input: tc_sessions - list of TCSession instances
+    Output: unit dict with entity_type 'tc_roster'
+    """
+    rows = build_tc_export_rows(tc_sessions)
+    return {
+        "entity_type": "tc_roster",
+        "header": "Horas de guardia",
+        "rows": rows,
+        "schedules": [],
+        "tc_sessions": list(tc_sessions),
+    }
+
+
+def _build_entity_name_and_stage_maps(entity_type, model_cls, selected_ids, active_team):
+    if entity_type == "group":
+        group_objs = list(
+            model_cls.objects.filter(
+                id__in=selected_ids,
+                team=active_team,
+            ).only("id", "name", "stage")
+        )
+        name_map = {obj.id: obj.name for obj in group_objs}
+        stage_map = {obj.id: getattr(obj, "stage", "") for obj in group_objs}
+    else:
+        name_map = {
+            obj.id: obj.name
+            for obj in model_cls.objects.filter(
+                id__in=selected_ids,
+                team=active_team,
+            ).only("id", "name")
+        }
+        stage_map = {}
+    return name_map, stage_map
+
+
+def _build_card_export_units(queryset, filters, export_entity_config, active_team, tc_by_teacher_id):
+    units = []
     for entity_type in EXPORT_ENTITY_ORDER:
         config = export_entity_config[entity_type]
         field_name = config["field"]
@@ -163,37 +235,31 @@ def build_export_units(queryset, params, active_team, export_entity_config):
                 )
             )
         selected_ids.extend(entity_filter["ids"])
-
         selected_ids = sorted(set(selected_ids))
         if not selected_ids:
             continue
 
-        model_cls = config["model"]
-        if entity_type == "group":
-            group_objs = list(
-                model_cls.objects.filter(
-                    id__in=selected_ids,
-                    team=active_team,
-                ).only("id", "name", "stage")
-            )
-            name_map = {obj.id: obj.name for obj in group_objs}
-            stage_map = {obj.id: getattr(obj, "stage", "") for obj in group_objs}
-        else:
-            name_map = {
-                obj.id: obj.name
-                for obj in model_cls.objects.filter(
-                    id__in=selected_ids,
-                    team=active_team,
-                ).only("id", "name")
-            }
-            stage_map = {}
+        name_map, stage_map = _build_entity_name_and_stage_maps(
+            entity_type, config["model"], selected_ids, active_team
+        )
 
         for object_id in selected_ids:
             object_name = name_map.get(object_id, f"{config['label']} {object_id}")
-            object_queryset = queryset.filter(
-                **{f"{field_name}_id": object_id}
-            ).order_by("start_time", "id")
+            object_queryset = (
+                queryset.filter(**{f"{field_name}_id": object_id})
+                .order_by("start_time", "id")
+                .distinct()
+            )
             rows = build_export_rows(object_queryset)
+            unit_tc = (
+                tc_by_teacher_id.get(object_id, []) if entity_type == "teacher" else []
+            )
+            if unit_tc:
+                tc_rows = build_tc_export_rows(unit_tc)
+                rows = sorted(
+                    rows + tc_rows,
+                    key=lambda r: (_DAY_ORDER.get(r["day"], 99), r["start"]),
+                )
             if entity_type == "group":
                 rows = _inject_group_recess_rows(
                     rows, stage_map.get(object_id, ""), object_name
@@ -204,8 +270,63 @@ def build_export_units(queryset, params, active_team, export_entity_config):
                     "header": f"{config['label']} {object_name}",
                     "rows": rows,
                     "schedules": list(object_queryset),
+                    "tc_sessions": unit_tc,
                 }
             )
+    return units
+
+
+def build_export_units(
+    queryset,
+    params,
+    active_team,
+    export_entity_config,
+    tc_sessions=None,
+    add_tc_roster=True,
+):
+    """Build the list of export units (one per card/entity or one global unit).
+    Input: queryset - filtered Schedule queryset;
+           params - parsed export params dict;
+           active_team - Team instance;
+           export_entity_config - dict of entity configs from ScheduleViewSet;
+           tc_sessions - optional list of TCSession instances to include;
+           add_tc_roster - if True append a TC roster summary unit at the end
+    Output: list of unit dicts with entity_type, header, rows, schedules, tc_sessions
+    """
+    tc_by_teacher_id = {}
+    if tc_sessions:
+        for tc in tc_sessions:
+            tc_by_teacher_id.setdefault(tc.teacher_id, []).append(tc)
+
+    units = []
+    if params.get("scope") != "cards":
+        rows = build_export_rows(queryset)
+        if tc_sessions:
+            tc_rows = build_tc_export_rows(tc_sessions)
+            rows = sorted(
+                rows + tc_rows,
+                key=lambda r: (_DAY_ORDER.get(r["day"], 99), r["start"]),
+            )
+        units.append(
+            {
+                "entity_type": "mixed",
+                "header": "",
+                "rows": rows,
+                "schedules": list(queryset),
+                "tc_sessions": list(tc_sessions) if tc_sessions else [],
+            }
+        )
+        if tc_sessions and add_tc_roster:
+            units.append(_build_tc_roster_unit(tc_sessions))
+        return units
+
+    filters = params["card_filters"]["filters"]
+    units = _build_card_export_units(
+        queryset, filters, export_entity_config, active_team, tc_by_teacher_id
+    )
+
+    if tc_sessions and add_tc_roster:
+        units.append(_build_tc_roster_unit(tc_sessions))
 
     return units
 
@@ -435,7 +556,10 @@ def collect_slots_and_content(schedules):
             slot_keys.append(slot)
 
         key = (day_name, slot)
-        cell_content.setdefault(key, []).append(_describe_schedule(schedule))
+        content = _describe_schedule(schedule)
+        entry_list = cell_content.setdefault(key, [])
+        if content not in entry_list:
+            entry_list.append(content)
 
         normalized_stage = normalize_stage(
             getattr(schedule.group, "stage", "") if schedule.group else ""
@@ -507,23 +631,49 @@ def build_timetable_rows(slot_keys, cell_content):
     return table_data
 
 
-def build_timetable_table_data(schedules, entity_type):
+def _merge_tc_into_timetable(slot_keys, cell_content, tc_sessions):
+    tc_slot_keys, tc_cell_content = collect_tc_slots_and_content(
+        tc_sessions, show_teacher_names=False
+    )
+    for slot in tc_slot_keys:
+        if slot not in slot_keys:
+            slot_keys.append(slot)
+    for (day, slot), contents in tc_cell_content.items():
+        entry_list = cell_content.setdefault((day, slot), [])
+        for content in contents:
+            if content not in entry_list:
+                entry_list.append(content)
+
+
+def build_timetable_table_data(schedules, entity_type, tc_sessions=None):
     """Build the full table data matrix for a timetable PDF page.
     Input: schedules - list of Schedule instances for one entity;
-           entity_type - 'teacher', 'group', 'classroom' or 'mixed'
+           entity_type - 'teacher', 'group', 'classroom', 'mixed', or 'tc_roster';
+           tc_sessions - optional list of TCSession instances to merge into the grid
     Output: list of rows (including header) ready for a ReportLab Table
     """
+    _empty_header = ["Hora", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+
+    if entity_type == "tc_roster":
+        slot_keys, cell_content = collect_tc_slots_and_content(
+            tc_sessions or [], show_teacher_names=True
+        )
+        slot_keys.sort()
+        if not slot_keys:
+            return [_empty_header, ["Sin horas de guardia", "", "", "", "", ""]]
+        return build_timetable_rows(slot_keys, cell_content)
+
     slot_keys, cell_content, day_stage_map = collect_slots_and_content(schedules)
+
+    if tc_sessions and entity_type == "teacher":
+        _merge_tc_into_timetable(slot_keys, cell_content, tc_sessions)
 
     if entity_type == "group":
         inject_recess_breaks(slot_keys, cell_content, day_stage_map)
 
     slot_keys.sort()
     if not slot_keys:
-        return [
-            ["Hora", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"],
-            ["Sin sesiones", "", "", "", "", ""],
-        ]
+        return [_empty_header, ["Sin sesiones", "", "", "", "", ""]]
 
     return build_timetable_rows(slot_keys, cell_content)
 
@@ -569,7 +719,9 @@ def build_pdf_units_response(units, filename):
                 ]
             )
 
-        table_data = build_timetable_table_data(unit["schedules"], unit["entity_type"])
+        table_data = build_timetable_table_data(
+            unit["schedules"], unit["entity_type"], unit.get("tc_sessions") or None
+        )
 
         available_width = document.width
         time_col_width = available_width * 0.15

@@ -21,7 +21,7 @@ def apply_teacher_gap_local_search(
     sessions,
     slots,
     fixed_assignments=None,
-    max_passes=3,
+    max_passes=50,  # safety cap; loop exits early when no move is found (convergence)
     deadline=None,
 ):
     """Reduce teacher intraday gaps via greedy single-session moves.
