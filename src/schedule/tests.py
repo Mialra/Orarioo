@@ -2373,7 +2373,9 @@ class TestTCAssigner(TestCase):
     def test_sin_warning_cuando_cobertura_completa(self):
         self.teacher.max_weekly_hours = 100
         self.teacher.save()
-        _, teacher2 = _make_team_and_teacher(email_prefix="tc-algo2", max_weekly_hours=100)
+        _, teacher2 = _make_team_and_teacher(
+            email_prefix="tc-algo2", max_weekly_hours=100
+        )
         teacher2.team = self.team
         teacher2.save()
 
