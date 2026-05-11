@@ -1044,7 +1044,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
                 {self.user.id, self.other_user.id},
             )
 
-    def test_saved_endpoint_returns_only_saved_schedules_for_current_user(self):
+    def test_saved_endpoint_returns_all_team_saved_schedules(self):
         start_time = timezone.now() + timedelta(days=1)
         end_time = start_time + timedelta(hours=1)
         saved_schedule = self.create_schedule(
@@ -1067,7 +1067,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             users=[self.user],
         )
 
-        self.create_schedule(
+        other_saved_schedule = self.create_schedule(
             name="Horario Otro Usuario",
             start_time=start_time + timedelta(hours=2),
             end_time=end_time + timedelta(hours=2),
@@ -1080,9 +1080,11 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         response = self.client.get(reverse("schedule-saved"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["count"], 1)
-        self.assertEqual(len(response.data["results"]), 1)
-        self.assertEqual(response.data["results"][0]["id"], saved_schedule.id)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(len(response.data["results"]), 2)
+        returned_ids = {r["id"] for r in response.data["results"]}
+        self.assertIn(saved_schedule.id, returned_ids)
+        self.assertIn(other_saved_schedule.id, returned_ids)
         self.assertIn("teacher_workloads", response.data)
         self.assertTrue(
             any(
@@ -2369,7 +2371,9 @@ class TestTCAssigner(TestCase):
         self.assertEqual(first_warning["assigned"], 1)
 
     def test_sin_warning_cuando_cobertura_completa(self):
-        _, teacher2 = _make_team_and_teacher(email_prefix="tc-algo2")
+        self.teacher.max_weekly_hours = 100
+        self.teacher.save()
+        _, teacher2 = _make_team_and_teacher(email_prefix="tc-algo2", max_weekly_hours=100)
         teacher2.team = self.team
         teacher2.save()
 
