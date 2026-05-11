@@ -560,6 +560,64 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             )
         return schedules, None
 
+    @action(detail=False, methods=["post"], url_path="rename-saved-timetable")
+    def rename_saved_timetable(self, request):
+        """Rename a saved timetable by updating all its schedules' observations field.
+        Input: request - DRF Request with old_name and new_name in body
+        Output: Response with detail and updated_count (HTTP 200), or 400/404 on error
+        """
+        active_team = self.get_active_team()
+        old_name = (request.data.get("old_name") or "").strip()
+        if not old_name:
+            return Response(
+                {"old_name": "old_name is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        new_name = (request.data.get("new_name") or "").strip()
+        if not new_name:
+            return Response(
+                {"new_name": "new_name is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not self._saved_timetable_name_exists(timetable_name=old_name, team=active_team):
+            return Response(
+                {"detail": "Saved timetable not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if self._saved_timetable_name_exists(timetable_name=new_name, team=active_team):
+            return Response(
+                {
+                    "new_name": (
+                        "Ya existe un horario guardado con ese nombre. "
+                        "Usa otro nombre o elimina el horario anterior."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        old_obs = f"{SAVED_TIMETABLE_PREFIX}: {old_name}"
+        new_obs = f"{SAVED_TIMETABLE_PREFIX}: {new_name}"
+        updated_count = Schedule.objects.filter(
+            observations=old_obs, team=active_team
+        ).update(observations=new_obs)
+        create_audit_entry(
+            model=Schedule,
+            entity_id=0,
+            entity_name=new_name,
+            action_type=AuditActionType.UPDATE,
+            detail=(
+                f'Se renombró el horario guardado "{old_name}" a "{new_name}" '
+                f"({updated_count} sesiones actualizadas)."
+            ),
+            changed_fields=[
+                {"campo": "Nombre del horario", "valor_anterior": old_name, "valor_nuevo": new_name}
+            ],
+            team=active_team,
+        )
+        return Response(
+            {"detail": "Saved timetable renamed successfully.", "updated_count": updated_count},
+            status=status.HTTP_200_OK,
+        )
+
     @action(detail=False, methods=["post"], url_path="delete-saved-timetable")
     def delete_saved_timetable(self, request):
         """Delete a saved timetable and all its schedules.

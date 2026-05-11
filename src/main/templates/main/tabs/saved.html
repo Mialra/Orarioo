@@ -29,6 +29,51 @@
 </section>
 {% include "main/tabs/_schedule_export_modal.html" %}
 <div class="modal fade"
+     id="renameSavedTimetableModal"
+     tabindex="-1"
+     aria-labelledby="renameSavedTimetableModalTitle"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
+        <div class="modal-content shadow-lg">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title h4 mb-0" id="renameSavedTimetableModalTitle">Renombrar horario</h3>
+                    <p class="text-secondary small mb-0 mt-1">Escribe el nuevo nombre para el horario guardado.</p>
+                </div>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="renameSavedTimetableForm" novalidate>
+                    <div id="renameSavedTimetableAlert" class="alert d-none mb-3" role="alert"></div>
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <label class="form-label fw-semibold mb-0"
+                               for="renameSavedTimetableInput">Nombre</label>
+                        <span class="text-danger" aria-hidden="true">*</span>
+                    </div>
+                    <input class="form-control"
+                           id="renameSavedTimetableInput"
+                           type="text"
+                           maxlength="150"
+                           placeholder="Nombre del horario"
+                           required>
+                    <div class="invalid-feedback" id="renameSavedTimetableNameError"></div>
+                </form>
+            </div>
+            <div class="modal-footer justify-content-center gap-2">
+                <button type="button"
+                        class="btn btn-outline-secondary px-4"
+                        data-bs-dismiss="modal">Cancelar</button>
+                <button type="button"
+                        id="confirmRenameSavedTimetableBtn"
+                        class="btn btn-primary px-4">Renombrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade"
      id="deleteSavedTimetableModal"
      tabindex="-1"
      aria-labelledby="deleteSavedTimetableModalTitle"

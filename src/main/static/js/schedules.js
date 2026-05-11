@@ -1846,6 +1846,17 @@
         if (!(target instanceof Element)) {
           return;
         }
+        const renameButton = target.closest("button[data-action='rename'][data-index]");
+        if (renameButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          const renameIndex = Number.parseInt(renameButton.dataset.index || "", 10);
+          if (Number.isNaN(renameIndex) || renameIndex < 0) {
+            return;
+          }
+          savedManager.renameSavedTimetable(renameIndex);
+          return;
+        }
         const deleteButton = target.closest("button[data-action='delete'][data-index]");
         if (deleteButton) {
           event.preventDefault();

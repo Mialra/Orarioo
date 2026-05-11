@@ -83,12 +83,20 @@
             utils.toIsoDateDisplay(group.updated_at) +
             "</p>" +
             "</div>" +
+            '<div class="saved-card-actions">' +
+            '<button type="button" class="btn btn-link text-primary p-0 saved-card-rename" data-action="rename" data-index="' +
+            index +
+            '" title="Renombrar horario" aria-label="Renombrar horario ' +
+            group.name +
+            '">' +
+            '<i data-lucide="pencil" class="saved-card-rename-icon" aria-hidden="true"></i></button>' +
             '<button type="button" class="btn btn-link text-danger p-0 saved-card-delete" data-action="delete" data-index="' +
             index +
             '" title="Eliminar horario" aria-label="Eliminar horario ' +
             group.name +
             '">' +
             '<i data-lucide="trash-2" class="saved-card-delete-icon" aria-hidden="true"></i></button>' +
+            "</div>" +
             "</div>" +
             "</article></div>"
           );
@@ -241,6 +249,105 @@
         return false;
       }
       return openSavedWorkspace(index);
+    }
+
+    function openRenameModal(currentName) {
+      return new Promise(function (resolve) {
+        var modal = document.getElementById("renameSavedTimetableModal");
+        var input = document.getElementById("renameSavedTimetableInput");
+        var nameError = document.getElementById("renameSavedTimetableNameError");
+        var alertEl = document.getElementById("renameSavedTimetableAlert");
+        var confirmBtn = document.getElementById("confirmRenameSavedTimetableBtn");
+        if (!modal || !confirmBtn) {
+          var newName = window.prompt("Nuevo nombre para el horario:", currentName);
+          resolve(newName && newName.trim() ? newName.trim() : null);
+          return;
+        }
+        if (input) { input.value = currentName; input.classList.remove("is-invalid"); }
+        if (nameError) { nameError.textContent = ""; }
+        if (alertEl) { alertEl.classList.add("d-none"); alertEl.textContent = ""; }
+
+        var resolved = false;
+        var instance = window.bootstrap && window.bootstrap.Modal
+          ? window.bootstrap.Modal.getOrCreateInstance(modal)
+          : null;
+
+        function closeModal() {
+          if (instance) { instance.hide(); }
+          else { modal.classList.remove("show"); modal.style.display = "none"; document.body.classList.remove("modal-open"); }
+        }
+
+        function onConfirm() {
+          if (resolved) { return; }
+          var val = (input ? input.value : "").trim();
+          if (!val) {
+            if (input) { input.classList.add("is-invalid"); }
+            if (nameError) { nameError.textContent = "El nombre es obligatorio."; }
+            return;
+          }
+          resolved = true;
+          closeModal();
+          resolve(val);
+        }
+
+        function onDismiss() {
+          if (resolved) { return; }
+          resolved = true;
+          resolve(null);
+        }
+
+        confirmBtn.addEventListener("click", onConfirm, { once: true });
+        modal.addEventListener("hidden.bs.modal", onDismiss, { once: true });
+
+        if (instance) { instance.show(); }
+        else { modal.classList.add("show"); modal.style.display = "block"; document.body.classList.add("modal-open"); }
+        setTimeout(function () { if (input) { input.select(); } }, 300);
+      });
+    }
+
+    async function renameSavedTimetable(index) {
+      try {
+        var selected = state.savedTimetableGroups[index];
+        if (!selected) {
+          showAlert("error", "Horario guardado no encontrado.");
+          return;
+        }
+        var newName = await openRenameModal(selected.name);
+        if (!newName) { return; }
+        if (utils.normalizeForCompare(newName) === utils.normalizeForCompare(selected.name)) { return; }
+
+        var result = await apiJson("/schedules/rename-saved-timetable/", "POST", {
+          old_name: selected.name,
+          new_name: newName,
+        });
+
+        if (!result.ok) {
+          var fieldError = result.data && result.data.new_name;
+          if (fieldError) {
+            var input = document.getElementById("renameSavedTimetableInput");
+            var nameError = document.getElementById("renameSavedTimetableNameError");
+            if (input) { input.classList.add("is-invalid"); }
+            if (nameError) { nameError.textContent = fieldError; }
+            var modal = document.getElementById("renameSavedTimetableModal");
+            var instance = window.bootstrap && window.bootstrap.Modal
+              ? window.bootstrap.Modal.getOrCreateInstance(modal) : null;
+            if (instance) { instance.show(); }
+            return;
+          }
+          showAlert("error", extractApiErrorMessage(result.data, "No se pudo renombrar el horario guardado."));
+          return;
+        }
+
+        var oldName = selected.name;
+        selected.name = newName;
+        if (utils.normalizeForCompare(state.selectedSavedTimetableName) === utils.normalizeForCompare(oldName)) {
+          state.selectedSavedTimetableName = newName;
+        }
+        renderSavedCards();
+        showAlert("success", "Horario renombrado correctamente.");
+      } catch (_error) {
+        showAlert("error", "No se pudo renombrar el horario guardado.");
+      }
     }
 
     function openDeleteConfirmModal(name) {
@@ -480,6 +587,7 @@
       getSelectedSavedGroup: getSelectedSavedGroup,
       openSavedWorkspace: openSavedWorkspace,
       deleteSavedTimetable: deleteSavedTimetable,
+      renameSavedTimetable: renameSavedTimetable,
       ensureSavedSchedulesLoaded: ensureSavedSchedulesLoaded,
       rememberSavedTimetableSummary: rememberSavedTimetableSummary,
       hasSavedTimetableNameCollision: hasSavedTimetableNameCollision,

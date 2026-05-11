@@ -20,6 +20,9 @@ schedule_saved_detail = ScheduleViewSet.as_view({"get": "saved_detail"})
 schedule_delete_saved_timetable = ScheduleViewSet.as_view(
     {"post": "delete_saved_timetable"}
 )
+schedule_rename_saved_timetable = ScheduleViewSet.as_view(
+    {"post": "rename_saved_timetable"}
+)
 schedule_save_generated = ScheduleViewSet.as_view({"post": "save_generated"})
 schedule_move = ScheduleViewSet.as_view({"post": "move"})
 schedule_apply_manual_change = ScheduleViewSet.as_view({"post": "apply_manual_change"})
@@ -42,6 +45,11 @@ urlpatterns = [
         "schedules/delete-saved-timetable/",
         schedule_delete_saved_timetable,
         name="schedule-delete-saved-timetable",
+    ),
+    path(
+        "schedules/rename-saved-timetable/",
+        schedule_rename_saved_timetable,
+        name="schedule-rename-saved-timetable",
     ),
     path("schedules/export/", schedule_export, name="schedule-export"),
     path("schedules/generate/", schedule_generate, name="schedule-generate"),
