@@ -579,7 +579,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 {"new_name": "new_name is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if not self._saved_timetable_name_exists(timetable_name=old_name, team=active_team):
+        if not self._saved_timetable_name_exists(
+            timetable_name=old_name, team=active_team
+        ):
             return Response(
                 {"detail": "Saved timetable not found."},
                 status=status.HTTP_404_NOT_FOUND,
@@ -609,12 +611,19 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 f"({updated_count} sesiones actualizadas)."
             ),
             changed_fields=[
-                {"campo": "Nombre del horario", "valor_anterior": old_name, "valor_nuevo": new_name}
+                {
+                    "campo": "Nombre del horario",
+                    "valor_anterior": old_name,
+                    "valor_nuevo": new_name,
+                }
             ],
             team=active_team,
         )
         return Response(
-            {"detail": "Saved timetable renamed successfully.", "updated_count": updated_count},
+            {
+                "detail": "Saved timetable renamed successfully.",
+                "updated_count": updated_count,
+            },
             status=status.HTTP_200_OK,
         )
 
