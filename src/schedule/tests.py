@@ -1,4 +1,5 @@
-﻿import time as _time
+﻿import sys
+import time as _time
 from datetime import datetime, timedelta
 from io import BytesIO
 from types import SimpleNamespace
@@ -3025,7 +3026,7 @@ class PostprocessingConvergenceTests(TestCase):
 
     def test_generator_no_longer_imports_local_search(self):
         """Verify the redundant import was removed from generator.py."""
-        import schedule.algorithm.generator as gen_module
+        gen_module = sys.modules[BasicScheduleGenerator.__module__]
 
         self.assertFalse(
             hasattr(gen_module, "apply_teacher_gap_local_search"),
