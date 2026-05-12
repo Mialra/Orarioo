@@ -4,8 +4,6 @@ Exposes solve_session_assignment as the single entry point.  All internal
 functions build decision variables, add constraints and extract the solution.
 """
 
-import time
-
 try:
     from ortools.sat.python import cp_model
 except ModuleNotFoundError:  # pragma: no cover - depends on local Python version
@@ -28,7 +26,6 @@ from schedule.algorithm.diagnostics import (
     raise_schedule_generation_diagnostics,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
-from schedule.algorithm.postprocessing import apply_teacher_gap_local_search
 from schedule.algorithm.slots import build_real_time_intervals
 
 
@@ -280,32 +277,13 @@ def _cp_sat_session_assignment(
         generation_options=generation_options,
         extra_objective_terms=stability_terms,
     )
-    _use_lns = opts.get("enable_lns_phase2", True) and session_count >= 10
-    if _use_lns:
-        happy_indices = _classify_sessions_for_lns(
-            phase1_slots=phase1_slots,
-            sessions=sessions,
-            slots=slots,
-            generation_options=generation_options,
-        )
-        _apply_lns_constraints(
-            model=model,
-            x=x,
-            y=y,
-            happy_session_indices=happy_indices,
-            phase1_slots=phase1_slots,
-            compatible_classrooms_by_session=compatible_classrooms_by_session,
-            feasible_solver=feasible_solver,
-        )
-    else:
-        _add_solution_hints(
-            model=model,
-            solver=feasible_solver,
-            x=x,
-            y=y,
-        )
+    _add_solution_hints(
+        model=model,
+        solver=feasible_solver,
+        x=x,
+        y=y,
+    )
 
-    phase2_start = time.monotonic()
     optimization_solver = _build_solver(
         timeout_seconds=optimization_timeout,
         random_seed=random_seed,
@@ -314,7 +292,6 @@ def _cp_sat_session_assignment(
         stop_after_first_solution=False,
     )
     optimization_status = optimization_solver.Solve(model)
-    phase2_deadline = phase2_start + optimization_timeout
 
     if optimization_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         phase2_slots, phase2_classrooms = _extract_slot_and_classroom_assignment(
@@ -325,18 +302,9 @@ def _cp_sat_session_assignment(
             session_count=session_count,
             slot_count=slot_count,
         )
-        pre_ls_slots = list(phase2_slots)
-        phase2_slots, phase2_classrooms = apply_teacher_gap_local_search(
-            slot_by_session=phase2_slots,
-            classroom_by_session=phase2_classrooms,
-            sessions=sessions,
-            slots=slots,
-            fixed_assignments=fixed_assignments,
-            deadline=phase2_deadline,
-        )
         soft_score_info = _build_soft_score_info(
             phase1_slots=phase1_slots,
-            pre_local_search_slots=pre_ls_slots,
+            pre_local_search_slots=phase2_slots,
             phase2_slots=phase2_slots,
             sessions=sessions,
             slots=slots,
@@ -350,18 +318,9 @@ def _cp_sat_session_assignment(
         )
 
     # Fallback: keep the feasible phase solution if optimisation times out/fails.
-    pre_ls_slots = list(phase1_slots)
-    phase1_slots, phase1_classrooms = apply_teacher_gap_local_search(
-        slot_by_session=phase1_slots,
-        classroom_by_session=phase1_classrooms,
-        sessions=sessions,
-        slots=slots,
-        fixed_assignments=fixed_assignments,
-        deadline=phase2_deadline,
-    )
     soft_score_info = _build_soft_score_info(
         phase1_slots=phase1_slots,
-        pre_local_search_slots=pre_ls_slots,
+        pre_local_search_slots=phase1_slots,
         phase2_slots=phase1_slots,
         sessions=sessions,
         slots=slots,
@@ -843,168 +802,3 @@ def _classroom_compatibility_error(*, session):
 
 
 # ---------------------------------------------------------------------------
-# Large Neighbourhood Search helpers for Phase 2
-# ---------------------------------------------------------------------------
-
-
-def _build_teacher_gap_days(*, phase1_slots, sessions, slot_day_index, slots_by_day):
-    """Return the set of (teacher_id, day_idx) pairs where that teacher has an intraday gap.
-
-    Iterates only the days where each teacher actually has sessions, avoiding
-    spurious lookups for days with no activity.
-    Input: phase1_slots - list[int] of slot indices from Phase 1;
-           sessions - list of session dicts;
-           slot_day_index - dict {slot_idx: day_idx};
-           slots_by_day - dict {day_idx: [slot_idx, ...]} sorted by start time
-    Output: set of (teacher_id, day_idx) tuples
-    """
-    teacher_slots_by_day = {}
-    for s_idx, session in enumerate(sessions):
-        teacher_id = session.get("teacher_id")
-        if teacher_id is None:
-            continue
-        day_idx = slot_day_index.get(phase1_slots[s_idx])
-        if day_idx is None:
-            continue
-        teacher_slots_by_day.setdefault(teacher_id, {}).setdefault(day_idx, set()).add(
-            phase1_slots[s_idx]
-        )
-
-    gap_days = set()
-    for teacher_id, days in teacher_slots_by_day.items():
-        for day_idx, assigned_in_day in days.items():
-            day_slot_list = slots_by_day.get(day_idx, [])
-            if len(day_slot_list) < 3:
-                continue
-            for inner_pos, p_i in enumerate(day_slot_list[1:-1], start=1):
-                before_slots = set(day_slot_list[:inner_pos])
-                after_slots = set(day_slot_list[inner_pos + 1 :])
-                if (
-                    assigned_in_day & before_slots
-                    and assigned_in_day & after_slots
-                    and p_i not in assigned_in_day
-                ):
-                    gap_days.add((teacher_id, day_idx))
-                    break
-    return gap_days
-
-
-def _classify_sessions_for_lns(
-    *,
-    phase1_slots,
-    sessions,
-    slots,
-    generation_options,
-    max_fix_ratio=0.70,
-):
-    """Return a frozenset of session indices to fix as hard constraints for LNS Phase 2.
-
-    A session is eligible to fix ("happy") iff its subject/teacher time-preference
-    score is >= 0 AND its teacher has no intraday gap on the session's assigned day
-    in the Phase 1 solution.  When more candidates exist than max_fix_ratio allows,
-    the highest-scoring ones are kept.
-    Input: phase1_slots - list[int]; sessions - list of session dicts;
-           slots - list of slot dicts; generation_options - dict;
-           max_fix_ratio - maximum fraction of sessions to fix (default 0.70)
-    Output: frozenset of session indices
-    """
-    from schedule.algorithm.constraints.hard import (
-        session_preference_state,
-        teacher_preference_state,
-    )
-    from schedule.algorithm.constraints.soft import _build_slots_by_day
-    from schedule.algorithm.slots import (
-        build_slot_day_index,
-        build_slot_preference_index,
-    )
-    from subject.models import SubjectTimePreferenceState
-    from teacher.models import TeacherTimePreferenceState
-
-    opts = generation_options or {}
-    slot_preference_by_idx = build_slot_preference_index(slots=slots)
-    slot_day_index = build_slot_day_index(slots=slots)
-    slots_by_day = _build_slots_by_day(slots=slots)
-
-    teacher_gap_days = _build_teacher_gap_days(
-        phase1_slots=phase1_slots,
-        sessions=sessions,
-        slot_day_index=slot_day_index,
-        slots_by_day=slots_by_day,
-    )
-
-    happy = []  # list of (s_idx, pref_score)
-    for s_idx, session in enumerate(sessions):
-        assigned_slot = phase1_slots[s_idx]
-        slot_key = slot_preference_by_idx.get(assigned_slot)
-
-        pref_score = 0
-        if slot_key and opts.get("enable_subject_time_preferences", True):
-            state = session_preference_state(
-                session=session, slot_preference_key=slot_key
-            )
-            if state == SubjectTimePreferenceState.PREFER_YES:
-                pref_score += 2
-            elif state == SubjectTimePreferenceState.PREFER_NO:
-                pref_score -= 2
-
-        if slot_key and opts.get("enable_teacher_time_preferences", True):
-            state = teacher_preference_state(
-                session=session, slot_preference_key=slot_key
-            )
-            if state == TeacherTimePreferenceState.PREFER_YES:
-                pref_score += 2
-            elif state == TeacherTimePreferenceState.PREFER_NO:
-                pref_score -= 2
-
-        teacher_id = session.get("teacher_id")
-        day_idx = slot_day_index.get(assigned_slot)
-        teacher_has_gap = (teacher_id, day_idx) in teacher_gap_days
-
-        if pref_score >= 0 and not teacher_has_gap:
-            happy.append((s_idx, pref_score))
-
-    max_to_fix = int(len(sessions) * max_fix_ratio)
-    if len(happy) > max_to_fix:
-        happy.sort(key=lambda item: item[1], reverse=True)
-        happy = happy[:max_to_fix]
-
-    return frozenset(s_idx for s_idx, _ in happy)
-
-
-def _apply_lns_constraints(
-    *,
-    model,
-    x,
-    y,
-    happy_session_indices,
-    phase1_slots,
-    compatible_classrooms_by_session,
-    feasible_solver,
-):
-    """Fix happy sessions as hard constraints and warm-start all variables with Phase 1 hints.
-
-    For each happy session adds model.Add(x[(s, p)] == 1) for the assigned slot and
-    model.Add(y[(s, p, c)] == 1) for the Phase 1 classroom.  Then adds model.AddHint
-    for every x and y variable so Phase 2 starts from the Phase 1 solution.
-    Input: model - CP-SAT CpModel; x, y - decision variables;
-           happy_session_indices - frozenset of session indices to hard-fix;
-           phase1_slots - list[int] of Phase 1 slot assignments;
-           compatible_classrooms_by_session - compatibility index;
-           feasible_solver - solved Phase 1 CpSolver instance
-    Output: None; side-effect: adds constraints and hints to model
-    """
-    for s_idx, assigned_slot in enumerate(phase1_slots):
-        if s_idx not in happy_session_indices:
-            continue
-
-        model.Add(x[(s_idx, assigned_slot)] == 1)
-
-        for classroom in compatible_classrooms_by_session[s_idx]:
-            if feasible_solver.Value(y[(s_idx, assigned_slot, classroom.id)]) == 1:
-                model.Add(y[(s_idx, assigned_slot, classroom.id)] == 1)
-                break
-
-    for var in x.values():
-        model.AddHint(var, feasible_solver.Value(var))
-    for var in y.values():
-        model.AddHint(var, feasible_solver.Value(var))
