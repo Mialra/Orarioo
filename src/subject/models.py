@@ -32,7 +32,6 @@ class Subject(TeamScopedModel, AuditableEntity):
 
     weekly_hours = models.PositiveIntegerField()
     duration = models.FloatField(default=1.0)
-    preferred_time_slot = models.CharField(max_length=150, blank=True)
     time_preferences = models.JSONField(default=dict, blank=True)
     type = models.CharField(
         max_length=20,

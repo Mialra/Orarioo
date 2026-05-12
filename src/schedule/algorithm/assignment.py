@@ -304,7 +304,6 @@ def _cp_sat_session_assignment(
         )
         soft_score_info = _build_soft_score_info(
             phase1_slots=phase1_slots,
-            pre_local_search_slots=phase2_slots,
             phase2_slots=phase2_slots,
             sessions=sessions,
             slots=slots,
@@ -320,7 +319,6 @@ def _cp_sat_session_assignment(
     # Fallback: keep the feasible phase solution if optimisation times out/fails.
     soft_score_info = _build_soft_score_info(
         phase1_slots=phase1_slots,
-        pre_local_search_slots=phase1_slots,
         phase2_slots=phase1_slots,
         sessions=sessions,
         slots=slots,
@@ -718,27 +716,19 @@ def _build_schedule_stability_terms(*, x, y, previous_assignment_by_session):
 def _build_soft_score_info(
     *,
     phase1_slots,
-    pre_local_search_slots,
     phase2_slots,
     sessions,
     slots,
     generation_options,
 ):
-    """Compute soft scores at three checkpoints and return a comparison dict.
+    """Compute soft scores at feasibility and optimised checkpoints.
     Input: phase1_slots - slot_by_session from the feasibility phase;
-           pre_local_search_slots - slot_by_session after CP-SAT opt, before local search;
-           phase2_slots - slot_by_session after local search post-processing;
+           phase2_slots - slot_by_session after CP-SAT optimisation;
            sessions, slots, generation_options - forwarded to evaluate_soft_score
-    Output: dict {feasible_phase, cp_sat_phase, optimized_phase, delta, local_search_delta}
+    Output: dict {feasible_phase, optimized_phase, delta}
     """
     phase1_score = evaluate_soft_score(
         slot_by_session=phase1_slots,
-        sessions=sessions,
-        slots=slots,
-        generation_options=generation_options,
-    )
-    pre_ls_score = evaluate_soft_score(
-        slot_by_session=pre_local_search_slots,
         sessions=sessions,
         slots=slots,
         generation_options=generation_options,
@@ -751,10 +741,8 @@ def _build_soft_score_info(
     )
     return {
         "feasible_phase": phase1_score,
-        "cp_sat_phase": pre_ls_score,
         "optimized_phase": phase2_score,
         "delta": phase2_score["total"] - phase1_score["total"],
-        "local_search_delta": phase2_score["total"] - pre_ls_score["total"],
     }
 
 

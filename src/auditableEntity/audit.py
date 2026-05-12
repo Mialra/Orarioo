@@ -89,7 +89,6 @@ FIELD_LABELS = {
     "stage": "Etapa",
     "weekly_hours": "Horas semanales",
     "duration": "Duración",
-    "preferred_time_slot": "Franja horaria preferida",
     "type": "Tipo",
     "teacher": "Profesor",
     "group": "Curso",

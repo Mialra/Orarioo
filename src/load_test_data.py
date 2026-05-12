@@ -967,7 +967,6 @@ def create_subjects(teachers, groups, team):  # noqa: C901
             name=row["name"],
             weekly_hours=row["weekly_hours"],
             duration=row.get("duration", 1.0),
-            preferred_time_slot=row.get("preferred_time_slot", ""),
             time_preferences=row.get("time_preferences", {}),
             type=row.get("type", SubjectType.NORMAL),
             teacher=teachers[row["teacher_key"]],

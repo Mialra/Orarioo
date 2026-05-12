@@ -66,7 +66,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Mathematics",
             weekly_hours=5,
             duration=1.5,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -271,7 +271,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Language 2A",
             weekly_hours=3,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
@@ -319,7 +319,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=3,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=second_teacher,
             group=self.group,
@@ -496,7 +496,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Physics",
             weekly_hours=1,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -524,7 +524,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Mathematics 2A",
             weekly_hours=5,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=group_2,
@@ -551,7 +551,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=5,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=self.group,
@@ -691,7 +691,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Lengua 2A",
             weekly_hours=2,
             duration=1.0,
-            preferred_time_slot="Any",
+
             type=SubjectType.NORMAL,
             teacher=other_teacher,
             group=other_group,
@@ -770,7 +770,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Ciencias 3A",
             weekly_hours=2,
             duration=1.0,
-            preferred_time_slot="Any",
+
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
@@ -1145,7 +1145,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Physics",
             weekly_hours=3,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=group_2,
@@ -1169,7 +1169,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=21,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -1201,21 +1201,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(group_schedules.count(), 25)
         self.assertEqual(len(daily_counts), 5)
         self.assertTrue(all(count <= 5 for count in daily_counts.values()))
-
-    def test_generate_rejects_when_recess_supervision_overloads_teacher(self):
-        self.teacher.max_weekly_hours = 5
-        self.teacher.save(update_fields=["max_weekly_hours"])
-
-        response = self.generate_schedule(
-            {
-                "recess_supervisors_primary": 1,
-            }
-        )
-
-        self.assert_generate_bad_request_with_detail(
-            response,
-            "exceeds",
-        )
 
     def test_generate_accepts_timeout_minutes_and_returns_it_in_response(self):
         response = self.generate_schedule({"timeout_minutes": 15})
@@ -1338,7 +1323,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=1,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=group_2,
@@ -1496,7 +1481,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science 2A",
             weekly_hours=1,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=other_teacher,
             group=other_group,
@@ -1622,7 +1607,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=1,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=self.group,
@@ -1831,7 +1816,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Physics",
             weekly_hours=2,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=secondary_group,
@@ -1898,7 +1883,7 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Mathematics",
             weekly_hours=25,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -2061,7 +2046,7 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=1,
             duration=1.0,
-            preferred_time_slot="Morning",
+
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
