@@ -19,6 +19,7 @@
     classroom_conflict: "El aula ya está ocupada en ese hueco horario.",
     teacher_unavailable: "El profesor no está disponible en ese hueco horario.",
     subject_unavailable: "La asignatura no está disponible en ese hueco horario.",
+    duration_mismatch: "No se puede intercambiar: las sesiones tienen distinta duración.",
   };
 
   /**
@@ -287,6 +288,13 @@
         var targetMapped = mappedById.get(String(targetScheduleId));
         if (!targetMapped) {
           return { valid: false, reason: "missing_target_session" };
+        }
+        var sourceDuration =
+          utils.parseHmToMinutes(dragState.sourceEnd) - utils.parseHmToMinutes(dragState.sourceStart);
+        var targetDuration =
+          utils.parseHmToMinutes(targetMapped.endHm) - utils.parseHmToMinutes(targetMapped.startHm);
+        if (sourceDuration !== targetDuration) {
+          return { valid: false, reason: "duration_mismatch" };
         }
         candidateById.set(String(targetScheduleId), {
           id: targetMapped.id,

@@ -1072,8 +1072,8 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             return None, Response(
                 {
                     "detail": (
-                        "The source slot no longer matches current data. "
-                        "Refresh and try again."
+                        "La sesión de origen ya no coincide con los datos actuales. "
+                        "Recarga y vuelve a intentarlo."
                     )
                 },
                 status=status.HTTP_409_CONFLICT,
@@ -1148,8 +1148,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 return None, Response(
                     {
                         "detail": (
-                            "target_slot.schedule_id must belong to the same "
-                            "timetable scope as source_slot.schedule_id."
+                            "El ID de sesión de destino no pertenece al mismo horario."
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -1161,11 +1160,19 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 return None, Response(
                     {
                         "detail": (
-                            "Target schedule no longer matches target slot. "
-                            "Refresh and try again."
+                            "La sesión de destino ya no coincide con el hueco seleccionado. "
+                            "Recarga y vuelve a intentarlo."
                         )
                     },
                     status=status.HTTP_409_CONFLICT,
+                )
+            if (
+                target_schedule.end_time - target_schedule.start_time
+                != source_schedule.end_time - source_schedule.start_time
+            ):
+                return None, Response(
+                    {"detail": "No se puede intercambiar: las sesiones tienen distinta duración."},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
             return target_schedule, None
 
@@ -1177,7 +1184,15 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         )
         if target_schedule is None:
             return None, Response(
-                {"detail": "Swap requires a target schedule in destination slot."},
+                {"detail": "El intercambio requiere una sesión en el hueco de destino."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if (
+            target_schedule.end_time - target_schedule.start_time
+            != source_schedule.end_time - source_schedule.start_time
+        ):
+            return None, Response(
+                {"detail": "No se puede intercambiar: las sesiones tienen distinta duración."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return target_schedule, None
