@@ -735,6 +735,11 @@
     box-shadow: inset 0 0 0 2px #d33f4a;
 }
 
+.schedule-board-cell-drop-swappable:not(.schedule-board-cell-drop-valid):not(.schedule-board-cell-drop-hover) {
+    box-shadow: inset 0 0 0 2px rgba(47, 158, 106, 0.45);
+    background: rgba(47, 158, 106, 0.06);
+}
+
 .schedule-board-cell-updated {
     animation: scheduleCellPulse 0.35s ease;
 }

@@ -504,6 +504,12 @@
         dragState.sourceSlotKey = utils.createBoardCellKey(sourceDay, sourceStart, sourceEnd);
 
         card.classList.add("schedule-board-card-dragging");
+        outputEl.querySelectorAll(".schedule-board-cell").forEach(function (cell) {
+          var preview = evaluateDropCandidate(cell, null);
+          if (preview.valid) {
+            cell.classList.add("schedule-board-cell-drop-swappable");
+          }
+        });
         if (event.dataTransfer) {
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", String(sourceScheduleId));
@@ -590,6 +596,9 @@
           card.classList.remove("schedule-board-card-dragging");
         });
         clearDropFeedback();
+        outputEl.querySelectorAll(".schedule-board-cell-drop-swappable").forEach(function (cell) {
+          cell.classList.remove("schedule-board-cell-drop-swappable");
+        });
         config.resetDragState();
       });
     }
