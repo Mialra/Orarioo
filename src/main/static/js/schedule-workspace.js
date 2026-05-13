@@ -19,6 +19,8 @@
     classroom_conflict: "El aula ya está ocupada en ese hueco horario.",
     teacher_unavailable: "El profesor no está disponible en ese hueco horario.",
     subject_unavailable: "La asignatura no está disponible en ese hueco horario.",
+    duration_mismatch: "No se puede intercambiar: las sesiones tienen distinta duración.",
+    stage_window_violation: "El hueco horario no está permitido para la etapa de esta sesión.",
   };
 
   /**
@@ -288,6 +290,13 @@
         if (!targetMapped) {
           return { valid: false, reason: "missing_target_session" };
         }
+        var sourceDuration =
+          utils.parseHmToMinutes(dragState.sourceEnd) - utils.parseHmToMinutes(dragState.sourceStart);
+        var targetDuration =
+          utils.parseHmToMinutes(targetMapped.endHm) - utils.parseHmToMinutes(targetMapped.startHm);
+        if (sourceDuration !== targetDuration) {
+          return { valid: false, reason: "duration_mismatch" };
+        }
         candidateById.set(String(targetScheduleId), {
           id: targetMapped.id,
           teacherId: targetMapped.teacherId,
@@ -364,6 +373,28 @@
             if (tgtSubjectSlots.indexOf(sourcePrefKey) !== -1) {
               return { valid: false, reason: "subject_unavailable" };
             }
+          }
+        }
+      }
+
+      var stageWindows = config.getStageWindows ? config.getStageWindows() : null;
+      if (stageWindows) {
+        var srcStage = sourceMapped.groupStage;
+        var srcAllowed = stageWindows[srcStage] || [];
+        var srcSlotOk = srcAllowed.some(function (r) {
+          return r[0] === targetStart && r[1] === targetEnd;
+        });
+        if (!srcSlotOk) {
+          return { valid: false, reason: "stage_window_violation" };
+        }
+        if (mode === "swap") {
+          var tgtStage = targetMapped.groupStage;
+          var tgtAllowed = stageWindows[tgtStage] || [];
+          var tgtSlotOk = tgtAllowed.some(function (r) {
+            return r[0] === dragState.sourceStart && r[1] === dragState.sourceEnd;
+          });
+          if (!tgtSlotOk) {
+            return { valid: false, reason: "stage_window_violation" };
           }
         }
       }
@@ -504,6 +535,12 @@
         dragState.sourceSlotKey = utils.createBoardCellKey(sourceDay, sourceStart, sourceEnd);
 
         card.classList.add("schedule-board-card-dragging");
+        outputEl.querySelectorAll(".schedule-board-cell").forEach(function (cell) {
+          var preview = evaluateDropCandidate(cell, null);
+          if (preview.valid) {
+            cell.classList.add("schedule-board-cell-drop-swappable");
+          }
+        });
         if (event.dataTransfer) {
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", String(sourceScheduleId));
@@ -590,6 +627,9 @@
           card.classList.remove("schedule-board-card-dragging");
         });
         clearDropFeedback();
+        outputEl.querySelectorAll(".schedule-board-cell-drop-swappable").forEach(function (cell) {
+          cell.classList.remove("schedule-board-cell-drop-swappable");
+        });
         config.resetDragState();
       });
     }

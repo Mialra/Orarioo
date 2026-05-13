@@ -66,22 +66,24 @@ BasicScheduleGenerator
 build_weekly_slots()          -- time windows per educational stage
   |
   v
-solve_session_assignment()    -- CP-SAT (Phase 1: feasibility, Phase 2: optimise)
-  |- Hard constraints: no double-booking, capacity limits, unavailability blocks
-  +- Soft constraints: time preferences, day spread, teacher gap penalty
+solve_session_assignment()
+  |- Phase 1 — CP-SAT feasibility (no timeout, finds any valid assignment)
+  |- _add_solution_hints()    -- warm-starts Phase 2 from Phase 1 solution
+  +- Phase 2 — CP-SAT optimisation (configurable timeout, default unlimited)
+       Hard constraints: no double-booking, capacity limits, unavailability blocks
+       Soft constraints: time preferences, day spread, teacher gap penalty
   |
   v
-apply_teacher_gap_local_search()   -- greedy hill-climbing post-processing
+assign_tc_sessions()          -- greedy duty-hour assignment (if teachers_on_duty > 0)
   |
   v
-assign_tc_sessions()               -- greedy duty-hour assignment
-  |
-  v
-ScheduleEvaluator                  -- detects non-critical defects
+ScheduleEvaluator             -- detects non-critical defects
   |
   v
 Schedule + TCSession objects saved to DB
 ```
+
+> **Why no post-processing?** Empirical testing showed that a greedy hill-climbing local search after Phase 2 always produced `local_search_delta = 0`: student groups are fully packed, so there is no legal slot to move a session into when filling a teacher gap. Teacher gaps are structural in this domain, not solver artefacts.
 
 **Hard constraints** (infeasible if violated):
 
@@ -101,6 +103,23 @@ Schedule + TCSession objects saved to DB
 | Teacher in PREFER_NO slot            | -2     | `enable_teacher_time_preferences` |
 | Subject spread across different days | +3/day | `enable_subject_day_spread`       |
 | Teacher intra-day gap                | -8/gap | `enable_teacher_gap_minimization` |
+
+**Generation parameters** (sent with the request):
+
+| Parameter                          | Type | Default   | Description                                     |
+| ---------------------------------- | ---- | --------- | ----------------------------------------------- |
+| `enable_no_intraday_gaps`          | bool | `true`    | Forbid intra-day gaps for student groups        |
+| `enable_subject_unavailable_times` | bool | `true`    | Respect subject UNAVAILABLE blocks              |
+| `enable_teacher_unavailable_times` | bool | `true`    | Respect teacher UNAVAILABLE blocks              |
+| `enable_subject_time_preferences`  | bool | `true`    | Apply subject PREFER_YES / PREFER_NO weights    |
+| `enable_teacher_time_preferences`  | bool | `true`    | Apply teacher PREFER_YES / PREFER_NO weights    |
+| `enable_subject_day_spread`        | bool | `true`    | Spread each subject across different days       |
+| `enable_teacher_gap_minimization`  | bool | `true`    | Penalise teacher intra-day gaps in Phase 2      |
+| `timeout_minutes`                  | int  | unlimited | Phase 2 timeout in minutes (1–1440)             |
+| `teachers_on_duty`                 | int  | `0`       | TC duty teachers required per slot              |
+| `seed`                             | int  | —         | Random seed for Phase 1 reproducibility (debug) |
+
+**Solver configuration note:** CP-SAT runs with `num_workers=1` in production. The free-tier hosting environment (Render) provides a shared fraction of a single vCPU; running multiple parallel workers produces more scheduling overhead than search diversity benefit. If deployed on hardware with ≥4 dedicated vCPUs, increasing `num_workers` would improve optimisation quality.
 
 ---
 
@@ -125,13 +144,13 @@ Orarioo/
     +-- schedule/             Core: timetable generation, TC sessions, export
     |   +-- algorithm/
     |   |   +-- generator.py       BasicScheduleGenerator, ScheduleReplanner
-    |   |   +-- assignment.py      CP-SAT solver
+    |   |   +-- assignment.py      CP-SAT solver (Phase 1 + Phase 2)
     |   |   +-- slots.py           Weekly slot generation per stage
     |   |   +-- constraints/       hard.py + soft.py
     |   |   +-- tc_assigner.py     TC duty-hour greedy assigner
-    |   |   +-- postprocessing.py  Teacher gap local search
     |   |   +-- evaluator.py       Post-generation defect detection
     |   |   +-- diagnostics.py     Structured infeasibility diagnostics
+    |   |   +-- errors.py          Algorithm-specific exception types
     |   +-- views_generate.py      Generation endpoint
     |   +-- views_move.py          Manual session move endpoint
     |   +-- views_export.py        PDF / Excel export
@@ -225,9 +244,3 @@ GitHub Actions runs on every push and pull request to `main`:
 - `feature/*` — new features
 - `fix/*` — bug fixes
 - `doc/*` — documentation
-
----
-
-## License
-
-Academic project — Universidad de Sevilla, 2025-2026.

@@ -4,16 +4,12 @@ Serializer for subject CRUD operations with team-scoped FK validation and audit 
 
 from rest_framework import serializers
 
-from app.constants import MAX_LENGTH_EXTENDED, STRING_MAX_LENGTH
+from app.constants import MAX_LENGTH_EXTENDED
 from classroom.models import Classroom
 from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
 from common.serializers import TeamScopedModelSerializerMixin
 from common.stages import DEFAULT_STAGE_COLORS, canonical_group_stage
-from common.validators import (
-    normalize_optional_text,
-    raise_validation_error,
-    validate_time_preferences,
-)
+from common.validators import raise_validation_error, validate_time_preferences
 from group.models import Group
 from namedEntity.serializers import NamedEntityNameValidationMixin
 from subject.models import Subject, SubjectTimePreferenceState
@@ -24,7 +20,6 @@ SUBJECT_SERIALIZER_FIELDS = with_audit_fields(
     "team",
     "weekly_hours",
     "duration",
-    "preferred_time_slot",
     "time_preferences",
     "stage",
     "stage_color",
@@ -94,18 +89,6 @@ class SubjectSerializer(
                 context={"field": "weekly_hours", "value": value},
             )
         return value
-
-    def validate_preferred_time_slot(self, value):
-        """Normalize the preferred_time_slot text, trimming whitespace and enforcing max length.
-        Input: value - str submitted for preferred_time_slot
-        Output: str normalized value, or raises ValidationError if too long
-        """
-        return normalize_optional_text(
-            value,
-            field_name="preferred_time_slot",
-            label="preferred_time_slot",
-            max_length=STRING_MAX_LENGTH,
-        )
 
     def validate_time_preferences(self, value):
         """Normalize and validate the time_preferences JSON map against allowed states.

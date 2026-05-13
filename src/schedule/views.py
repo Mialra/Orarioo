@@ -22,7 +22,6 @@ from common.errors.exceptions import ValidationAppError
 from group.models import Group
 from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
 from schedule.algorithm.evaluator import ScheduleEvaluator
-from schedule.algorithm.generator import ScheduleReplanner
 from schedule.algorithm.slots import parse_schedule_config_to_slot_windows
 from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule
@@ -59,6 +58,30 @@ from teacher.models import Teacher, TeacherTimePreferenceState
 from user.models import User
 
 logger = logging.getLogger(__name__)
+
+
+def build_stage_windows_for_client(schedule_config=None):
+    """Return allowed HH:MM slot ranges per stage for client-side validation.
+    Keys use Group.stage values (lowercase) to match group_stage in session serializer.
+    Output: dict {group_stage_str: [["HH:MM", "HH:MM"], ...]}
+    """
+    from common.stages import GROUP_STAGE_TO_CANONICAL
+    from schedule.algorithm.slots import (
+        STAGE_SLOT_WINDOWS,
+        parse_schedule_config_to_slot_windows,
+    )
+
+    slot_windows = (
+        parse_schedule_config_to_slot_windows(schedule_config) or STAGE_SLOT_WINDOWS
+    )
+    canonical_to_group = {str(v): k for k, v in GROUP_STAGE_TO_CANONICAL.items()}
+    result = {}
+    for stage, windows in slot_windows.items():
+        key = canonical_to_group.get(str(stage), str(stage))
+        result[key] = [
+            [w[0].strftime("%H:%M"), w[1].strftime("%H:%M")] for w in windows
+        ]
+    return result
 
 
 def build_unavailability_index(schedules):
@@ -501,6 +524,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "generated_count": len(serialized.data),
                 "teacher_workloads": build_teacher_workloads(schedules),
                 "unavailability": build_unavailability_index(schedules),
+                "stage_windows": build_stage_windows_for_client(
+                    getattr(active_team, "schedule_config", None)
+                ),
                 "tc_warnings": tc_result.warnings if tc_result else [],
             },
             status=status.HTTP_201_CREATED,
@@ -577,6 +603,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "results": serialized.data,
                 "teacher_workloads": build_teacher_workloads(schedules),
                 "unavailability": build_unavailability_index(schedules),
+                "stage_windows": build_stage_windows_for_client(
+                    getattr(self.get_active_team(), "schedule_config", None)
+                ),
             },
             status=status.HTTP_200_OK,
         )
@@ -1073,8 +1102,8 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             return None, Response(
                 {
                     "detail": (
-                        "The source slot no longer matches current data. "
-                        "Refresh and try again."
+                        "La sesión de origen ya no coincide con los datos actuales. "
+                        "Recarga y vuelve a intentarlo."
                     )
                 },
                 status=status.HTTP_409_CONFLICT,
@@ -1149,8 +1178,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 return None, Response(
                     {
                         "detail": (
-                            "target_slot.schedule_id must belong to the same "
-                            "timetable scope as source_slot.schedule_id."
+                            "El ID de sesión de destino no pertenece al mismo horario."
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -1162,11 +1190,21 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 return None, Response(
                     {
                         "detail": (
-                            "Target schedule no longer matches target slot. "
-                            "Refresh and try again."
+                            "La sesión de destino ya no coincide con el hueco seleccionado. "
+                            "Recarga y vuelve a intentarlo."
                         )
                     },
                     status=status.HTTP_409_CONFLICT,
+                )
+            if (
+                target_schedule.end_time - target_schedule.start_time
+                != source_schedule.end_time - source_schedule.start_time
+            ):
+                return None, Response(
+                    {
+                        "detail": "No se puede intercambiar: las sesiones tienen distinta duración."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
             return target_schedule, None
 
@@ -1178,7 +1216,19 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         )
         if target_schedule is None:
             return None, Response(
-                {"detail": "Swap requires a target schedule in destination slot."},
+                {
+                    "detail": "El intercambio requiere una sesión en el hueco de destino."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if (
+            target_schedule.end_time - target_schedule.start_time
+            != source_schedule.end_time - source_schedule.start_time
+        ):
+            return None, Response(
+                {
+                    "detail": "No se puede intercambiar: las sesiones tienen distinta duración."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return target_schedule, None
@@ -1498,78 +1548,5 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
 
         return Response(
             {"count": len(defects), "defects": defects},
-            status=status.HTTP_200_OK,
-        )
-
-    @action(detail=False, methods=["post"], url_path="apply-manual-change")
-    def apply_manual_change(self, request):
-        """Apply a manual session-to-slot change and replan the entire schedule.
-        Input: request - DRF Request with schedule_id and new_slot_index in body
-        Output: Response with replanned schedules and teacher workloads (HTTP 200)
-        """
-        actor = getattr(request.user, "email", "")
-
-        schedule_id = request.data.get("schedule_id")
-        new_slot_index = request.data.get("new_slot_index")
-
-        if schedule_id is None:
-            return Response(
-                {"detail": "schedule_id is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if new_slot_index is None:
-            return Response(
-                {"detail": "new_slot_index is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            schedule_id = int(schedule_id)
-            new_slot_index = int(new_slot_index)
-        except (TypeError, ValueError):
-            return Response(
-                {"detail": "schedule_id and new_slot_index must be integers."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if schedule_id <= 0:
-            return Response(
-                {"schedule_id": "schedule_id must be a positive integer."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if new_slot_index < 0:
-            return Response(
-                {"new_slot_index": "new_slot_index must be zero or greater."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            new_schedules = ScheduleReplanner.replan_with_manual_change(
-                user=request.user,
-                team=self.get_active_team(),
-                schedule_to_move_id=schedule_id,
-                new_slot_index=new_slot_index,
-                actor_email=actor,
-            )
-        except ScheduleGenerationError:
-            logger.warning(
-                "ScheduleGenerationError while applying manual change: "
-                "schedule_id=%s, new_slot_index=%s, actor=%s",
-                schedule_id,
-                new_slot_index,
-                actor,
-            )
-            raise
-
-        serialized = self.get_serializer(new_schedules, many=True)
-        return Response(
-            {
-                "detail": "Schedule replanned with manual change successfully.",
-                "schedules": serialized.data,
-                "generated_count": len(serialized.data),
-                "teacher_workloads": build_teacher_workloads(new_schedules),
-            },
             status=status.HTTP_200_OK,
         )

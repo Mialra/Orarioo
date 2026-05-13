@@ -262,7 +262,7 @@ def create_teachers(team):
         (
             "pri_4",
             "Raquel Núñez",
-            29,
+            19,
             build_time_preferences(
                 prefer_yes=slot_keys(DAY_CODES, ["12:00", "13:00"]),
                 prefer_no=slot_keys(DAY_CODES, ["09:00", "10:00"]),
@@ -273,9 +273,9 @@ def create_teachers(team):
         (
             "pri_5",
             "Javier Ortiz",
-            29,
+            18,
             build_time_preferences(),
-            {"max_weekly_minutes": 30, "weekly_hours_exact": True},
+            {"weekly_hours_exact": True},
         ),
         (
             "pri_6",
@@ -967,7 +967,6 @@ def create_subjects(teachers, groups, team):  # noqa: C901
             name=row["name"],
             weekly_hours=row["weekly_hours"],
             duration=row.get("duration", 1.0),
-            preferred_time_slot=row.get("preferred_time_slot", ""),
             time_preferences=row.get("time_preferences", {}),
             type=row.get("type", SubjectType.NORMAL),
             teacher=teachers[row["teacher_key"]],

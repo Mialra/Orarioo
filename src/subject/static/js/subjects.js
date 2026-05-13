@@ -452,7 +452,6 @@
         return {
           name: elements.nameInput.value.trim(),
           weekly_hours: Number(elements.weeklyHoursInput.value),
-          preferred_time_slot: "",
           time_preferences: admin.parsePreferences(elements.timePreferencesInput.value),
           teacher: Number(elements.teacherInput.value),
           group: Number(elements.groupInput.value),

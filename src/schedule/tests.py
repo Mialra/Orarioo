@@ -1,10 +1,7 @@
-﻿import sys
-import time as _time
-from datetime import datetime, timedelta
+﻿from datetime import datetime, timedelta
 from io import BytesIO
 from types import SimpleNamespace
 from unittest import skipIf
-from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -19,7 +16,6 @@ from group.models import EducationalStage, Group
 from schedule.algorithm import assignment as schedule_assignment
 from schedule.algorithm.diagnostics import collect_generation_diagnostics
 from schedule.algorithm.generator import BasicScheduleGenerator
-from schedule.algorithm.postprocessing import apply_teacher_gap_local_search
 from schedule.algorithm.slots import (
     STAGE_PRIMARY,
     build_slot_preference_index,
@@ -70,7 +66,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Mathematics",
             weekly_hours=5,
             duration=1.5,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -275,7 +270,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Language 2A",
             weekly_hours=3,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
@@ -323,7 +317,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=3,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=second_teacher,
             group=self.group,
@@ -500,7 +493,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Physics",
             weekly_hours=1,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -528,7 +520,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Mathematics 2A",
             weekly_hours=5,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=group_2,
@@ -555,7 +546,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=5,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=self.group,
@@ -569,57 +559,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         unique_starts = {item.start_time for item in group_schedules}
         self.assertEqual(len(unique_starts), len(group_schedules))
-
-    def test_apply_manual_change_replans_saved_timetable(self):
-        slots = build_weekly_slots()
-        primary_slots = [slot for slot in slots if slot.get("stage") == "PRIMARY"]
-        self.assertGreaterEqual(len(primary_slots), 3)
-
-        saved_observation = "Saved timetable: Horario Manual Test"
-        schedule_to_move = self.create_schedule(
-            name="Horario Manual Test",
-            start_time=primary_slots[0]["start"],
-            end_time=primary_slots[0]["end"],
-            observations=saved_observation,
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-        self.create_schedule(
-            name="Horario Manual Test",
-            start_time=primary_slots[1]["start"],
-            end_time=primary_slots[1]["end"],
-            observations=saved_observation,
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-        AuditEntry.objects.all().delete()
-
-        target_slot_index = slots.index(primary_slots[2])
-
-        response = self.client.post(
-            reverse("schedule-apply-manual-change"),
-            {
-                "schedule_id": schedule_to_move.id,
-                "new_slot_index": target_slot_index,
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("schedules", response.data)
-
-        schedule_to_move.refresh_from_db()
-        self.assertEqual(schedule_to_move.start_time, primary_slots[2]["start"])
-        self.assertEqual(schedule_to_move.end_time, primary_slots[2]["end"])
-        self.assertGreaterEqual(
-            AuditEntry.objects.filter(
-                entity_type="schedule",
-                action_type=AuditActionType.UPDATE,
-            ).count(),
-            1,
-        )
 
     def test_move_endpoint_moves_single_generated_session(self):
         slots = build_weekly_slots()
@@ -695,7 +634,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Lengua 2A",
             weekly_hours=2,
             duration=1.0,
-            preferred_time_slot="Any",
             type=SubjectType.NORMAL,
             teacher=other_teacher,
             group=other_group,
@@ -774,7 +712,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Ciencias 3A",
             weekly_hours=2,
             duration=1.0,
-            preferred_time_slot="Any",
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
@@ -825,7 +762,9 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
-        self.assertIn("Teacher conflict", response.data["detail"])
+        self.assertIn(
+            "ya tiene otra sesión en ese hueco horario", response.data["detail"]
+        )
 
         source_schedule.refresh_from_db()
         self.assertEqual(source_schedule.start_time, primary_slots[0]["start"])
@@ -1116,28 +1055,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "exceeds",
         )
 
-    def test_apply_manual_change_rejects_negative_slot_index(self):
-        saved_observation = "Saved timetable: Horario Manual Test"
-        schedule_to_move = self.create_schedule(
-            name="Horario Manual Test",
-            observations=saved_observation,
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-
-        response = self.client.post(
-            reverse("schedule-apply-manual-change"),
-            {
-                "schedule_id": schedule_to_move.id,
-                "new_slot_index": -1,
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("new_slot_index", response.data)
-
     def test_generate_rejects_teacher_over_max_with_multiple_subjects(self):
         group_2 = Group.objects.create(
             name="2B",
@@ -1149,7 +1066,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Physics",
             weekly_hours=3,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=group_2,
@@ -1173,7 +1089,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=21,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -1205,21 +1120,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(group_schedules.count(), 25)
         self.assertEqual(len(daily_counts), 5)
         self.assertTrue(all(count <= 5 for count in daily_counts.values()))
-
-    def test_generate_rejects_when_recess_supervision_overloads_teacher(self):
-        self.teacher.max_weekly_hours = 5
-        self.teacher.save(update_fields=["max_weekly_hours"])
-
-        response = self.generate_schedule(
-            {
-                "recess_supervisors_primary": 1,
-            }
-        )
-
-        self.assert_generate_bad_request_with_detail(
-            response,
-            "exceeds",
-        )
 
     def test_generate_accepts_timeout_minutes_and_returns_it_in_response(self):
         response = self.generate_schedule({"timeout_minutes": 15})
@@ -1342,7 +1242,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=1,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=group_2,
@@ -1500,7 +1399,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science 2A",
             weekly_hours=1,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=other_teacher,
             group=other_group,
@@ -1626,7 +1524,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=1,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=self.group,
@@ -1835,7 +1732,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Physics",
             weekly_hours=2,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=secondary_group,
@@ -1902,7 +1798,6 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Mathematics",
             weekly_hours=25,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -2065,7 +1960,6 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=1,
             duration=1.0,
-            preferred_time_slot="Morning",
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
@@ -2143,7 +2037,6 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
                 compatible_classrooms_by_session=compatible_classrooms_by_session,
                 random_seed=None,
                 fixed_assignments=None,
-                previous_assignment_by_session=None,
                 generation_options=None,
             )
         )
@@ -2469,6 +2362,64 @@ class TestTCAssigner(TestCase):
         ]
         if gap_tc:
             self.assertEqual(gap_tc[0].teacher_id, self.teacher.id)
+
+    def test_horas_exactas_priorizadas_sobre_hueco_muerto(self):
+        """Teacher with weekly_hours_exact=True and deficit beats dead-gap teacher."""
+        # teacher_exact: exact-hours mode, barely any schedule hours → big deficit
+        teacher_exact = Teacher.objects.create(
+            team=self.team,
+            name="Exact Priority",
+            max_weekly_hours=20,
+            weekly_hours_exact=True,
+        )
+        # teacher_gap: has a dead gap on Monday but no exact-hours need
+        teacher_gap = Teacher.objects.create(
+            team=self.team,
+            name="Gap Teacher",
+            max_weekly_hours=30,
+            weekly_hours_exact=False,
+        )
+        non_recess = [s for s in self.slots if not s.get("is_recess")]
+        monday_slots = [s for s in non_recess if s["start"].weekday() == 0]
+        if len(monday_slots) < 3:
+            self.skipTest("Not enough Monday slots to test priority")
+
+        # Give teacher_gap a dead gap at slot 1 on Monday
+        def _unsaved(teacher, slot):
+            return SimpleNamespace(
+                teacher=teacher,
+                teacher_id=teacher.id,
+                start_time=slot["start"],
+                end_time=slot["end"],
+            )
+
+        existing = [
+            _unsaved(teacher_gap, monday_slots[0]),
+            _unsaved(teacher_gap, monday_slots[2]),
+        ]
+        gap_slot = monday_slots[1]
+
+        result = assign_tc_sessions(
+            teachers=[teacher_gap, teacher_exact],
+            existing_schedules=existing,
+            weekly_slots=self.slots,
+            teachers_on_duty=1,
+            team=self.team,
+        )
+        gap_day = gap_slot["start"].weekday()
+        gap_time = gap_slot["start"].time()
+        gap_tc = [
+            tc
+            for tc in result.tc_sessions
+            if tc.day == gap_day and tc.start_time == gap_time
+        ]
+        # teacher_exact must win the dead-gap slot despite teacher_gap having a gap there
+        self.assertTrue(gap_tc, "Expected a TC session at the gap slot")
+        self.assertEqual(
+            gap_tc[0].teacher_id,
+            teacher_exact.id,
+            "Exact-hours teacher should be assigned before dead-gap teacher",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -2888,360 +2839,3 @@ class TestTCSessionSwapView(AuthenticatedAdminAPIMixin, APITestCase):
         tc_own = self._create_tc(self.teacher_a, day=0)
         response = self._swap(tc_own, tc_other)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-
-
-# ---------------------------------------------------------------------------
-# Postprocessing & LNS unit tests (appended)
-# ---------------------------------------------------------------------------
-
-
-def _make_primary_slots():
-    """Return 3 consecutive non-recess PRIMARY slots on a single day (Monday)."""
-    base = datetime(2024, 1, 1, 9, 0)  # 2024-01-01 is a Monday
-    return [
-        {
-            "start": base,
-            "end": base.replace(hour=10),
-            "stage": STAGE_PRIMARY,
-            "day_code": "MON",
-            "is_recess": False,
-        },
-        {
-            "start": base.replace(hour=10),
-            "end": base.replace(hour=11),
-            "stage": STAGE_PRIMARY,
-            "day_code": "MON",
-            "is_recess": False,
-        },
-        {
-            "start": base.replace(hour=11),
-            "end": base.replace(hour=12),
-            "stage": STAGE_PRIMARY,
-            "day_code": "MON",
-            "is_recess": False,
-        },
-    ]
-
-
-def _make_gap_fixtures():
-    """Return (slots, sessions, slot_by_session, classroom_by_session) with one teacher gap.
-
-    Teacher 1 has sessions at slot 0 and slot 2; slot 1 is the gap.
-    Session 1 (slot 2) can legally move to slot 1.
-    """
-    slots = _make_primary_slots()
-    G1 = SimpleNamespace(id=1, stage="PRIMARY")
-    G2 = SimpleNamespace(id=2, stage="PRIMARY")
-    C1 = SimpleNamespace(id=10)
-    C2 = SimpleNamespace(id=11)
-    sessions = [
-        {"teacher_id": 1, "group": G1, "name": "s0"},
-        {"teacher_id": 1, "group": G2, "name": "s1"},
-    ]
-    return slots, sessions, [0, 2], [C1, C2]
-
-
-class PostprocessingConvergenceTests(TestCase):
-    def test_gap_is_filled_and_loop_converges(self):
-        """Local search fills the teacher gap and stops before hitting max_passes."""
-        slots, sessions, slot_by_session, classroom_by_session = _make_gap_fixtures()
-
-        result_slots, _ = apply_teacher_gap_local_search(
-            slot_by_session=slot_by_session,
-            classroom_by_session=classroom_by_session,
-            sessions=sessions,
-            slots=slots,
-        )
-
-        # Session 1 should have moved from slot 2 into the gap at slot 1
-        self.assertEqual(result_slots[1], 1)
-        # Session 0 remains at slot 0
-        self.assertEqual(result_slots[0], 0)
-
-    def test_idempotent_when_no_gaps(self):
-        """Local search makes no changes when the teacher schedule already has no gaps."""
-        slots = _make_primary_slots()
-        G1 = SimpleNamespace(id=1, stage="PRIMARY")
-        G2 = SimpleNamespace(id=2, stage="PRIMARY")
-        sessions = [
-            {"teacher_id": 1, "group": G1, "name": "s0"},
-            {"teacher_id": 1, "group": G2, "name": "s1"},
-        ]
-        # Sessions at slot 0 and slot 1 — contiguous, no gap
-        slot_by_session = [0, 1]
-        classroom_by_session = [SimpleNamespace(id=10), SimpleNamespace(id=11)]
-
-        with patch(
-            "schedule.algorithm.postprocessing._run_single_pass",
-            wraps=__import__(
-                "schedule.algorithm.postprocessing",
-                fromlist=["_run_single_pass"],
-            )._run_single_pass,
-        ) as mock_pass:
-            result_slots, _ = apply_teacher_gap_local_search(
-                slot_by_session=slot_by_session,
-                classroom_by_session=classroom_by_session,
-                sessions=sessions,
-                slots=slots,
-            )
-
-        self.assertEqual(result_slots, [0, 1])
-        # Loop must have exited after 1 pass that returned False (no moves)
-        self.assertEqual(mock_pass.call_count, 1)
-
-    def test_safety_cap_stops_loop(self):
-        """Loop stops at max_passes even when _run_single_pass always reports a move."""
-        slots, sessions, slot_by_session, classroom_by_session = _make_gap_fixtures()
-        cap = 5
-
-        with patch(
-            "schedule.algorithm.postprocessing._run_single_pass", return_value=True
-        ) as mock_pass:
-            apply_teacher_gap_local_search(
-                slot_by_session=slot_by_session,
-                classroom_by_session=classroom_by_session,
-                sessions=sessions,
-                slots=slots,
-                max_passes=cap,
-            )
-
-        self.assertEqual(mock_pass.call_count, cap)
-
-    def test_expired_deadline_makes_no_passes(self):
-        """An already-expired deadline means zero passes are executed."""
-        slots, sessions, slot_by_session, classroom_by_session = _make_gap_fixtures()
-        past_deadline = _time.monotonic() - 1.0
-
-        with patch("schedule.algorithm.postprocessing._run_single_pass") as mock_pass:
-            result_slots, _ = apply_teacher_gap_local_search(
-                slot_by_session=slot_by_session,
-                classroom_by_session=classroom_by_session,
-                sessions=sessions,
-                slots=slots,
-                deadline=past_deadline,
-            )
-
-        mock_pass.assert_not_called()
-        self.assertEqual(result_slots, slot_by_session)
-
-    def test_generator_no_longer_imports_local_search(self):
-        """Verify the redundant import was removed from generator.py."""
-        gen_module = sys.modules[BasicScheduleGenerator.__module__]
-
-        self.assertFalse(
-            hasattr(gen_module, "apply_teacher_gap_local_search"),
-            "apply_teacher_gap_local_search should not be importable from generator",
-        )
-
-
-class LNSClassifyTests(TestCase):
-    """Unit tests for _classify_sessions_for_lns and _build_teacher_gap_days."""
-
-    def _make_slots_and_day_index(self):
-        """3 slots on Monday for PRIMARY, no recess."""
-        base = datetime(2024, 1, 1, 9, 0)
-        slots = [
-            {
-                "start": base,
-                "end": base.replace(hour=10),
-                "stage": STAGE_PRIMARY,
-                "day_code": "MON",
-                "is_recess": False,
-            },
-            {
-                "start": base.replace(hour=10),
-                "end": base.replace(hour=11),
-                "stage": STAGE_PRIMARY,
-                "day_code": "MON",
-                "is_recess": False,
-            },
-            {
-                "start": base.replace(hour=11),
-                "end": base.replace(hour=12),
-                "stage": STAGE_PRIMARY,
-                "day_code": "MON",
-                "is_recess": False,
-            },
-        ]
-        return slots
-
-    def test_teacher_with_gap_excluded_from_happy(self):
-        """Sessions whose teacher has an intraday gap are classified as unhappy."""
-        from schedule.algorithm.assignment import _classify_sessions_for_lns
-
-        slots = self._make_slots_and_day_index()
-        G1 = SimpleNamespace(id=1, stage="PRIMARY")
-        G2 = SimpleNamespace(id=2, stage="PRIMARY")
-        sessions = [
-            {"teacher_id": 1, "group": G1, "name": "s0"},
-            {"teacher_id": 1, "group": G2, "name": "s1"},
-        ]
-        # Teacher 1 has sessions at slots 0 and 2 — gap at slot 1
-        phase1_slots = [0, 2]
-
-        happy = _classify_sessions_for_lns(
-            phase1_slots=phase1_slots,
-            sessions=sessions,
-            slots=slots,
-            generation_options={},
-        )
-
-        # Both sessions belong to the gapped teacher — neither should be fixed
-        self.assertEqual(len(happy), 0)
-
-    def test_sessions_with_no_gaps_are_happy(self):
-        """Sessions with score >= 0 and no teacher gap are classified as happy."""
-        from schedule.algorithm.assignment import _classify_sessions_for_lns
-
-        slots = self._make_slots_and_day_index()
-        # Two different teachers — no shared gaps
-        G1 = SimpleNamespace(id=1, stage="PRIMARY")
-        G2 = SimpleNamespace(id=2, stage="PRIMARY")
-        sessions = [
-            {"teacher_id": 1, "group": G1, "name": "s0"},
-            {"teacher_id": 2, "group": G2, "name": "s1"},
-        ]
-        phase1_slots = [0, 1]
-
-        # Use max_fix_ratio=1.0 to bypass the cap and test classification logic only
-        happy = _classify_sessions_for_lns(
-            phase1_slots=phase1_slots,
-            sessions=sessions,
-            slots=slots,
-            generation_options={},
-            max_fix_ratio=1.0,
-        )
-
-        self.assertEqual(happy, frozenset({0, 1}))
-
-    def test_cap_keeps_highest_scoring_sessions(self):
-        """When candidates exceed max_fix_ratio, only the highest-scoring sessions are kept."""
-        from schedule.algorithm.assignment import _classify_sessions_for_lns
-        from subject.models import SubjectTimePreferenceState
-
-        slots = self._make_slots_and_day_index()
-        # slot 0 has preference key "MON_09:00"
-        # Build 4 sessions from 4 different teachers so no gaps exist
-        sessions = []
-        slot_assignments = []
-        for i in range(4):
-            subj = SimpleNamespace(
-                id=i + 100,
-                time_preferences={"MON_09:00": SubjectTimePreferenceState.PREFER_YES},
-            )
-            sessions.append(
-                {
-                    "teacher_id": i + 10,
-                    "group": SimpleNamespace(id=i + 20, stage="PRIMARY"),
-                    "name": f"s{i}",
-                    "subject": subj,
-                    "teacher": None,
-                }
-            )
-            slot_assignments.append(0)  # all at slot 0 (prefer_yes → score +2)
-
-        # 4 happy candidates; fix only 50% (2 out of 4)
-        happy = _classify_sessions_for_lns(
-            phase1_slots=slot_assignments,
-            sessions=sessions,
-            slots=slots,
-            generation_options={},
-            max_fix_ratio=0.50,
-        )
-
-        self.assertEqual(len(happy), 2)
-
-    def test_lns_disabled_by_flag(self):
-        """enable_lns_phase2=False makes the solver use original hints, not LNS constraints."""
-        # We verify this at the _cp_sat_session_assignment level indirectly:
-        # _classify_sessions_for_lns should NOT be called when the flag is False.
-        from schedule.algorithm import assignment as asgn_module
-
-        with patch.object(asgn_module, "_classify_sessions_for_lns") as mock_classify:
-            # Build a minimal solve call with enable_lns_phase2=False
-            # We can't easily run CP-SAT in unit tests, so we just verify
-            # _classify_sessions_for_lns is never reached when flag is False.
-            # The real integration test for this is test_lns_flag_integration below.
-            pass
-
-        # The mock was never called because we didn't run the solver
-        mock_classify.assert_not_called()
-
-    def test_small_instance_skips_lns(self):
-        """LNS is skipped (not even classified) for instances with fewer than 10 sessions."""
-        from schedule.algorithm import assignment as asgn_module
-
-        with patch.object(
-            asgn_module, "_classify_sessions_for_lns"
-        ) as mock_classify, patch.object(
-            asgn_module, "_add_solution_hints"
-        ) as mock_hints:
-            # Simulate the guard condition directly — we test the branch logic,
-            # not a full CP-SAT run.
-            session_count = 5
-            opts = {"enable_lns_phase2": True}
-            use_lns = opts.get("enable_lns_phase2", True) and session_count >= 10
-            if use_lns:
-                mock_classify()
-            else:
-                mock_hints()
-
-        mock_classify.assert_not_called()
-        mock_hints.assert_called_once()
-
-    def test_build_teacher_gap_days_detects_gap(self):
-        """_build_teacher_gap_days correctly identifies (teacher_id, day_idx) with a gap."""
-        from schedule.algorithm.assignment import _build_teacher_gap_days
-        from schedule.algorithm.constraints.soft import _build_slots_by_day
-        from schedule.algorithm.slots import build_slot_day_index
-
-        slots = self._make_slots_and_day_index()
-        slot_day_index = build_slot_day_index(slots=slots)
-        slots_by_day = _build_slots_by_day(slots=slots)
-
-        G1 = SimpleNamespace(id=1, stage="PRIMARY")
-        G2 = SimpleNamespace(id=2, stage="PRIMARY")
-        sessions = [
-            {"teacher_id": 1, "group": G1, "name": "s0"},
-            {"teacher_id": 1, "group": G2, "name": "s1"},
-        ]
-        # Teacher 1 at slot 0 and slot 2 — gap at slot 1
-        phase1_slots = [0, 2]
-
-        gap_days = _build_teacher_gap_days(
-            phase1_slots=phase1_slots,
-            sessions=sessions,
-            slot_day_index=slot_day_index,
-            slots_by_day=slots_by_day,
-        )
-
-        # Day 0 is the only day; teacher_id=1 must be in gap_days
-        self.assertIn((1, 0), gap_days)
-
-    def test_build_teacher_gap_days_no_false_positives(self):
-        """_build_teacher_gap_days does not report gaps when sessions are contiguous."""
-        from schedule.algorithm.assignment import _build_teacher_gap_days
-        from schedule.algorithm.constraints.soft import _build_slots_by_day
-        from schedule.algorithm.slots import build_slot_day_index
-
-        slots = self._make_slots_and_day_index()
-        slot_day_index = build_slot_day_index(slots=slots)
-        slots_by_day = _build_slots_by_day(slots=slots)
-
-        G1 = SimpleNamespace(id=1, stage="PRIMARY")
-        G2 = SimpleNamespace(id=2, stage="PRIMARY")
-        sessions = [
-            {"teacher_id": 1, "group": G1, "name": "s0"},
-            {"teacher_id": 1, "group": G2, "name": "s1"},
-        ]
-        # Teacher 1 at slots 0 and 1 — contiguous, no gap
-        phase1_slots = [0, 1]
-
-        gap_days = _build_teacher_gap_days(
-            phase1_slots=phase1_slots,
-            sessions=sessions,
-            slot_day_index=slot_day_index,
-            slots_by_day=slots_by_day,
-        )
-
-        self.assertNotIn((1, 0), gap_days)

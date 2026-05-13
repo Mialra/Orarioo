@@ -306,8 +306,8 @@ def validate_resource_overlaps_for_changes(
                 return Response(
                     {
                         "detail": (
-                            "Teacher conflict detected in target slot for "
-                            f"'{current_schedule.teacher.name}'."
+                            f"El profesor '{current_schedule.teacher.name}' "
+                            "ya tiene otra sesión en ese hueco horario."
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -320,8 +320,8 @@ def validate_resource_overlaps_for_changes(
                 return Response(
                     {
                         "detail": (
-                            "Group conflict detected in target slot for "
-                            f"'{current_schedule.group.name}'."
+                            f"El curso '{current_schedule.group.name}' "
+                            "ya tiene otra sesión en ese hueco horario."
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -334,8 +334,8 @@ def validate_resource_overlaps_for_changes(
                 return Response(
                     {
                         "detail": (
-                            "Classroom conflict detected in target slot for "
-                            f"'{current_schedule.classroom.name}'."
+                            f"El aula '{current_schedule.classroom.name}' "
+                            "ya está ocupada en ese hueco horario."
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -558,8 +558,8 @@ def validate_minimal_move_constraints(
             return Response(
                 {
                     "detail": (
-                        "Target slot is not allowed for the session stage "
-                        f"({schedule.group.stage})."
+                        "El hueco de destino no está permitido para la etapa del curso "
+                        f"'{schedule.group.stage}'."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,

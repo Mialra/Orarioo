@@ -85,7 +85,7 @@
 
     if (!response.ok) {
       clearAuthSession();
-      throw new Error("No se pudo renovar la sesion.");
+      throw new Error("No se pudo renovar la sesión. Recarga la página e inicia sesión de nuevo.");
     }
 
     const data = await response.json();
@@ -169,9 +169,7 @@
       return;
     }
 
-    const tooltipElements = document.querySelectorAll(
-      '[data-bs-toggle="tooltip"]',
-    );
+    const tooltipElements = document.querySelectorAll('[data-bs-toggle="tooltip"]');
     tooltipElements.forEach(function (element) {
       if (!window.bootstrap.Tooltip.getInstance(element)) {
         new window.bootstrap.Tooltip(element);
@@ -186,9 +184,7 @@
   function initPasswordToggle(options) {
     const input = document.getElementById(options.inputId);
     const button = document.getElementById(options.buttonId);
-    const iconSlot = button
-      ? button.querySelector(".password-toggle-icon-slot")
-      : null;
+    const iconSlot = button ? button.querySelector(".password-toggle-icon-slot") : null;
 
     if (!input || !button) {
       return;
@@ -201,10 +197,7 @@
 
       const hidden = input.type === "password";
       const iconName = hidden ? "eye" : "eye-off";
-      iconSlot.innerHTML =
-        '<i data-lucide="' +
-        iconName +
-        '" class="password-toggle-icon" aria-hidden="true"></i>';
+      iconSlot.innerHTML = '<i data-lucide="' + iconName + '" class="password-toggle-icon" aria-hidden="true"></i>';
       initLucideIcons();
     }
 

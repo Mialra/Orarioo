@@ -30,7 +30,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         payload = {
             "name": "Mathematics",
             "weekly_hours": 5,
-            "preferred_time_slot": "Morning",
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -77,7 +76,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         payload = {
             "name": "History Updated",
             "weekly_hours": 4,
-            "preferred_time_slot": "Afternoon",
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
@@ -179,21 +177,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("name", response.data)
-
-    def test_normalize_optional_text_fields(self):
-        payload = {
-            "name": "Biology",
-            "weekly_hours": 3,
-            "preferred_time_slot": "  Morning  ",
-            "type": SubjectType.NORMAL,
-            "teacher": self.teacher.id,
-            "group": self.group.id,
-        }
-
-        response = self.client.post(reverse("subject-list"), payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["preferred_time_slot"], "Morning")
 
     def test_reject_case_insensitive_duplicate_name(self):
         Subject.objects.create(
