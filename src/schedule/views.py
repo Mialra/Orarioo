@@ -71,12 +71,16 @@ def build_stage_windows_for_client(schedule_config=None):
         parse_schedule_config_to_slot_windows,
     )
 
-    slot_windows = parse_schedule_config_to_slot_windows(schedule_config) or STAGE_SLOT_WINDOWS
+    slot_windows = (
+        parse_schedule_config_to_slot_windows(schedule_config) or STAGE_SLOT_WINDOWS
+    )
     canonical_to_group = {str(v): k for k, v in GROUP_STAGE_TO_CANONICAL.items()}
     result = {}
     for stage, windows in slot_windows.items():
         key = canonical_to_group.get(str(stage), str(stage))
-        result[key] = [[w[0].strftime("%H:%M"), w[1].strftime("%H:%M")] for w in windows]
+        result[key] = [
+            [w[0].strftime("%H:%M"), w[1].strftime("%H:%M")] for w in windows
+        ]
     return result
 
 
