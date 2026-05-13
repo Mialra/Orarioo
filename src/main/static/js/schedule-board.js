@@ -74,6 +74,7 @@
       end: end,
       startHm: utils.toUtcHM(start),
       endHm: utils.toUtcHM(end),
+      groupStage: session.group_stage || null,
       isTc: session.is_tc === true,
     };
   }

@@ -128,6 +128,7 @@
           result.data && result.data.teacher_workloads
         ),
         unavailability: (result.data && result.data.unavailability) || null,
+        stageWindows: (result.data && result.data.stage_windows) || null,
       };
     }
 
@@ -204,6 +205,7 @@
         var sessions = savedDetail.sessions;
         selected.sessions = sessions;
         selected.unavailability = savedDetail.unavailability || null;
+        selected.stageWindows = savedDetail.stageWindows || null;
         selected.sessionsLoaded = true;
         state.savedTeacherWorkloadsByName =
           savedDetail.teacherWorkloadsByName && Object.keys(savedDetail.teacherWorkloadsByName).length

@@ -36,6 +36,7 @@
     generatedTCViewMode: false,
     savedTCViewMode: false,
     generatedUnavailability: null,
+    generatedStageWindows: null,
     generatedDetailPage: 1,
     savedDetailPage: 1,
     detailPageSize: 20,
@@ -166,6 +167,9 @@
     getUnavailability: function () {
       return state.generatedUnavailability;
     },
+    getStageWindows: function () {
+      return state.generatedStageWindows;
+    },
   });
 
   const savedWorkspace = window.ScheduleWorkspace.createScheduleWorkspace({
@@ -212,6 +216,10 @@
     getUnavailability: function () {
       const group = savedManager.getSelectedSavedGroup();
       return (group && group.unavailability) || null;
+    },
+    getStageWindows: function () {
+      const group = savedManager.getSelectedSavedGroup();
+      return (group && group.stageWindows) || null;
     },
   });
 
@@ -1648,6 +1656,7 @@
       }
     });
     state.generatedUnavailability = (result.data && result.data.unavailability) || null;
+    state.generatedStageWindows = (result.data && result.data.stage_windows) || null;
     state.generatedDetailPage = 1;
     state.generatedSaved = false;
     state.generatedSavedName = "";

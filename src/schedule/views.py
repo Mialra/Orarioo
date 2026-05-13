@@ -60,6 +60,26 @@ from user.models import User
 logger = logging.getLogger(__name__)
 
 
+def build_stage_windows_for_client(schedule_config=None):
+    """Return allowed HH:MM slot ranges per stage for client-side validation.
+    Keys use Group.stage values (lowercase) to match group_stage in session serializer.
+    Output: dict {group_stage_str: [["HH:MM", "HH:MM"], ...]}
+    """
+    from common.stages import GROUP_STAGE_TO_CANONICAL
+    from schedule.algorithm.slots import (
+        STAGE_SLOT_WINDOWS,
+        parse_schedule_config_to_slot_windows,
+    )
+
+    slot_windows = parse_schedule_config_to_slot_windows(schedule_config) or STAGE_SLOT_WINDOWS
+    canonical_to_group = {str(v): k for k, v in GROUP_STAGE_TO_CANONICAL.items()}
+    result = {}
+    for stage, windows in slot_windows.items():
+        key = canonical_to_group.get(str(stage), str(stage))
+        result[key] = [[w[0].strftime("%H:%M"), w[1].strftime("%H:%M")] for w in windows]
+    return result
+
+
 def build_unavailability_index(schedules):
     """Build a dict of UNAVAILABLE slot keys per teacher and subject for client-side pre-validation.
     Input: schedules - list of Schedule instances with teacher and subject select_related
@@ -500,6 +520,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "generated_count": len(serialized.data),
                 "teacher_workloads": build_teacher_workloads(schedules),
                 "unavailability": build_unavailability_index(schedules),
+                "stage_windows": build_stage_windows_for_client(
+                    getattr(active_team, "schedule_config", None)
+                ),
                 "tc_warnings": tc_result.warnings if tc_result else [],
             },
             status=status.HTTP_201_CREATED,
@@ -576,6 +599,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 "results": serialized.data,
                 "teacher_workloads": build_teacher_workloads(schedules),
                 "unavailability": build_unavailability_index(schedules),
+                "stage_windows": build_stage_windows_for_client(
+                    getattr(self.get_active_team(), "schedule_config", None)
+                ),
             },
             status=status.HTTP_200_OK,
         )
@@ -1171,7 +1197,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 != source_schedule.end_time - source_schedule.start_time
             ):
                 return None, Response(
-                    {"detail": "No se puede intercambiar: las sesiones tienen distinta duración."},
+                    {
+                        "detail": "No se puede intercambiar: las sesiones tienen distinta duración."
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             return target_schedule, None
@@ -1184,7 +1212,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         )
         if target_schedule is None:
             return None, Response(
-                {"detail": "El intercambio requiere una sesión en el hueco de destino."},
+                {
+                    "detail": "El intercambio requiere una sesión en el hueco de destino."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if (
@@ -1192,7 +1222,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             != source_schedule.end_time - source_schedule.start_time
         ):
             return None, Response(
-                {"detail": "No se puede intercambiar: las sesiones tienen distinta duración."},
+                {
+                    "detail": "No se puede intercambiar: las sesiones tienen distinta duración."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return target_schedule, None

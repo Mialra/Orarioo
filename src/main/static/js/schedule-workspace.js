@@ -20,6 +20,7 @@
     teacher_unavailable: "El profesor no está disponible en ese hueco horario.",
     subject_unavailable: "La asignatura no está disponible en ese hueco horario.",
     duration_mismatch: "No se puede intercambiar: las sesiones tienen distinta duración.",
+    stage_window_violation: "El hueco horario no está permitido para la etapa de esta sesión.",
   };
 
   /**
@@ -372,6 +373,28 @@
             if (tgtSubjectSlots.indexOf(sourcePrefKey) !== -1) {
               return { valid: false, reason: "subject_unavailable" };
             }
+          }
+        }
+      }
+
+      var stageWindows = config.getStageWindows ? config.getStageWindows() : null;
+      if (stageWindows) {
+        var srcStage = sourceMapped.groupStage;
+        var srcAllowed = stageWindows[srcStage] || [];
+        var srcSlotOk = srcAllowed.some(function (r) {
+          return r[0] === targetStart && r[1] === targetEnd;
+        });
+        if (!srcSlotOk) {
+          return { valid: false, reason: "stage_window_violation" };
+        }
+        if (mode === "swap") {
+          var tgtStage = targetMapped.groupStage;
+          var tgtAllowed = stageWindows[tgtStage] || [];
+          var tgtSlotOk = tgtAllowed.some(function (r) {
+            return r[0] === dragState.sourceStart && r[1] === dragState.sourceEnd;
+          });
+          if (!tgtSlotOk) {
+            return { valid: false, reason: "stage_window_violation" };
           }
         }
       }

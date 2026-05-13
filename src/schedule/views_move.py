@@ -558,8 +558,8 @@ def validate_minimal_move_constraints(
             return Response(
                 {
                     "detail": (
-                        "Target slot is not allowed for the session stage "
-                        f"({schedule.group.stage})."
+                        "El hueco de destino no está permitido para la etapa del curso "
+                        f"'{schedule.group.stage}'."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
