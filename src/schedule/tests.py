@@ -762,7 +762,9 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
-        self.assertIn("ya tiene otra sesión en ese hueco horario", response.data["detail"])
+        self.assertIn(
+            "ya tiene otra sesión en ese hueco horario", response.data["detail"]
+        )
 
         source_schedule.refresh_from_db()
         self.assertEqual(source_schedule.start_time, primary_slots[0]["start"])
