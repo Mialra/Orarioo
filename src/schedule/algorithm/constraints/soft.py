@@ -17,11 +17,11 @@ from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 
 PREFER_YES_WEIGHT = 2
-PREFER_NO_WEIGHT = -2
+PREFER_NO_WEIGHT_PENALTY = 2
 TEACHER_PREFER_YES_WEIGHT = 2
-TEACHER_PREFER_NO_WEIGHT = -2
+TEACHER_PREFER_NO_WEIGHT_PENALTY = 2
 SUBJECT_DAY_SPREAD_WEIGHT = 3
-TEACHER_GAP_PENALTY_WEIGHT = 8
+TEACHER_GAP_WEIGHT_PENALTY = 8
 
 
 def apply_soft_constraints(*, model, x, sessions, slots, generation_options=None):
@@ -70,7 +70,7 @@ def _subject_time_preference_terms(*, x, sessions, slots):
         prefer_yes_state=SubjectTimePreferenceState.PREFER_YES,
         prefer_no_state=SubjectTimePreferenceState.PREFER_NO,
         prefer_yes_weight=PREFER_YES_WEIGHT,
-        prefer_no_weight=PREFER_NO_WEIGHT,
+        prefer_no_weight=-PREFER_NO_WEIGHT_PENALTY,
     )
 
 
@@ -87,7 +87,7 @@ def _teacher_time_preference_terms(*, x, sessions, slots):
         prefer_yes_state=TeacherTimePreferenceState.PREFER_YES,
         prefer_no_state=TeacherTimePreferenceState.PREFER_NO,
         prefer_yes_weight=TEACHER_PREFER_YES_WEIGHT,
-        prefer_no_weight=TEACHER_PREFER_NO_WEIGHT,
+        prefer_no_weight=-TEACHER_PREFER_NO_WEIGHT_PENALTY,
     )
 
 
@@ -221,7 +221,7 @@ def _teacher_gap_minimization_terms(*, model, x, sessions, slots):
                     [has_before.Not(), has_after.Not(), has_at]
                 ).OnlyEnforceIf(is_gap.Not())
 
-                weighted_terms.append(-TEACHER_GAP_PENALTY_WEIGHT * is_gap)
+                weighted_terms.append(-TEACHER_GAP_WEIGHT_PENALTY * is_gap)
 
     return weighted_terms
 
@@ -332,7 +332,7 @@ def _eval_teacher_gap_score(*, slot_by_session, sessions, slots):
                 has_after = bool(assigned_in_day & after_slots)
                 has_at = p_i in assigned_in_day
                 if has_before and has_after and not has_at:
-                    total -= TEACHER_GAP_PENALTY_WEIGHT
+                    total -= TEACHER_GAP_WEIGHT_PENALTY
     return total
 
 
@@ -372,7 +372,7 @@ def _eval_subject_time_preference_score(*, slot_by_session, sessions, slots):
         if state == SubjectTimePreferenceState.PREFER_YES:
             total += PREFER_YES_WEIGHT
         elif state == SubjectTimePreferenceState.PREFER_NO:
-            total += PREFER_NO_WEIGHT
+            total -= PREFER_NO_WEIGHT_PENALTY
     return total
 
 
@@ -388,5 +388,5 @@ def _eval_teacher_time_preference_score(*, slot_by_session, sessions, slots):
         if state == TeacherTimePreferenceState.PREFER_YES:
             total += TEACHER_PREFER_YES_WEIGHT
         elif state == TeacherTimePreferenceState.PREFER_NO:
-            total += TEACHER_PREFER_NO_WEIGHT
+            total -= TEACHER_PREFER_NO_WEIGHT_PENALTY
     return total
