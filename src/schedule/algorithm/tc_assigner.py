@@ -10,10 +10,6 @@ from schedule.algorithm.slots import slot_instance_key
 from schedule.models import TCSession
 from teacher.models import TeacherTimePreferenceState
 
-# Cada minuto de déficit de horas exactas aporta esta cantidad de prioridad.
-# Subirlo hace que los profesores con carga exacta se llenen antes que cualquier otro.
-EXACT_HOURS_DEFICIT_PRIORITY = 60
-
 
 @dataclass
 class TCAssignmentResult:
