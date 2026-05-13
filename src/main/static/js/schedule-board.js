@@ -74,6 +74,7 @@
       end: end,
       startHm: utils.toUtcHM(start),
       endHm: utils.toUtcHM(end),
+      groupStage: session.group_stage || null,
       isTc: session.is_tc === true,
     };
   }
@@ -127,7 +128,7 @@
           var hasSessionAfter = sessionRanges.some(function (r) {
             return r.start >= b.end;
           });
-          if (overlapsSession || !hasSessionBefore || !hasSessionAfter) {
+          if (overlapsSession || !hasSessionBefore) {
             return;
           }
           var key = b.start + "-" + b.end;
@@ -397,7 +398,7 @@
         return left.start - right.start;
       });
 
-    var rows = buildBoardRows(mappedSessions, safeOptions.scheduleConfig || null);
+    var rows = buildBoardRows(mappedSessions, safeOptions.enableTcCreate ? null : (safeOptions.scheduleConfig || null));
 
     var rowHtml = rows
       .map(function (row) {

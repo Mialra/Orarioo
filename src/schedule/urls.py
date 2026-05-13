@@ -25,7 +25,6 @@ schedule_rename_saved_timetable = ScheduleViewSet.as_view(
 )
 schedule_save_generated = ScheduleViewSet.as_view({"post": "save_generated"})
 schedule_move = ScheduleViewSet.as_view({"post": "move"})
-schedule_apply_manual_change = ScheduleViewSet.as_view({"post": "apply_manual_change"})
 schedule_export = ScheduleViewSet.as_view({"get": "export"})
 
 urlpatterns = [
@@ -63,11 +62,6 @@ urlpatterns = [
         "schedules/move/",
         schedule_move,
         name="schedule-move",
-    ),
-    path(
-        "schedules/apply-manual-change/",
-        schedule_apply_manual_change,
-        name="schedule-apply-manual-change",
     ),
     path("schedules/<int:pk>/", schedule_detail, name="schedule-detail"),
     path("tc-sessions/", TCSessionListView.as_view(), name="tc-session-list"),

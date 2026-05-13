@@ -36,6 +36,7 @@
     generatedTCViewMode: false,
     savedTCViewMode: false,
     generatedUnavailability: null,
+    generatedStageWindows: null,
     generatedDetailPage: 1,
     savedDetailPage: 1,
     detailPageSize: 20,
@@ -166,6 +167,9 @@
     getUnavailability: function () {
       return state.generatedUnavailability;
     },
+    getStageWindows: function () {
+      return state.generatedStageWindows;
+    },
   });
 
   const savedWorkspace = window.ScheduleWorkspace.createScheduleWorkspace({
@@ -212,6 +216,10 @@
     getUnavailability: function () {
       const group = savedManager.getSelectedSavedGroup();
       return (group && group.unavailability) || null;
+    },
+    getStageWindows: function () {
+      const group = savedManager.getSelectedSavedGroup();
+      return (group && group.stageWindows) || null;
     },
   });
 
@@ -1495,7 +1503,9 @@
       return el ? el.checked : true;
     }
     var dutyEl = document.getElementById("gen-opt-teachers-on-duty");
-    return {
+    var seedEl = document.getElementById("gen-opt-seed");
+    var seedValue = seedEl && seedEl.value.trim() !== "" ? parseInt(seedEl.value, 10) : null;
+    var opts = {
       enable_no_intraday_gaps: checked("gen-opt-no-intraday-gaps"),
       enable_subject_unavailable_times: checked("gen-opt-subject-unavailable"),
       enable_teacher_unavailable_times: checked("gen-opt-teacher-unavailable"),
@@ -1505,6 +1515,10 @@
       enable_teacher_gap_minimization: checked("gen-opt-gap-minimization"),
       teachers_on_duty: dutyEl ? parseInt(dutyEl.value, 10) || 0 : 0,
     };
+    if (seedValue !== null && !isNaN(seedValue)) {
+      opts.seed = seedValue;
+    }
+    return opts;
   }
 
   /**
@@ -1642,6 +1656,7 @@
       }
     });
     state.generatedUnavailability = (result.data && result.data.unavailability) || null;
+    state.generatedStageWindows = (result.data && result.data.stage_windows) || null;
     state.generatedDetailPage = 1;
     state.generatedSaved = false;
     state.generatedSavedName = "";

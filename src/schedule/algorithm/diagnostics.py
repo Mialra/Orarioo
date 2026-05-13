@@ -386,50 +386,11 @@ def _check_group_capacities(sessions_by_group, sessions, slots):
     return diagnostics
 
 
-def _recess_supervision_extra_hours(*, sessions, generation_options):
-    """Compute per-teacher extra hours from recess supervision requirements."""
-    _RECESS_MINUTES_PER_DAY = {
-        EducationalStage.PRESCHOOL: 60,
-        EducationalStage.PRIMARY: 30,
-    }
-    _STAGE_OPTION_FIELD = {
-        EducationalStage.PRESCHOOL: "recess_supervisors_preschool",
-        EducationalStage.PRIMARY: "recess_supervisors_primary",
-    }
-
-    teachers_by_stage = {
-        EducationalStage.PRESCHOOL: set(),
-        EducationalStage.PRIMARY: set(),
-    }
-    for session in sessions:
-        teacher = session.get("teacher")
-        group = session.get("group")
-        if teacher is None or group is None:
-            continue
-        group_stage = canonical_group_stage(getattr(group, "stage", None))
-        if group_stage in teachers_by_stage:
-            teachers_by_stage[group_stage].add(teacher.id)
-
-    extra = {}
-    for stage, teacher_ids in teachers_by_stage.items():
-        required = int(generation_options.get(_STAGE_OPTION_FIELD[stage], 0) or 0)
-        if required <= 0 or not teacher_ids:
-            continue
-        per_teacher = (
-            (_RECESS_MINUTES_PER_DAY[stage] / 60.0) * 5 * required / len(teacher_ids)
-        )
-        for tid in teacher_ids:
-            extra[tid] = extra.get(tid, 0.0) + per_teacher
-    return extra
-
-
-def _check_teacher_capacities(sessions_by_teacher, sessions, recess_extra=None):
-    if recess_extra is None:
-        recess_extra = {}
+def _check_teacher_capacities(sessions_by_teacher, sessions):
     diagnostics = []
     for session_indices in sessions_by_teacher.values():
         teacher = sessions[session_indices[0]].get("teacher")
-        assigned = len(session_indices) + recess_extra.get(teacher.id, 0.0)
+        assigned = len(session_indices)
         max_weekly_hours = (getattr(teacher, "max_weekly_hours", 0) or 0) + (
             getattr(teacher, "max_weekly_minutes", 0) or 0
         ) / 60.0
@@ -467,17 +428,9 @@ def _collect_capacity_diagnostics(*, sessions, slots, generation_options):
         if getattr(teacher, "id", None) is not None:
             sessions_by_teacher[teacher.id].append(session_idx)
 
-    recess_extra = _recess_supervision_extra_hours(
-        sessions=sessions,
-        generation_options=generation_options,
-    )
     diagnostics = []
     diagnostics.extend(_check_group_capacities(sessions_by_group, sessions, slots))
-    diagnostics.extend(
-        _check_teacher_capacities(
-            sessions_by_teacher, sessions, recess_extra=recess_extra
-        )
-    )
+    diagnostics.extend(_check_teacher_capacities(sessions_by_teacher, sessions))
     return diagnostics
 
 

@@ -20,14 +20,6 @@ PRESCHOOL_AND_PRIMARY_STAGES = {
     EducationalStage.PRESCHOOL,
     EducationalStage.PRIMARY,
 }
-RECESS_MINUTES_PER_DAY_BY_STAGE = {
-    EducationalStage.PRESCHOOL: 60,
-    EducationalStage.PRIMARY: 30,
-}
-STAGE_OPTION_FIELD = {
-    EducationalStage.PRESCHOOL: "recess_supervisors_preschool",
-    EducationalStage.PRIMARY: "recess_supervisors_primary",
-}
 
 
 def group_weekly_limit(group):
@@ -50,83 +42,19 @@ def group_daily_limit(group):
     return 6
 
 
-def validate_group_and_teacher_capacity(*, sessions, slots, generation_options=None):
+def validate_group_and_teacher_capacity(*, sessions, slots):
     """Validate that groups and teachers do not exceed their capacity before solving.
     Input: sessions - list of session dicts;
-           slots - list of slot dicts from build_weekly_slots;
-           generation_options - dict of generation parameters, or None
+           slots - list of slot dicts from build_weekly_slots
     Output: None; raises ScheduleGenerationError or ScheduleCapacityError on violation
     """
     sessions_by_group, sessions_by_teacher = _build_capacity_state(sessions=sessions)
-    _apply_recess_supervision_capacity(
-        sessions=sessions,
-        sessions_by_teacher=sessions_by_teacher,
-        generation_options=generation_options or {},
-    )
-
     _validate_group_slot_capacity(
         sessions_by_group=sessions_by_group,
         slot_count=len(slots),
     )
     _validate_group_weekly_capacity(sessions_by_group=sessions_by_group)
     _validate_teacher_weekly_capacity(sessions_by_teacher=sessions_by_teacher)
-
-
-def _apply_recess_supervision_capacity(
-    *, sessions, sessions_by_teacher, generation_options
-):
-    """Add recess supervision hours to teachers' assigned workload.
-    Input: sessions - list of session dicts;
-           sessions_by_teacher - mutable capacity state dict per teacher;
-           generation_options - dict with optional recess supervisor counts
-    Output: None; side-effect: mutates sessions_by_teacher with extra hours;
-            raises ScheduleGenerationError if supervisors are required but no teachers exist
-    """
-    teachers_by_stage = {
-        EducationalStage.PRESCHOOL: set(),
-        EducationalStage.PRIMARY: set(),
-    }
-
-    for session in sessions:
-        teacher = session.get("teacher")
-        group = session.get("group")
-        if teacher is None or group is None:
-            continue
-        group_stage = canonical_group_stage(group.stage)
-        if group_stage in teachers_by_stage:
-            teachers_by_stage[group_stage].add(teacher.id)
-
-    for stage, teacher_ids in teachers_by_stage.items():
-        required_supervisors = int(
-            generation_options.get(STAGE_OPTION_FIELD[stage], 0) or 0
-        )
-        if required_supervisors <= 0:
-            continue
-        if not teacher_ids:
-            raise ScheduleGenerationError(
-                (
-                    "Cannot assign recess supervision for stage '{stage}'. "
-                    "No teachers available in that stage."
-                ).format(stage=stage),
-                code="RECESS_SUPERVISION_UNAVAILABLE",
-                context={
-                    "stage": stage,
-                    "required_supervisors": required_supervisors,
-                },
-                suggestions=[
-                    "Assign at least one teacher to that stage before generating the schedule.",
-                    "Reduce the required number of recess supervisors for that stage.",
-                ],
-            )
-
-        daily_minutes = RECESS_MINUTES_PER_DAY_BY_STAGE[stage]
-        weekly_extra_hours = (daily_minutes / 60.0) * 5 * required_supervisors
-        per_teacher_extra_hours = weekly_extra_hours / len(teacher_ids)
-
-        for teacher_id in teacher_ids:
-            teacher_state = sessions_by_teacher.get(teacher_id)
-            if teacher_state is not None:
-                teacher_state["assigned_hours"] += per_teacher_extra_hours
 
 
 def _build_capacity_state(*, sessions):

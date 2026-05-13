@@ -248,30 +248,43 @@ class ScheduleEvaluator:
         return defects
 
     @staticmethod
-    def analyze_exact_hours_teachers(schedules):
-        """Detect teachers in exact-hours mode whose total assigned time doesn't match target.
-
-        Sums the actual duration of every session assigned to each exact-mode teacher
-        (regular + TC) and compares against max_weekly_hours * 60 + max_weekly_minutes.
-
-        Input: schedules - queryset or list of Schedule objects
-        Output: list of defect dicts for teachers with unmet exact workloads
-        """
-        teacher_minutes = defaultdict(float)
-        teacher_obj = {}
-
+    def _accumulate_exact_schedule_minutes(schedules, teacher_minutes, teacher_obj):
         for schedule in schedules:
             teacher = getattr(schedule, "teacher", None)
-            if teacher is None:
+            if not teacher or not getattr(teacher, "weekly_hours_exact", False):
                 continue
-            if not getattr(teacher, "weekly_hours_exact", False):
-                continue
-            start = schedule.start_time
-            end = schedule.end_time
+            start, end = schedule.start_time, schedule.end_time
             if start is None or end is None:
                 continue
             teacher_minutes[teacher.id] += (end - start).total_seconds() / 60.0
             teacher_obj[teacher.id] = teacher
+
+    @staticmethod
+    def _accumulate_exact_tc_minutes(tc_sessions, teacher_minutes, teacher_obj):
+        for tc in tc_sessions or []:
+            teacher = getattr(tc, "teacher", None)
+            if not teacher or not getattr(teacher, "weekly_hours_exact", False):
+                continue
+            start, end = tc.start_time, tc.end_time
+            if start is None or end is None:
+                continue
+            minutes = (end.hour * 60 + end.minute) - (start.hour * 60 + start.minute)
+            if minutes > 0:
+                teacher_minutes[teacher.id] += minutes
+                teacher_obj[teacher.id] = teacher
+
+    @staticmethod
+    def analyze_exact_hours_teachers(schedules, tc_sessions=None):
+        """Detect teachers in exact-hours mode whose total assigned time doesn't match target."""
+        teacher_minutes = defaultdict(float)
+        teacher_obj = {}
+
+        ScheduleEvaluator._accumulate_exact_schedule_minutes(
+            schedules, teacher_minutes, teacher_obj
+        )
+        ScheduleEvaluator._accumulate_exact_tc_minutes(
+            tc_sessions, teacher_minutes, teacher_obj
+        )
 
         defects = []
         for tid, teacher in teacher_obj.items():
@@ -283,10 +296,6 @@ class ScheduleEvaluator:
                 continue
             target_h, target_m = divmod(int(target), 60)
             assigned_h, assigned_m = divmod(int(round(assigned)), 60)
-            target_str = f"{target_h} h {target_m} min" if target_m else f"{target_h} h"
-            assigned_str = (
-                f"{assigned_h} h {assigned_m} min" if assigned_m else f"{assigned_h} h"
-            )
             defects.append(
                 {
                     "entity_id": tid,
@@ -295,8 +304,9 @@ class ScheduleEvaluator:
                     "severity": "HIGH",
                     "gap_type": "EXACT_HOURS_NOT_MET",
                     "description": (
-                        f"Carga exacta no cumplida: {assigned_str} asignadas, "
-                        f"objetivo {target_str}"
+                        f"Carga exacta no cumplida: "
+                        f"{ScheduleEvaluator._fmt_minutes(assigned)} asignadas, "
+                        f"objetivo {ScheduleEvaluator._fmt_minutes(target)}"
                     ),
                     "context": {
                         "teacher_id": tid,
@@ -421,7 +431,9 @@ class ScheduleEvaluator:
         gaps_defects = ScheduleEvaluator.analyze_gaps_groups(schedules)
         all_defects.extend(gaps_defects)
 
-        exact_hours_defects = ScheduleEvaluator.analyze_exact_hours_teachers(schedules)
+        exact_hours_defects = ScheduleEvaluator.analyze_exact_hours_teachers(
+            schedules, tc_sessions=tc_sessions
+        )
         all_defects.extend(exact_hours_defects)
 
         overloaded_defects = ScheduleEvaluator.analyze_overloaded_teachers(
