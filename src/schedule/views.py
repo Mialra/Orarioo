@@ -22,7 +22,6 @@ from common.errors.exceptions import ValidationAppError
 from group.models import Group
 from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
 from schedule.algorithm.evaluator import ScheduleEvaluator
-from schedule.algorithm.generator import ScheduleReplanner
 from schedule.algorithm.slots import parse_schedule_config_to_slot_windows
 from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule
@@ -1498,78 +1497,5 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
 
         return Response(
             {"count": len(defects), "defects": defects},
-            status=status.HTTP_200_OK,
-        )
-
-    @action(detail=False, methods=["post"], url_path="apply-manual-change")
-    def apply_manual_change(self, request):
-        """Apply a manual session-to-slot change and replan the entire schedule.
-        Input: request - DRF Request with schedule_id and new_slot_index in body
-        Output: Response with replanned schedules and teacher workloads (HTTP 200)
-        """
-        actor = getattr(request.user, "email", "")
-
-        schedule_id = request.data.get("schedule_id")
-        new_slot_index = request.data.get("new_slot_index")
-
-        if schedule_id is None:
-            return Response(
-                {"detail": "schedule_id is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if new_slot_index is None:
-            return Response(
-                {"detail": "new_slot_index is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            schedule_id = int(schedule_id)
-            new_slot_index = int(new_slot_index)
-        except (TypeError, ValueError):
-            return Response(
-                {"detail": "schedule_id and new_slot_index must be integers."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if schedule_id <= 0:
-            return Response(
-                {"schedule_id": "schedule_id must be a positive integer."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if new_slot_index < 0:
-            return Response(
-                {"new_slot_index": "new_slot_index must be zero or greater."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            new_schedules = ScheduleReplanner.replan_with_manual_change(
-                user=request.user,
-                team=self.get_active_team(),
-                schedule_to_move_id=schedule_id,
-                new_slot_index=new_slot_index,
-                actor_email=actor,
-            )
-        except ScheduleGenerationError:
-            logger.warning(
-                "ScheduleGenerationError while applying manual change: "
-                "schedule_id=%s, new_slot_index=%s, actor=%s",
-                schedule_id,
-                new_slot_index,
-                actor,
-            )
-            raise
-
-        serialized = self.get_serializer(new_schedules, many=True)
-        return Response(
-            {
-                "detail": "Schedule replanned with manual change successfully.",
-                "schedules": serialized.data,
-                "generated_count": len(serialized.data),
-                "teacher_workloads": build_teacher_workloads(new_schedules),
-            },
             status=status.HTTP_200_OK,
         )

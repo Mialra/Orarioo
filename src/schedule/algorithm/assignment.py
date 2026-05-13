@@ -36,7 +36,6 @@ def solve_session_assignment(
     classrooms,
     random_seed=None,
     fixed_assignments=None,
-    previous_assignment_by_session=None,
     generation_options=None,
 ):
     """Assign each session to a slot and classroom using a two-phase CP-SAT solve.
@@ -48,8 +47,6 @@ def solve_session_assignment(
            classrooms - list of Classroom instances;
            random_seed - optional integer for reproducibility;
            fixed_assignments - dict {session_idx: slot_idx} for locked assignments;
-           previous_assignment_by_session - dict {session_idx: {slot_index, classroom_id}}
-               used to build stability objective terms;
            generation_options - dict with generation parameters
     Output: tuple (slot_by_session, classroom_by_session, is_optimal, soft_score_info) —
             slot_by_session[i] is the assigned slot index for session i,
@@ -94,7 +91,6 @@ def solve_session_assignment(
             compatible_classrooms_by_session=compatible_classrooms_by_session,
             random_seed=random_seed,
             fixed_assignments=fixed_assignments,
-            previous_assignment_by_session=previous_assignment_by_session,
             generation_options=generation_options,
         )
     )
@@ -123,14 +119,12 @@ def _cp_sat_session_assignment(
     compatible_classrooms_by_session,
     random_seed,
     fixed_assignments,
-    previous_assignment_by_session,
     generation_options,
 ):
     """Run the full two-phase CP-SAT solve and return the assignment.
     Input: sessions, slots - standard algorithm inputs;
            compatible_classrooms_by_session - index from _build_compatible_classroom_index;
-           random_seed, fixed_assignments, previous_assignment_by_session, generation_options
-               - forwarded from solve_session_assignment
+           random_seed, fixed_assignments, generation_options - forwarded from solve_session_assignment
     Output: tuple (slot_by_session, classroom_by_session)
     """
     model = cp_model.CpModel()
@@ -264,18 +258,12 @@ def _cp_sat_session_assignment(
     )
 
     # Phase 2: optimise soft constraints, starting from the feasible solution.
-    stability_terms = _build_schedule_stability_terms(
-        x=x,
-        y=y,
-        previous_assignment_by_session=previous_assignment_by_session,
-    )
     apply_soft_constraints(
         model=model,
         x=x,
         sessions=sessions,
         slots=slots,
         generation_options=generation_options,
-        extra_objective_terms=stability_terms,
     )
     _add_solution_hints(
         model=model,
@@ -676,41 +664,6 @@ def _fallback_error_code_for_status(status):
     if status_name == "MODEL_INVALID":
         return "SCHEDULE_MODEL_INVALID"
     return "SCHEDULE_INFEASIBLE"
-
-
-def _build_schedule_stability_terms(*, x, y, previous_assignment_by_session):
-    """Build soft terms that reward keeping sessions in their original slot and classroom.
-
-    Higher slot-stability weight minimises timetable perturbation after a manual
-    change; classroom stability acts as a secondary tie-breaker.
-    Input: x, y - decision variables; previous_assignment_by_session - dict
-           {session_idx: {slot_index, classroom_id}} or None
-    Output: list of weighted CP-SAT expressions; empty list if no previous assignment given
-    """
-    if not previous_assignment_by_session:
-        return []
-
-    slot_stability_weight = 100
-    classroom_stability_weight = 20
-    weighted_terms = []
-
-    for s_idx, previous in previous_assignment_by_session.items():
-        slot_idx = previous.get("slot_index")
-        classroom_id = previous.get("classroom_id")
-
-        if slot_idx is not None and (s_idx, slot_idx) in x:
-            weighted_terms.append(slot_stability_weight * x[(s_idx, slot_idx)])
-
-        if (
-            slot_idx is not None
-            and classroom_id is not None
-            and (s_idx, slot_idx, classroom_id) in y
-        ):
-            weighted_terms.append(
-                classroom_stability_weight * y[(s_idx, slot_idx, classroom_id)]
-            )
-
-    return weighted_terms
 
 
 def _build_soft_score_info(

@@ -10,6 +10,10 @@ from schedule.algorithm.slots import slot_instance_key
 from schedule.models import TCSession
 from teacher.models import TeacherTimePreferenceState
 
+# Cada minuto de déficit de horas exactas aporta esta cantidad de prioridad.
+# Subirlo hace que los profesores con carga exacta se llenen antes que cualquier otro.
+EXACT_HOURS_DEFICIT_PRIORITY = 60
+
 
 @dataclass
 class TCAssignmentResult:
@@ -79,12 +83,17 @@ def assign_tc_sessions(
                 start_time=start_t,
                 class_slots_by_teacher_day=class_slots_by_teacher_day,
             )
-            candidates.append((teacher, is_gap))
+            exact_deficit = _compute_exact_hours_deficit(
+                teacher=teacher,
+                schedule_minutes=schedule_minutes,
+                tc_minutes_assigned=tc_minutes_assigned,
+            )
+            candidates.append((teacher, is_gap, exact_deficit))
 
-        # Dead-gap teachers first, then the rest
-        candidates.sort(key=lambda x: not x[1])
+        # Exact-hours deficit teachers first (highest deficit first), then dead-gap, then rest
+        candidates.sort(key=lambda c: (-c[2], not c[1]))
 
-        assigned = [t for t, _ in candidates[:teachers_on_duty]]
+        assigned = [t for t, _, _ in candidates[:teachers_on_duty]]
 
         if len(assigned) < teachers_on_duty:
             warnings.append(
@@ -204,6 +213,24 @@ def _compute_class_slots_by_teacher_day(existing_schedules):
     for key in result:
         result[key].sort()
     return result
+
+
+def _compute_exact_hours_deficit(*, teacher, schedule_minutes, tc_minutes_assigned):
+    """Return remaining minutes to fill for exact-hours teachers, 0 otherwise.
+
+    Used to sort TC candidates: teachers below their exact-hours target get
+    priority proportional to their deficit so they are filled first.
+    Input: teacher - Teacher instance; schedule_minutes, tc_minutes_assigned -
+           dicts {teacher_id: minutes} accumulated so far
+    Output: non-negative integer (minutes still needed), or 0
+    """
+    if not getattr(teacher, "weekly_hours_exact", False):
+        return 0
+    target = teacher.max_weekly_hours * 60 + teacher.max_weekly_minutes
+    current = schedule_minutes.get(teacher.id, 0) + tc_minutes_assigned.get(
+        teacher.id, 0
+    )
+    return max(0, target - current)
 
 
 def _is_dead_gap(*, teacher_id, day, start_time, class_slots_by_teacher_day):

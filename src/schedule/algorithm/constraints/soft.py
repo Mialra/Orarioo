@@ -24,14 +24,11 @@ SUBJECT_DAY_SPREAD_WEIGHT = 3
 TEACHER_GAP_PENALTY_WEIGHT = 8
 
 
-def apply_soft_constraints(
-    *, model, x, sessions, slots, generation_options=None, extra_objective_terms=None
-):
+def apply_soft_constraints(*, model, x, sessions, slots, generation_options=None):
     """Collect all soft objective terms and set the model's maximisation objective.
     Input: model - CP-SAT CpModel; x - slot decision variables;
            sessions - list of session dicts; slots - list of slot dicts;
-           generation_options - dict of generation parameters controlling which terms to include;
-           extra_objective_terms - optional list of additional weighted CP-SAT expressions
+           generation_options - dict of generation parameters controlling which terms to include
     Output: None; side-effect: calls model.Maximize with the combined objective
     """
     opts = generation_options or {}
@@ -55,8 +52,6 @@ def apply_soft_constraints(
                 model=model, x=x, sessions=sessions, slots=slots
             )
         )
-    if extra_objective_terms:
-        objective_terms.extend(extra_objective_terms)
 
     if objective_terms:
         model.Maximize(sum(objective_terms))

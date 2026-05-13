@@ -66,7 +66,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Mathematics",
             weekly_hours=5,
             duration=1.5,
-
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -271,7 +270,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Language 2A",
             weekly_hours=3,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
@@ -319,7 +317,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=3,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=second_teacher,
             group=self.group,
@@ -496,7 +493,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Physics",
             weekly_hours=1,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -524,7 +520,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Mathematics 2A",
             weekly_hours=5,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=group_2,
@@ -551,7 +546,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=5,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=self.group,
@@ -565,57 +559,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         unique_starts = {item.start_time for item in group_schedules}
         self.assertEqual(len(unique_starts), len(group_schedules))
-
-    def test_apply_manual_change_replans_saved_timetable(self):
-        slots = build_weekly_slots()
-        primary_slots = [slot for slot in slots if slot.get("stage") == "PRIMARY"]
-        self.assertGreaterEqual(len(primary_slots), 3)
-
-        saved_observation = "Saved timetable: Horario Manual Test"
-        schedule_to_move = self.create_schedule(
-            name="Horario Manual Test",
-            start_time=primary_slots[0]["start"],
-            end_time=primary_slots[0]["end"],
-            observations=saved_observation,
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-        self.create_schedule(
-            name="Horario Manual Test",
-            start_time=primary_slots[1]["start"],
-            end_time=primary_slots[1]["end"],
-            observations=saved_observation,
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-        AuditEntry.objects.all().delete()
-
-        target_slot_index = slots.index(primary_slots[2])
-
-        response = self.client.post(
-            reverse("schedule-apply-manual-change"),
-            {
-                "schedule_id": schedule_to_move.id,
-                "new_slot_index": target_slot_index,
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("schedules", response.data)
-
-        schedule_to_move.refresh_from_db()
-        self.assertEqual(schedule_to_move.start_time, primary_slots[2]["start"])
-        self.assertEqual(schedule_to_move.end_time, primary_slots[2]["end"])
-        self.assertGreaterEqual(
-            AuditEntry.objects.filter(
-                entity_type="schedule",
-                action_type=AuditActionType.UPDATE,
-            ).count(),
-            1,
-        )
 
     def test_move_endpoint_moves_single_generated_session(self):
         slots = build_weekly_slots()
@@ -691,7 +634,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Lengua 2A",
             weekly_hours=2,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=other_teacher,
             group=other_group,
@@ -770,7 +712,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Ciencias 3A",
             weekly_hours=2,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
@@ -1112,28 +1053,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "exceeds",
         )
 
-    def test_apply_manual_change_rejects_negative_slot_index(self):
-        saved_observation = "Saved timetable: Horario Manual Test"
-        schedule_to_move = self.create_schedule(
-            name="Horario Manual Test",
-            observations=saved_observation,
-            created_by=self.user.email,
-            updated_by=self.user.email,
-            users=[self.user],
-        )
-
-        response = self.client.post(
-            reverse("schedule-apply-manual-change"),
-            {
-                "schedule_id": schedule_to_move.id,
-                "new_slot_index": -1,
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("new_slot_index", response.data)
-
     def test_generate_rejects_teacher_over_max_with_multiple_subjects(self):
         group_2 = Group.objects.create(
             name="2B",
@@ -1145,7 +1064,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Physics",
             weekly_hours=3,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=group_2,
@@ -1169,7 +1087,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=21,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -1323,7 +1240,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=1,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=group_2,
@@ -1481,7 +1397,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science 2A",
             weekly_hours=1,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=other_teacher,
             group=other_group,
@@ -1607,7 +1522,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=1,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=self.group,
@@ -1816,7 +1730,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Physics",
             weekly_hours=2,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=secondary_group,
@@ -1883,7 +1796,6 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Mathematics",
             weekly_hours=25,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
@@ -2046,7 +1958,6 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             name="Science",
             weekly_hours=1,
             duration=1.0,
-
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
@@ -2124,7 +2035,6 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
                 compatible_classrooms_by_session=compatible_classrooms_by_session,
                 random_seed=None,
                 fixed_assignments=None,
-                previous_assignment_by_session=None,
                 generation_options=None,
             )
         )
@@ -2450,6 +2360,64 @@ class TestTCAssigner(TestCase):
         ]
         if gap_tc:
             self.assertEqual(gap_tc[0].teacher_id, self.teacher.id)
+
+    def test_horas_exactas_priorizadas_sobre_hueco_muerto(self):
+        """Teacher with weekly_hours_exact=True and deficit beats dead-gap teacher."""
+        # teacher_exact: exact-hours mode, barely any schedule hours → big deficit
+        teacher_exact = Teacher.objects.create(
+            team=self.team,
+            name="Exact Priority",
+            max_weekly_hours=20,
+            weekly_hours_exact=True,
+        )
+        # teacher_gap: has a dead gap on Monday but no exact-hours need
+        teacher_gap = Teacher.objects.create(
+            team=self.team,
+            name="Gap Teacher",
+            max_weekly_hours=30,
+            weekly_hours_exact=False,
+        )
+        non_recess = [s for s in self.slots if not s.get("is_recess")]
+        monday_slots = [s for s in non_recess if s["start"].weekday() == 0]
+        if len(monday_slots) < 3:
+            self.skipTest("Not enough Monday slots to test priority")
+
+        # Give teacher_gap a dead gap at slot 1 on Monday
+        def _unsaved(teacher, slot):
+            return SimpleNamespace(
+                teacher=teacher,
+                teacher_id=teacher.id,
+                start_time=slot["start"],
+                end_time=slot["end"],
+            )
+
+        existing = [
+            _unsaved(teacher_gap, monday_slots[0]),
+            _unsaved(teacher_gap, monday_slots[2]),
+        ]
+        gap_slot = monday_slots[1]
+
+        result = assign_tc_sessions(
+            teachers=[teacher_gap, teacher_exact],
+            existing_schedules=existing,
+            weekly_slots=self.slots,
+            teachers_on_duty=1,
+            team=self.team,
+        )
+        gap_day = gap_slot["start"].weekday()
+        gap_time = gap_slot["start"].time()
+        gap_tc = [
+            tc
+            for tc in result.tc_sessions
+            if tc.day == gap_day and tc.start_time == gap_time
+        ]
+        # teacher_exact must win the dead-gap slot despite teacher_gap having a gap there
+        self.assertTrue(gap_tc, "Expected a TC session at the gap slot")
+        self.assertEqual(
+            gap_tc[0].teacher_id,
+            teacher_exact.id,
+            "Exact-hours teacher should be assigned before dead-gap teacher",
+        )
 
 
 # ---------------------------------------------------------------------------
