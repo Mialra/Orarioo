@@ -13,6 +13,7 @@ from schedule.views_tc import (
 
 schedule_list, schedule_detail = build_crud_views(ScheduleViewSet)
 schedule_generate = ScheduleViewSet.as_view({"post": "generate"})
+schedule_generate_status = ScheduleViewSet.as_view({"get": "generate_status"})
 schedule_analyze = ScheduleViewSet.as_view({"post": "analyze"})
 schedule_saved = ScheduleViewSet.as_view({"get": "saved"})
 schedule_saved_summary = ScheduleViewSet.as_view({"get": "saved_summary"})
@@ -52,6 +53,11 @@ urlpatterns = [
     ),
     path("schedules/export/", schedule_export, name="schedule-export"),
     path("schedules/generate/", schedule_generate, name="schedule-generate"),
+    path(
+        "schedules/generate/status/<uuid:job_id>/",
+        schedule_generate_status,
+        name="schedule-generate-status",
+    ),
     path("schedules/analyze/", schedule_analyze, name="schedule-analyze"),
     path(
         "schedules/save-generated/",

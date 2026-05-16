@@ -145,6 +145,7 @@ def parse_base_generation_int_options(payload, options):
 
 
 DEFAULT_GENERATION_OPTIONS = {
+    "timeout_minutes": 15,
     "teachers_on_duty": 0,
     "enable_no_intraday_gaps": True,
     "enable_subject_unavailable_times": True,
