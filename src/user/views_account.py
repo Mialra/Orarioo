@@ -8,7 +8,7 @@ import logging
 from django.apps import apps
 from django.conf import settings
 from django.contrib.sessions.models import Session
-from django.db import transaction
+from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import permissions, status
@@ -76,15 +76,13 @@ def _anonymize_authorship_fields(*, original_email, anonymized_email):
         return
 
     for model in apps.get_models():
-        field_names = {field.name for field in model._meta.concrete_fields}
-        if "created_by" in field_names:
-            model.objects.filter(created_by__iexact=original_email).update(
-                created_by=anonymized_email
-            )
-        if "updated_by" in field_names:
-            model.objects.filter(updated_by__iexact=original_email).update(
-                updated_by=anonymized_email
-            )
+        fields_by_name = {field.name: field for field in model._meta.concrete_fields}
+        for attr in ("created_by", "updated_by"):
+            field = fields_by_name.get(attr)
+            if field is not None and isinstance(field, models.CharField):
+                model.objects.filter(**{f"{attr}__iexact": original_email}).update(
+                    **{attr: anonymized_email}
+                )
 
 
 def _cleanup_related_user_records(user, *, original_email, anonymized_email):

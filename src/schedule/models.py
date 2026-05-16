@@ -1,5 +1,8 @@
 """Schedule model for the Orarioo timetable management system."""
 
+import uuid
+
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Q
@@ -128,3 +131,47 @@ class TCSession(TimeSlotMixin, TeamScopedModel):
     def __str__(self):
         days = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
         return f"TC {self.teacher} — {days[self.day]} {self.start_time}–{self.end_time}"
+
+
+class ScheduleGenerationJob(TeamScopedModel):
+    """Persistent record of an async schedule generation task.
+
+    Created immediately when a generation request arrives; updated by the
+    background thread as it progresses.  The polling endpoint reads this
+    table so any Gunicorn worker can serve status queries.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        RUNNING = "RUNNING", "Running"
+        DONE = "DONE", "Done"
+        ERROR = "ERROR", "Error"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="schedule_generation_jobs",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    generation_options = models.JSONField(default=dict)
+    result_data = models.JSONField(null=True, blank=True)
+    error_data = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        db_table = "schedule_generation_job"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["team", "created_by", "status"]),
+        ]
+
+    def __str__(self):
+        return f"GenerationJob {self.id} [{self.status}]"

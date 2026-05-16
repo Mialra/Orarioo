@@ -1008,47 +1008,73 @@
     if (step2) {
       step2.classList.remove("gen-progress-step--pending");
     }
+    if (label) {
+      label.textContent = "(" + timeoutMinutes + " min)";
+    }
+    if (icon2) {
+      icon2.className = "gen-progress-step-icon gen-progress-step-icon--active";
+      icon2.innerHTML = "<div class='gen-spinner'></div>";
+    }
+    if (bar2Wrap) {
+      bar2Wrap.classList.remove("d-none");
+    }
 
-    if (timeoutMinutes) {
-      if (label) {
-        label.textContent = "(" + timeoutMinutes + " min)";
-      }
-      if (icon2) {
-        icon2.className = "gen-progress-step-icon gen-progress-step-icon--active";
-        icon2.innerHTML = "<div class='gen-spinner'></div>";
-      }
-      if (bar2Wrap) {
-        bar2Wrap.classList.remove("d-none");
-      }
-
-      var totalMs = timeoutMinutes * 60 * 1000;
-      var startMs = Date.now();
-      _genProgressPhase2Timer = setInterval(function () {
-        var pct = Math.min(100, ((Date.now() - startMs) / totalMs) * 100);
-        if (bar2) {
-          bar2.style.width = pct + "%";
-          bar2.setAttribute("aria-valuenow", Math.round(pct));
-        }
-        if (pct >= 100) {
-          clearInterval(_genProgressPhase2Timer);
-          _genProgressPhase2Timer = null;
-        }
-      }, 200);
-    } else {
-      if (label) {
-        label.textContent = "(sin límite)";
-      }
-      if (icon2) {
-        icon2.className = "gen-progress-step-icon gen-progress-step-icon--active";
-        icon2.innerHTML = "<div class='gen-spinner'></div>";
-      }
-      if (bar2Wrap) {
-        bar2Wrap.classList.remove("d-none");
-      }
+    var totalMs = timeoutMinutes * 60 * 1000;
+    var startMs = Date.now();
+    _genProgressPhase2Timer = setInterval(function () {
+      var pct = Math.min(100, ((Date.now() - startMs) / totalMs) * 100);
       if (bar2) {
-        bar2.className = "progress-bar progress-bar-striped progress-bar-animated bg-success";
-        bar2.style.width = "100%";
+        bar2.style.width = pct + "%";
+        bar2.setAttribute("aria-valuenow", Math.round(pct));
       }
+      if (pct >= 100) {
+        clearInterval(_genProgressPhase2Timer);
+        _genProgressPhase2Timer = null;
+        _genProgressSetPhase2Done();
+        _genProgressStartPhase3();
+      }
+    }, 200);
+  }
+
+  /**
+   * Marks Phase 2 as complete: switches the icon to a checkmark and freezes the bar solid at 100%.
+   * Input: none
+   * Output: void
+   */
+  function _genProgressSetPhase2Done() {
+    var icon2 = document.getElementById("genProgressIcon2");
+    var bar2 = document.getElementById("genProgressBar2");
+    if (icon2) {
+      icon2.className = "gen-progress-step-icon gen-progress-step-icon--done";
+      icon2.innerHTML = "<i data-lucide='check' style='width:1rem;height:1rem;color:#fff'></i>";
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+    if (bar2) {
+      bar2.className = "progress-bar bg-success";
+      bar2.style.width = "100%";
+    }
+  }
+
+  /**
+   * Activates Phase 3: shows the indeterminate purple bar while the backend finalizes and polling responds.
+   * Input: none
+   * Output: void
+   */
+  function _genProgressStartPhase3() {
+    var step3 = document.getElementById("genProgressStep3");
+    var icon3 = document.getElementById("genProgressIcon3");
+    var bar3Wrap = document.getElementById("genProgressBar3Wrap");
+    if (step3) {
+      step3.classList.remove("gen-progress-step--pending");
+    }
+    if (icon3) {
+      icon3.className = "gen-progress-step-icon gen-progress-step-icon--active";
+      icon3.innerHTML = "<div class='gen-spinner'></div>";
+    }
+    if (bar3Wrap) {
+      bar3Wrap.classList.remove("d-none");
     }
   }
 
@@ -1080,6 +1106,21 @@
     }
     if (label) {
       label.textContent = "";
+    }
+
+    // Reset step 3 to pending state
+    var step3 = document.getElementById("genProgressStep3");
+    var icon3 = document.getElementById("genProgressIcon3");
+    var bar3Wrap = document.getElementById("genProgressBar3Wrap");
+    if (step3) {
+      step3.classList.add("gen-progress-step--pending");
+    }
+    if (icon3) {
+      icon3.className = "gen-progress-step-icon";
+      icon3.innerHTML = "<span class='gen-progress-step-num'>3</span>";
+    }
+    if (bar3Wrap) {
+      bar3Wrap.classList.add("d-none");
     }
 
     _genProgressSetPhase1Active();
@@ -1456,39 +1497,14 @@
   }
 
   /**
-   * Restores the generation timeout controls to the default state.
+   * Restores the generation timeout input to the default value.
    * Input: none
    * Output: void
    */
   function resetGenerationTimeoutControls() {
-    var limitedRadio = document.getElementById("gen-timeout-limited");
-    var unlimitedRadio = document.getElementById("gen-timeout-unlimited");
     var timeoutInput = document.getElementById("gen-timeout-minutes");
-
-    if (limitedRadio) {
-      limitedRadio.checked = true;
-    }
-    if (unlimitedRadio) {
-      unlimitedRadio.checked = false;
-    }
     if (timeoutInput) {
       timeoutInput.value = "15";
-    }
-    syncGenerationTimeoutControls();
-  }
-
-  /**
-   * Enables or disables the timeout input depending on the selected mode.
-   * Input: none
-   * Output: void
-   */
-  function syncGenerationTimeoutControls() {
-    var limitedRadio = document.getElementById("gen-timeout-limited");
-    var timeoutInput = document.getElementById("gen-timeout-minutes");
-    var isLimited = !limitedRadio || limitedRadio.checked;
-
-    if (timeoutInput) {
-      timeoutInput.disabled = !isLimited;
     }
   }
 
@@ -1522,20 +1538,14 @@
   }
 
   /**
-   * Reads the user-selected timeout mode and returns the generation payload fragment.
+   * Reads the timeout minutes input and returns the generation payload fragment.
    * Input: none
-   * Output: object containing timeout_minutes only when the limited mode is selected
+   * Output: object with timeout_minutes from the input field
    */
   function readGenerationTimeoutOption() {
-    var limitedRadio = document.getElementById("gen-timeout-limited");
     var timeoutInput = document.getElementById("gen-timeout-minutes");
-
-    if (!limitedRadio || !limitedRadio.checked) {
-      return {};
-    }
-
     return {
-      timeout_minutes: timeoutInput ? timeoutInput.value : "",
+      timeout_minutes: timeoutInput ? timeoutInput.value : "15",
     };
   }
 
@@ -1632,8 +1642,40 @@
     resetGeneratedDragState();
     const timeoutOpt = readGenerationTimeoutOption();
     const payload = Object.assign({}, _readGenerationOptions(), timeoutOpt);
-    startGenerationProgress(timeoutOpt.timeout_minutes ? parseInt(timeoutOpt.timeout_minutes, 10) : null);
-    const result = await apiJson("/schedules/generate/", "POST", payload, { _skipSpinner: true });
+    startGenerationProgress(parseInt(timeoutOpt.timeout_minutes, 10));
+
+    var startResult = await apiJson("/schedules/generate/", "POST", payload, { _skipSpinner: true });
+    if (!startResult.ok) {
+      stopGenerationProgress();
+      setGenerateActionButtonsDisabled(false);
+      state.latestGeneratedSchedules = [];
+      state.generatedSaved = false;
+      state.generatedSavedName = "";
+      state.generatedMoveInFlight = false;
+      showGeneratedLanding();
+      showAlert("error", extractApiErrorInfo(startResult.data, "No se pudo iniciar la generación."));
+      return;
+    }
+
+    var jobId = startResult.data && startResult.data.job_id;
+    var result = null;
+    while (true) {
+      await new Promise(function (resolve) { setTimeout(resolve, 10000); });
+      var poll = await apiJson("/schedules/generate/status/" + jobId + "/", "GET", null, { _skipSpinner: true });
+      if (!poll.ok) {
+        result = { ok: false, data: poll.data };
+        break;
+      }
+      if (poll.data.status === "DONE") {
+        result = { ok: true, data: poll.data.result };
+        break;
+      }
+      if (poll.data.status === "ERROR") {
+        result = { ok: false, data: poll.data.error };
+        break;
+      }
+    }
+
     stopGenerationProgress();
     setGenerateActionButtonsDisabled(false);
     if (!result.ok) {
@@ -1830,16 +1872,6 @@
     if (confirmGenerateButton) {
       confirmGenerateButton.addEventListener("click", handleGenerateModalConfirm);
     }
-
-    ["gen-timeout-limited", "gen-timeout-unlimited"].forEach(function (id) {
-      const radio = document.getElementById(id);
-      if (!radio) {
-        return;
-      }
-      radio.addEventListener("change", syncGenerationTimeoutControls);
-    });
-
-    syncGenerationTimeoutControls();
 
     const tcBtn = document.getElementById("generatedWorkspaceTCBtn");
     if (tcBtn) {
