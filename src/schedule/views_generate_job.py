@@ -64,12 +64,15 @@ def run_generation_job(
         job.completed_at = timezone.now()
         job.save(update_fields=["status", "error_data", "completed_at"])
 
-    except Exception as exc:
+    except Exception:
         logger.exception("Unexpected error in generation job %s", job_id)
         job.status = ScheduleGenerationJob.Status.ERROR
         job.error_data = {
             "detail": "An unexpected error occurred during schedule generation.",
-            "_error": {"code": "INTERNAL_ERROR", "message": str(exc)},
+            "_error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected internal error occurred.",
+            },
         }
         job.completed_at = timezone.now()
         job.save(update_fields=["status", "error_data", "completed_at"])

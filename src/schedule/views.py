@@ -581,7 +581,22 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             )
 
         if job.status == ScheduleGenerationJob.Status.ERROR:
-            return Response({"status": job.status, "error": job.error_data})
+            raw_error = job.error_data or {}
+            nested = raw_error.get("_error") if isinstance(raw_error, dict) else None
+            code = nested.get("code") if isinstance(nested, dict) else None
+            if code == "INTERNAL_ERROR":
+                safe_error = {
+                    "detail": raw_error.get(
+                        "detail",
+                        "An unexpected error occurred during schedule generation.",
+                    ),
+                    "_error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "Internal server error.",
+                    },
+                }
+                return Response({"status": job.status, "error": safe_error})
+            return Response({"status": job.status, "error": raw_error})
 
         return Response({"status": job.status, "started_at": job.started_at})
 
