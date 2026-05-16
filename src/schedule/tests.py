@@ -93,7 +93,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         def make_sync_thread(target, args=(), kwargs=None, daemon=False, **kw):
             class _SyncThread:
-                def start(self_inner):
+                def start(self):
                     with patch.object(db_connection, "close", lambda: None):
                         target(*args, **(kwargs or {}))
 
