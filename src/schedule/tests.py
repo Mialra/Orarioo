@@ -2,6 +2,7 @@
 from io import BytesIO
 from types import SimpleNamespace
 from unittest import skipIf
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -87,8 +88,37 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         }
 
     def generate_schedule(self, payload=None):
-        return self.client.post(
-            reverse("schedule-generate"), payload or {}, format="json"
+        """POST generate (async), run job synchronously via thread patch, poll status."""
+        from django.db import connection as db_connection
+
+        def make_sync_thread(target, args=(), kwargs=None, daemon=False, **kw):
+            class _SyncThread:
+                def start(self_inner):
+                    with patch.object(db_connection, "close", lambda: None):
+                        target(*args, **(kwargs or {}))
+
+            return _SyncThread()
+
+        with patch("schedule.views.threading.Thread", side_effect=make_sync_thread):
+            start_resp = self.client.post(
+                reverse("schedule-generate"), payload or {}, format="json"
+            )
+
+        if start_resp.status_code != status.HTTP_202_ACCEPTED:
+            return start_resp
+
+        job_id = start_resp.data.get("job_id")
+        poll_resp = self.client.get(
+            reverse("schedule-generate-status", kwargs={"job_id": job_id})
+        )
+        if poll_resp.data.get("status") == "DONE":
+            return SimpleNamespace(
+                status_code=status.HTTP_201_CREATED,
+                data=poll_resp.data.get("result", {}),
+            )
+        return SimpleNamespace(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            data=poll_resp.data.get("error", {}),
         )
 
     def assert_generate_bad_request_with_detail(self, response, detail_snippet):
@@ -1154,14 +1184,12 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(timeout_seconds, 900.0)
 
-    def test_optimization_timeout_defaults_to_cap_when_no_timeout_set(self):
+    def test_optimization_timeout_defaults_to_15_minutes_when_no_timeout_set(self):
         timeout_seconds = schedule_assignment._resolve_optimization_timeout_seconds(
             generation_options={},
         )
 
-        self.assertEqual(
-            timeout_seconds, schedule_assignment._UNLIMITED_OPTIMIZATION_CAP_SECONDS
-        )
+        self.assertEqual(timeout_seconds, 900.0)  # 15 min * 60 s
 
     def test_generate_assigns_only_subject_mandatory_classroom(self):
         self.classroom.is_shared = True
