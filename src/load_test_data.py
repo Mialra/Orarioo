@@ -31,9 +31,6 @@ django.setup()
 # NOTE: These imports must come after django.setup() - ignore E402
 from django.contrib.auth import get_user_model  # noqa: E402
 
-from auditableEntity.audit import AUDITABLE_ENTITY_TYPES  # noqa: E402
-from auditableEntity.audit import suppress_audit_events  # noqa: E402
-from auditableEntity.models import AuditActionType, AuditEntry  # noqa: E402
 from classroom.models import Classroom  # noqa: E402
 from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
 from group.models import Group  # noqa: E402
@@ -99,40 +96,21 @@ def slot_keys(day_codes, times):
     return [f"{day}_{time}" for day in day_codes for time in times]
 
 
-def clear_existing_data():
-    """Clear all existing test data (optional - be careful in production!)"""
-    print("⚠️  Clearing existing data...")
-    suppress_rules = [
-        (entity_type, action_type)
-        for entity_type in AUDITABLE_ENTITY_TYPES
-        for action_type in AuditActionType.values
-    ]
-    with suppress_audit_events(*suppress_rules):
-        Schedule.objects.all().delete()
-        Subject.objects.all().delete()
-        Teacher.objects.all().delete()
-        Group.objects.all().delete()
-        Classroom.objects.all().delete()
-        User.objects.filter(email__contains="test").delete()
-        AuditEntry.objects.all().delete()
-        CollaborationTeam.objects.filter(members__isnull=True).delete()
-    print("✅ Existing test data cleared")
-
-
 def create_users():
     """Create test users and configure stage time windows."""
     print("\n📝 Creating users...")
 
     users = []
 
-    admin = User.objects.create_superuser(
+    admin, created = User.objects.update_or_create(
         email="admin@test.com",
-        password="admin123",
-        name="Administrador",
-        family_name="Centro",
+        defaults={"name": "Administrador", "family_name": "Centro", "is_staff": True, "is_superuser": True},
     )
+    if created:
+        admin.set_password("admin123")
+        admin.save(update_fields=["password"])
     users.append(admin)
-    print(f"  ✓ Created superuser: {admin.email}")
+    print(f"  ✓ Upserted superuser: {admin.email}")
 
     collaboration_data = [
         ("direccion.academica@test.com", "María", "García López"),
@@ -140,23 +118,17 @@ def create_users():
     ]
 
     for email, name, family_name in collaboration_data:
-        collaboration_user = User.objects.create_user(
+        collaboration_user, created = User.objects.update_or_create(
             email=email,
-            password="direccion123",
-            name=name,
-            family_name=family_name,
+            defaults={"name": name, "family_name": family_name},
         )
+        if created:
+            collaboration_user.set_password("direccion123")
+            collaboration_user.save(update_fields=["password"])
         users.append(collaboration_user)
-        print(f"  ✓ Created collaboration user: {collaboration_user.email}")
+        print(f"  ✓ Upserted collaboration user: {collaboration_user.email}")
 
-    admin_team = CollaborationTeam.objects.create(name=f"Equipo {admin.email}")
-    admin_team.members.set(users)
-    for user in users:
-        user.active_team = admin_team
-        user.save(update_fields=["active_team"])
-
-    # Set default stage time windows matching the onboarding defaults (STAGE_SLOT_WINDOWS).
-    admin_team.schedule_config = {
+    schedule_config = {
         "PRESCHOOL": {
             "start_time": "09:00",
             "end_time": "14:00",
@@ -179,9 +151,19 @@ def create_users():
             "session_duration": 60,
         },
     }
-    admin_team.save(update_fields=["schedule_config"])
+    team_name = f"Equipo {admin.email}"
+    admin_team = CollaborationTeam.objects.filter(name=team_name).first()
+    if admin_team:
+        admin_team.schedule_config = schedule_config
+        admin_team.save(update_fields=["schedule_config"])
+    else:
+        admin_team = CollaborationTeam.objects.create(name=team_name, schedule_config=schedule_config)
+    admin_team.members.set(users)
+    for user in users:
+        user.active_team = admin_team
+        user.save(update_fields=["active_team"])
 
-    print(f"  ✓ Created collaboration team for {admin.email}: {admin_team.name}")
+    print(f"  ✓ Upserted collaboration team for {admin.email}: {admin_team.name}")
 
     return users, admin_team
 
@@ -428,20 +410,22 @@ def create_teachers(team):
     teachers = {}
     for key, name, max_hours, time_preferences, *rest in teachers_data:
         extra = rest[0] if rest else {}
-        teacher = Teacher.objects.create(
+        teacher, _ = Teacher.objects.update_or_create(
             name=name,
-            max_weekly_hours=max_hours,
-            working_hours=0,
-            time_preferences=time_preferences,
             team=team,
-            created_by="system",
-            **extra,
+            defaults={
+                "max_weekly_hours": max_hours,
+                "working_hours": 0,
+                "time_preferences": time_preferences,
+                "created_by": "system",
+                **extra,
+            },
         )
         teachers[key] = teacher
         mins = extra.get("max_weekly_minutes", 0)
         mode = "exactas" if extra.get("weekly_hours_exact") else "máximo"
         mins_str = f" {mins} min" if mins else ""
-        print(f"  ✓ Created teacher: {teacher.name} ({max_hours} h{mins_str} {mode})")
+        print(f"  ✓ Upserted teacher: {teacher.name} ({max_hours} h{mins_str} {mode})")
 
     return teachers
 
@@ -468,14 +452,13 @@ def create_groups(team):
 
     groups = {}
     for name, stage in groups_data:
-        group = Group.objects.create(
+        group, _ = Group.objects.update_or_create(
             name=name,
-            stage=stage,
             team=team,
-            created_by="system",
+            defaults={"stage": stage, "created_by": "system"},
         )
         groups[name] = group
-        print(f"  ✓ Created group: {group.name}")
+        print(f"  ✓ Upserted group: {group.name}")
 
     return groups
 
@@ -507,15 +490,14 @@ def create_classrooms(team):
 
     classrooms = []
     for name, is_shared in classrooms_data:
-        classroom = Classroom.objects.create(
+        classroom, _ = Classroom.objects.update_or_create(
             name=name,
-            is_shared=is_shared,
             team=team,
-            created_by="system",
+            defaults={"is_shared": is_shared, "created_by": "system"},
         )
         classrooms.append(classroom)
         print(
-            f"  ✓ Created classroom: {classroom.name} [{'shared' if classroom.is_shared else 'exclusive'}]"
+            f"  ✓ Upserted classroom: {classroom.name} [{'shared' if classroom.is_shared else 'exclusive'}]"
         )
 
     return classrooms
@@ -963,16 +945,18 @@ def create_subjects(teachers, groups, team):  # noqa: C901
 
     subjects = []
     for row in subjects_data:
-        subject = Subject.objects.create(
+        subject, _ = Subject.objects.update_or_create(
             name=row["name"],
-            weekly_hours=row["weekly_hours"],
-            duration=row.get("duration", 1.0),
-            time_preferences=row.get("time_preferences", {}),
-            type=row.get("type", SubjectType.NORMAL),
-            teacher=teachers[row["teacher_key"]],
             group=groups[row["group_name"]],
             team=team,
-            created_by="system",
+            defaults={
+                "weekly_hours": row["weekly_hours"],
+                "duration": row.get("duration", 1.0),
+                "time_preferences": row.get("time_preferences", {}),
+                "type": row.get("type", SubjectType.NORMAL),
+                "teacher": teachers[row["teacher_key"]],
+                "created_by": "system",
+            },
         )
         room_name_hint = f"Aula {subject.group.name}"
         default_room = next(
@@ -1015,7 +999,7 @@ def create_subjects(teachers, groups, team):  # noqa: C901
 
         subjects.append(subject)
         print(
-            f"  ✓ Created subject: {subject.name} "
+            f"  ✓ Upserted subject: {subject.name} "
             f"({subject.weekly_hours}h/semana, dur={subject.duration}h)"
         )
 
@@ -1089,20 +1073,22 @@ def create_admin_saved_timetable(*, users, team):
 
         classroom = subject.mandatory_classroom or classrooms[0]
 
-        schedule = Schedule.objects.create(
+        schedule, _ = Schedule.objects.update_or_create(
             name=saved_name,
-            start_time=start_time,
-            end_time=end_time,
-            observations=saved_observation,
-            team=team,
-            teacher=subject.teacher,
-            classroom=classroom,
-            group=subject.group,
             subject=subject,
-            created_by=admin_user.email,
-            updated_by="system",
+            team=team,
+            defaults={
+                "start_time": start_time,
+                "end_time": end_time,
+                "observations": saved_observation,
+                "teacher": subject.teacher,
+                "classroom": classroom,
+                "group": subject.group,
+                "created_by": admin_user.email,
+                "updated_by": "system",
+            },
         )
-        schedule.users.add(admin_user)
+        schedule.users.set([admin_user])
         created.append(schedule)
 
     print(f"  ✓ Created saved timetable for admin with {len(created)} sessions")
@@ -1115,8 +1101,6 @@ def main():
     print("=" * 60)
 
     try:
-        clear_existing_data()
-
         users, demo_team = create_users()
         teachers = create_teachers(demo_team)
         groups = create_groups(demo_team)
