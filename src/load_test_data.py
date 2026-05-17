@@ -1005,9 +1005,9 @@ def create_admin_saved_timetable(*, users, team):
     """Create one saved timetable owned by admin user for manual testing."""
     print("\n🗓️ Creating saved timetable for admin...")
 
-    admin_user = next((user for user in users if user.email == "admin@test.com"), None)
+    admin_user = next((user for user in users if user.email == "direccion.academica@test.com"), None)
     if admin_user is None:
-        raise RuntimeError("Admin user not found while creating saved timetable.")
+        raise RuntimeError("direccion.academica@test.com user not found while creating saved timetable.")
 
     saved_name = "1 minuto"
     saved_observation = f"{SAVED_TIMETABLE_PREFIX}: {saved_name}"
@@ -4659,9 +4659,8 @@ def main():
         print(f"  • {len(subjects)} subjects created")
         print(f"  • {len(classrooms)} classrooms created")
         print(f"  • {len(groups)} groups created")
-        print(f"  • {len(saved_admin_timetable)} saved schedules for admin")
+        print(f"  • {len(saved_admin_timetable)} saved schedules for dirección académica")
         print("\n🔑 Login credentials:")
-        print("  Admin: admin@test.com / admin123")
         print("  Dirección: direccion.academica@test.com / direccion123")
         print("=" * 60)
 
