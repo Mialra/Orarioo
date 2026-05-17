@@ -6,6 +6,7 @@ views_export, views_generate and views_move modules respectively.
 
 import logging
 import random
+import threading
 
 from django.db import transaction
 from django.db.models import Max, Q
@@ -20,11 +21,10 @@ from classroom.models import Classroom
 from common.drf import TeamScopedAuditableModelViewSet
 from common.errors.exceptions import ValidationAppError
 from group.models import Group
-from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
 from schedule.algorithm.evaluator import ScheduleEvaluator
 from schedule.algorithm.slots import parse_schedule_config_to_slot_windows
 from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
-from schedule.models import Schedule
+from schedule.models import Schedule, ScheduleGenerationJob
 from schedule.serializers import ScheduleSerializer
 from schedule.views_export import (
     _DAY_ORDER,
@@ -467,10 +467,12 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         return build_pdf_units_response(units, filename)
 
     def generate(self, request):
-        """Generate a full weekly schedule for the active team using the CP-SAT solver.
+        """Start an async schedule generation job and return its ID immediately.
         Input: request - DRF Request with optional seed and generation options in body
-        Output: Response with created schedules, seed, options and teacher workloads (HTTP 201)
+        Output: Response with job_id (HTTP 202); client polls generate_status for the result
         """
+        from schedule.views_generate_job import run_generation_job
+
         actor = getattr(request.user, "email", "")
         active_team = self.get_active_team()
         raw_seed = request.data.get("seed")
@@ -494,43 +496,109 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                     context={"field": "seed", "value": raw_seed},
                 )
 
-        try:
-            schedules, is_optimal, soft_score_info, tc_result = (
-                BasicScheduleGenerator.generate(
-                    actor_email=actor,
-                    user=request.user,
-                    team=active_team,
-                    random_seed=generation_seed,
-                    generation_options=generation_options,
-                )
-            )
-        except ScheduleGenerationError as exc:
-            logger.warning(
-                "Schedule generation rejected: actor=%s, reason=%s",
-                actor,
-                exc,
-            )
-            raise
-        serialized = self.get_serializer(schedules, many=True)
-
-        return Response(
-            {
-                "detail": "Schedule generated successfully.",
-                "seed": generation_seed,
-                "generation_options": generation_options,
-                "optimization_is_optimal": is_optimal,
-                "soft_score": soft_score_info,
-                "schedules": serialized.data,
-                "generated_count": len(serialized.data),
-                "teacher_workloads": build_teacher_workloads(schedules),
-                "unavailability": build_unavailability_index(schedules),
-                "stage_windows": build_stage_windows_for_client(
-                    getattr(active_team, "schedule_config", None)
-                ),
-                "tc_warnings": tc_result.warnings if tc_result else [],
-            },
-            status=status.HTTP_201_CREATED,
+        job = ScheduleGenerationJob.objects.create(
+            team=active_team,
+            created_by=request.user,
+            generation_options=generation_options,
         )
+
+        thread = threading.Thread(
+            target=run_generation_job,
+            kwargs={
+                "job_id": job.id,
+                "actor_email": actor,
+                "user_id": request.user.id,
+                "team_id": active_team.id,
+                "generation_seed": generation_seed,
+                "generation_options": generation_options,
+            },
+            daemon=True,
+        )
+        thread.start()
+
+        return Response({"job_id": str(job.id)}, status=status.HTTP_202_ACCEPTED)
+
+    def generate_status(self, request, job_id=None):
+        """Return the current status (and result when done) of a generation job.
+        Input: request - DRF Request; job_id - UUID from the URL
+        Output: Response with status field plus result or error when applicable (HTTP 200)
+        """
+        active_team = self.get_active_team()
+        try:
+            job = ScheduleGenerationJob.objects.get(id=job_id, team=active_team)
+        except ScheduleGenerationJob.DoesNotExist:
+            from rest_framework.exceptions import NotFound
+
+            raise NotFound()
+
+        # Detect stale jobs: RUNNING but the worker process died before completing
+        if job.status == ScheduleGenerationJob.Status.RUNNING and job.started_at:
+            timeout_minutes = (job.generation_options or {}).get("timeout_minutes") or 0
+            stale_threshold_minutes = max(timeout_minutes, 5) + 10
+            elapsed = (timezone.now() - job.started_at).total_seconds() / 60
+            if elapsed > stale_threshold_minutes:
+                job.status = ScheduleGenerationJob.Status.ERROR
+                job.error_data = {
+                    "detail": "La generación fue interrumpida inesperadamente.",
+                    "_error": {
+                        "code": "JOB_STALE",
+                        "message": "Generation job stopped responding.",
+                    },
+                }
+                job.completed_at = timezone.now()
+                job.save(update_fields=["status", "error_data", "completed_at"])
+
+        if job.status == ScheduleGenerationJob.Status.DONE:
+            result = job.result_data or {}
+            schedule_ids = result.get("schedule_ids", [])
+            schedules = list(
+                self.get_queryset()
+                .filter(id__in=schedule_ids)
+                .order_by("start_time", "id")
+            )
+            serialized = self.get_serializer(schedules, many=True)
+            return Response(
+                {
+                    "status": job.status,
+                    "result": {
+                        "detail": "Schedule generated successfully.",
+                        "seed": result.get("seed"),
+                        "generation_options": result.get("generation_options"),
+                        "optimization_is_optimal": result.get(
+                            "optimization_is_optimal"
+                        ),
+                        "soft_score": result.get("soft_score"),
+                        "schedules": serialized.data,
+                        "generated_count": len(serialized.data),
+                        "teacher_workloads": build_teacher_workloads(schedules),
+                        "unavailability": build_unavailability_index(schedules),
+                        "stage_windows": build_stage_windows_for_client(
+                            getattr(active_team, "schedule_config", None)
+                        ),
+                        "tc_warnings": result.get("tc_warnings", []),
+                    },
+                }
+            )
+
+        if job.status == ScheduleGenerationJob.Status.ERROR:
+            raw_error = job.error_data or {}
+            nested = raw_error.get("_error") if isinstance(raw_error, dict) else None
+            code = nested.get("code") if isinstance(nested, dict) else None
+            if code == "INTERNAL_ERROR":
+                safe_error = {
+                    "detail": raw_error.get(
+                        "detail",
+                        "An unexpected error occurred during schedule generation.",
+                    ),
+                    "_error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "Internal server error.",
+                    },
+                }
+                return Response({"status": job.status, "error": safe_error})
+            return Response({"status": job.status, "error": raw_error})
+
+        return Response({"status": job.status, "started_at": job.started_at})
 
     def _saved_queryset(self):
         """Return a queryset of all saved (non-auto-generated) schedules for the active team.

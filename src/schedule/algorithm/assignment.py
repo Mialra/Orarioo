@@ -346,20 +346,17 @@ def _build_solver(
     return solver
 
 
-_UNLIMITED_OPTIMIZATION_CAP_SECONDS = 60 * 60  # 1-hour safety cap for unlimited mode
+_DEFAULT_TIMEOUT_MINUTES = 15
 
 
 def _resolve_optimization_timeout_seconds(*, generation_options):
     """Compute the Phase 2 (optimisation) timeout from the user's generation options.
     Input: generation_options - dict of generation parameters, or None
-    Output: float seconds for the optimisation phase;
-            falls back to the 1-hour cap when the user selects unlimited mode
+    Output: float seconds for the optimisation phase
     """
-    if generation_options is None:
-        return _UNLIMITED_OPTIMIZATION_CAP_SECONDS
-    timeout_minutes = generation_options.get("timeout_minutes")
-    if timeout_minutes is None:
-        return _UNLIMITED_OPTIMIZATION_CAP_SECONDS
+    timeout_minutes = (generation_options or {}).get(
+        "timeout_minutes", _DEFAULT_TIMEOUT_MINUTES
+    )
     return float(timeout_minutes) * 60.0
 
 
