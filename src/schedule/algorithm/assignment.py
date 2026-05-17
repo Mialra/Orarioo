@@ -290,7 +290,9 @@ def _cp_sat_session_assignment(
         try:
             on_phase2_start()
         except Exception:
-            logger.exception("on_phase2_start callback failed; continuing optimization phase")
+            logger.exception(
+                "on_phase2_start callback failed; continuing optimization phase"
+            )
 
     optimization_solver = _build_solver(
         timeout_seconds=optimization_timeout,
