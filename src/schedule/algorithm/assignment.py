@@ -5,6 +5,7 @@ functions build decision variables, add constraints and extract the solution.
 """
 
 import logging
+
 import psutil
 
 try:
@@ -33,9 +34,11 @@ from schedule.algorithm.slots import build_real_time_intervals
 
 logger = logging.getLogger(__name__)
 
-_SOLVER_NUM_WORKERS = 1       # single worker to avoid multiplying RAM on constrained hosts
-_SOLVER_MAX_MEMORY_MB = 380   # leave headroom against the 512 MB Render limit
-_SOLVER_LINEARIZATION = 0     # reduces model RAM at the cost of slightly longer solve times
+_SOLVER_NUM_WORKERS = 1  # single worker to avoid multiplying RAM on constrained hosts
+_SOLVER_MAX_MEMORY_MB = 380  # leave headroom against the 512 MB Render limit
+_SOLVER_LINEARIZATION = (
+    0  # reduces model RAM at the cost of slightly longer solve times
+)
 
 
 def solve_session_assignment(
@@ -747,7 +750,9 @@ def _classroom_compatibility_error(*, session):
 def _log_process_memory(phase_label):
     try:
         mem_mb = psutil.Process().memory_info().rss / 1024 / 1024
-        logger.info("Memoria del proceso antes del solver [%s]: %.0f MB", phase_label, mem_mb)
+        logger.info(
+            "Memoria del proceso antes del solver [%s]: %.0f MB", phase_label, mem_mb
+        )
     except Exception:
         pass
 

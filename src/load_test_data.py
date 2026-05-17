@@ -104,7 +104,12 @@ def create_users():
 
     admin, created = User.objects.update_or_create(
         email="admin@test.com",
-        defaults={"name": "Administrador", "family_name": "Centro", "is_staff": True, "is_superuser": True},
+        defaults={
+            "name": "Administrador",
+            "family_name": "Centro",
+            "is_staff": True,
+            "is_superuser": True,
+        },
     )
     if created:
         admin.set_password("admin123")
@@ -157,7 +162,9 @@ def create_users():
         admin_team.schedule_config = schedule_config
         admin_team.save(update_fields=["schedule_config"])
     else:
-        admin_team = CollaborationTeam.objects.create(name=team_name, schedule_config=schedule_config)
+        admin_team = CollaborationTeam.objects.create(
+            name=team_name, schedule_config=schedule_config
+        )
     admin_team.members.set(users)
     for user in users:
         user.active_team = admin_team
