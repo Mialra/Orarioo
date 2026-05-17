@@ -103,21 +103,6 @@ def create_users():
 
     users = []
 
-    admin, created = User.objects.update_or_create(
-        email="admin@test.com",
-        defaults={
-            "name": "Administrador",
-            "family_name": "Centro",
-            "is_staff": True,
-            "is_superuser": True,
-        },
-    )
-    if created:
-        admin.set_password("admin123")
-        admin.save(update_fields=["password"])
-    users.append(admin)
-    print(f"  ✓ Upserted superuser: {admin.email}")
-
     collaboration_data = [
         ("direccion.academica@test.com", "María", "García López"),
         ("jefatura.estudios@test.com", "Juan", "Martínez Ruiz"),
@@ -157,7 +142,7 @@ def create_users():
             "session_duration": 60,
         },
     }
-    team_name = f"Equipo {admin.email}"
+    team_name = "Equipo Test"
     admin_team = CollaborationTeam.objects.filter(name=team_name).first()
     if admin_team:
         admin_team.schedule_config = schedule_config
@@ -171,7 +156,7 @@ def create_users():
         user.active_team = admin_team
         user.save(update_fields=["active_team"])
 
-    print(f"  ✓ Upserted collaboration team for {admin.email}: {admin_team.name}")
+    print(f"  ✓ Upserted collaboration team: {admin_team.name}")
 
     return users, admin_team
 
