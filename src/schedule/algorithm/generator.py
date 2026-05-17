@@ -89,7 +89,6 @@ class BasicScheduleGenerator:
     """Generates a complete weekly timetable from scratch using CP-SAT."""
 
     @classmethod
-    @transaction.atomic
     def generate(
         cls,
         *,
@@ -98,21 +97,18 @@ class BasicScheduleGenerator:
         team,
         random_seed: int | None = None,
         generation_options=None,
+        on_phase2_start=None,
     ):
         """Generate and persist a full weekly schedule for the given team.
         Input: actor_email - email of the user triggering generation;
                user - Django User instance (owner of the generated schedules);
                team - Team model instance;
                random_seed - optional integer seed for reproducibility;
-               generation_options - dict with generation parameters
+               generation_options - dict with generation parameters;
+               on_phase2_start - optional callback invoked between Phase 1 and Phase 2
         Output: list of created Schedule instances; empty list if no sessions to schedule
         """
         generation_options = generation_options or {}
-        cls._clear_previous_generated_schedules(
-            actor_email=actor_email,
-            user=user,
-            team=team,
-        )
 
         teachers = list(Teacher.objects.filter(team=team).order_by("id"))
         teacher = teachers[0] if teachers else None
@@ -191,6 +187,7 @@ class BasicScheduleGenerator:
                 code=blocking[0]["code"],
             )
 
+        # Solver runs outside the transaction so on_phase2_start can commit immediately.
         slot_by_session, classroom_by_session, is_optimal, soft_score_info = (
             solve_session_assignment(
                 sessions=sessions,
@@ -198,6 +195,7 @@ class BasicScheduleGenerator:
                 classrooms=classrooms,
                 random_seed=random_seed,
                 generation_options=generation_options,
+                on_phase2_start=on_phase2_start,
             )
         )
 
@@ -237,21 +235,27 @@ class BasicScheduleGenerator:
                 team=team,
             )
 
-        created = cls._bulk_create_generated_schedules(
-            schedules=created,
-            user=user,
-        )
+        # Wrap only the writes atomically: delete old + create new + audit.
+        with transaction.atomic():
+            cls._clear_previous_generated_schedules(
+                actor_email=actor_email,
+                user=user,
+                team=team,
+            )
+            created = cls._bulk_create_generated_schedules(
+                schedules=created,
+                user=user,
+            )
+            TCSession.objects.filter(team=team).exclude(
+                observations__startswith=SAVED_TIMETABLE_PREFIX
+            ).delete()
+            if tc_result and tc_result.tc_sessions:
+                TCSession.objects.bulk_create(tc_result.tc_sessions)
+            cls._create_generation_audit_entry(
+                schedules=created,
+                team=team,
+            )
 
-        TCSession.objects.filter(team=team).exclude(
-            observations__startswith=SAVED_TIMETABLE_PREFIX
-        ).delete()
-        if tc_result and tc_result.tc_sessions:
-            TCSession.objects.bulk_create(tc_result.tc_sessions)
-
-        cls._create_generation_audit_entry(
-            schedules=created,
-            team=team,
-        )
         return created, is_optimal, soft_score_info, tc_result
 
     @staticmethod

@@ -4,6 +4,10 @@ Exposes solve_session_assignment as the single entry point.  All internal
 functions build decision variables, add constraints and extract the solution.
 """
 
+import logging
+
+import psutil
+
 try:
     from ortools.sat.python import cp_model
 except ModuleNotFoundError:  # pragma: no cover - depends on local Python version
@@ -28,6 +32,14 @@ from schedule.algorithm.diagnostics import (
 from schedule.algorithm.errors import ScheduleGenerationError
 from schedule.algorithm.slots import build_real_time_intervals
 
+logger = logging.getLogger(__name__)
+
+_SOLVER_NUM_WORKERS = 1  # single worker to avoid multiplying RAM on constrained hosts
+_SOLVER_MAX_MEMORY_MB = 380  # leave headroom against the 512 MB Render limit
+_SOLVER_LINEARIZATION = (
+    0  # reduces model RAM at the cost of slightly longer solve times
+)
+
 
 def solve_session_assignment(
     *,
@@ -37,6 +49,7 @@ def solve_session_assignment(
     random_seed=None,
     fixed_assignments=None,
     generation_options=None,
+    on_phase2_start=None,
 ):
     """Assign each session to a slot and classroom using a two-phase CP-SAT solve.
 
@@ -92,6 +105,7 @@ def solve_session_assignment(
             random_seed=random_seed,
             fixed_assignments=fixed_assignments,
             generation_options=generation_options,
+            on_phase2_start=on_phase2_start,
         )
     )
     return slot_by_session, classroom_by_session, is_optimal, soft_score_info
@@ -120,6 +134,7 @@ def _cp_sat_session_assignment(
     random_seed,
     fixed_assignments,
     generation_options,
+    on_phase2_start=None,
 ):
     """Run the full two-phase CP-SAT solve and return the assignment.
     Input: sessions, slots - standard algorithm inputs;
@@ -211,10 +226,9 @@ def _cp_sat_session_assignment(
     feasible_solver = _build_solver(
         timeout_seconds=feasible_timeout,
         random_seed=random_seed,
-        session_count=session_count,
-        slot_count=slot_count,
         stop_after_first_solution=True,
     )
+    _log_process_memory("Phase 1 (feasibility)")
     feasible_status = feasible_solver.Solve(model)
 
     if feasible_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -272,13 +286,20 @@ def _cp_sat_session_assignment(
         y=y,
     )
 
+    if on_phase2_start is not None:
+        try:
+            on_phase2_start()
+        except Exception:
+            logger.exception(
+                "on_phase2_start callback failed; continuing optimization phase"
+            )
+
     optimization_solver = _build_solver(
         timeout_seconds=optimization_timeout,
         random_seed=random_seed,
-        session_count=session_count,
-        slot_count=slot_count,
         stop_after_first_solution=False,
     )
+    _log_process_memory("Phase 2 (optimisation)")
     optimization_status = optimization_solver.Solve(model)
 
     if optimization_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -319,13 +340,10 @@ def _build_solver(
     *,
     timeout_seconds,
     random_seed,
-    session_count,
-    slot_count,
     stop_after_first_solution,
 ):
     """Create and configure a CP-SAT CpSolver instance.
     Input: timeout_seconds - maximum wall-clock time; random_seed - optional int;
-           session_count, slot_count - problem dimensions used to set parallelism;
            stop_after_first_solution - True for the feasibility phase
     Output: configured CpSolver instance
     """
@@ -333,12 +351,13 @@ def _build_solver(
     if timeout_seconds is not None:
         solver.parameters.max_time_in_seconds = timeout_seconds
     solver.parameters.log_search_progress = False
+    solver.parameters.num_search_workers = _SOLVER_NUM_WORKERS
+    solver.parameters.max_memory_in_mb = _SOLVER_MAX_MEMORY_MB
+    solver.parameters.linearization_level = _SOLVER_LINEARIZATION
     if random_seed is not None:
         solver.parameters.random_seed = int(random_seed)
     if hasattr(solver.parameters, "randomize_search"):
         solver.parameters.randomize_search = True
-    if session_count >= 40 or slot_count >= 25:
-        solver.parameters.num_workers = 8
     if stop_after_first_solution and hasattr(
         solver.parameters, "stop_after_first_solution"
     ):
@@ -737,6 +756,20 @@ def _classroom_compatibility_error(*, session):
         "Could not assign a classroom to at least one generated session. "
         "No available classroom matches subject '{subject_name}'."
     ).format(subject_name=subject_name)
+
+
+def _log_process_memory(phase_label):
+    try:
+        mem_mb = psutil.Process().memory_info().rss / 1024 / 1024
+        logger.info(
+            "Memoria del proceso antes del solver [%s]: %.0f MB", phase_label, mem_mb
+        )
+    except Exception:
+        logger.debug(
+            "Could not collect process memory usage for phase '%s'.",
+            phase_label,
+            exc_info=True,
+        )
 
 
 # ---------------------------------------------------------------------------

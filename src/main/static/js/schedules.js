@@ -962,8 +962,6 @@
 
   // ── Generation progress animation ─────────────────────────────────────────
   var _genProgressPhase2Timer = null;
-  var _genProgressPhase1Timer = null;
-  var GEN_PHASE1_FAKE_MS = 5000; // estimated Phase 1 duration shown before Phase 2 starts
 
   function _genProgressSetPhase1Active() {
     var step1 = document.getElementById("genProgressStep1");
@@ -1080,9 +1078,7 @@
 
   function startGenerationProgress(timeoutMinutes) {
     clearInterval(_genProgressPhase2Timer);
-    clearTimeout(_genProgressPhase1Timer);
     _genProgressPhase2Timer = null;
-    _genProgressPhase1Timer = null;
 
     // Reset step 2 to pending state
     var step2 = document.getElementById("genProgressStep2");
@@ -1127,18 +1123,11 @@
     toggleSection("generatedLandingSection", false);
     toggleSection("generatedProgressSection", true);
     toggleSection("generatedWorkspaceSection", false);
-
-    _genProgressPhase1Timer = setTimeout(function () {
-      _genProgressSetPhase1Done();
-      _genProgressStartPhase2(timeoutMinutes);
-    }, GEN_PHASE1_FAKE_MS);
   }
 
   function stopGenerationProgress() {
     clearInterval(_genProgressPhase2Timer);
-    clearTimeout(_genProgressPhase1Timer);
     _genProgressPhase2Timer = null;
-    _genProgressPhase1Timer = null;
     toggleSection("generatedProgressSection", false);
   }
 
@@ -1659,6 +1648,7 @@
 
     var jobId = startResult.data && startResult.data.job_id;
     var result = null;
+    var phase2Started = false;
     while (true) {
       await new Promise(function (resolve) { setTimeout(resolve, 10000); });
       var poll = await apiJson("/schedules/generate/status/" + jobId + "/", "GET", null, { _skipSpinner: true });
@@ -1666,7 +1656,21 @@
         result = { ok: false, data: poll.data };
         break;
       }
+      if (!phase2Started && poll.data.current_phase === 2) {
+        phase2Started = true;
+        _genProgressSetPhase1Done();
+        _genProgressStartPhase2(timeoutOpt.timeout_minutes);
+      }
       if (poll.data.status === "DONE") {
+        if (!phase2Started) {
+          _genProgressSetPhase1Done();
+          _genProgressSetPhase2Done();
+        } else {
+          clearInterval(_genProgressPhase2Timer);
+          _genProgressPhase2Timer = null;
+          _genProgressSetPhase2Done();
+        }
+        _genProgressStartPhase3();
         result = { ok: true, data: poll.data.result };
         break;
       }

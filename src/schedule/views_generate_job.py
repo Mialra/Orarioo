@@ -23,8 +23,9 @@ def run_generation_job(
 
     job = ScheduleGenerationJob.objects.get(id=job_id)
     job.status = ScheduleGenerationJob.Status.RUNNING
+    job.current_phase = 1
     job.started_at = timezone.now()
-    job.save(update_fields=["status", "started_at"])
+    job.save(update_fields=["status", "current_phase", "started_at"])
 
     try:
         from django.contrib.auth import get_user_model
@@ -35,6 +36,9 @@ def run_generation_job(
         user = User.objects.get(id=user_id)
         active_team = CollaborationTeam.objects.get(id=team_id)
 
+        def _on_phase2_start():
+            ScheduleGenerationJob.objects.filter(id=job_id).update(current_phase=2)
+
         schedules, is_optimal, soft_score_info, tc_result = (
             BasicScheduleGenerator.generate(
                 actor_email=actor_email,
@@ -42,6 +46,7 @@ def run_generation_job(
                 team=active_team,
                 random_seed=generation_seed,
                 generation_options=generation_options,
+                on_phase2_start=_on_phase2_start,
             )
         )
 
