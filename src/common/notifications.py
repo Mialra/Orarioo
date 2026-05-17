@@ -6,7 +6,7 @@ Uses Django's send_mail with optional HTML template rendering via django.templat
 import logging
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
@@ -41,14 +41,17 @@ def send_security_email(subject, message, recipient_list, html_message=None):
         if not rendered_message and rendered_html:
             rendered_message = strip_tags(rendered_html)
 
-        sent_count = send_mail(
+        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
+        msg = EmailMultiAlternatives(
             subject=subject,
-            message=rendered_message,
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-            recipient_list=list(recipient_list),
-            fail_silently=False,
-            html_message=rendered_html,
+            body=rendered_message,
+            from_email=from_email,
+            to=[from_email],
+            bcc=list(recipient_list),
         )
+        if rendered_html:
+            msg.attach_alternative(rendered_html, "text/html")
+        sent_count = msg.send(fail_silently=False)
         return sent_count > 0
     except Exception:
         logger.exception(
