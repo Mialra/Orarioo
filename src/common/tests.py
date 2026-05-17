@@ -95,7 +95,8 @@ class SecurityNotificationEmailTests(SimpleTestCase):
 
     def test_send_security_email_logs_and_returns_false_on_error(self):
         with patch(
-            "common.notifications.send_mail", side_effect=RuntimeError("smtp down")
+            "common.notifications.EmailMultiAlternatives",
+            side_effect=RuntimeError("smtp down"),
         ):
             with self.assertLogs("common.notifications", level="ERROR"):
                 sent = send_security_email(

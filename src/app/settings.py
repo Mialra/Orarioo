@@ -234,5 +234,9 @@ DEFAULT_FROM_EMAIL = config(
     default=(EMAIL_HOST_USER),
 )
 
+ANYMAIL = {
+    "BREVO_API_KEY": config("ANYMAIL_BREVO_API_KEY", default=""),
+}
+
 # Custom User Model
 AUTH_USER_MODEL = "user.User"
