@@ -162,6 +162,7 @@ class ScheduleGenerationJob(TeamScopedModel):
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    current_phase = models.IntegerField(null=True, blank=True)
     generation_options = models.JSONField(default=dict)
     result_data = models.JSONField(null=True, blank=True)
     error_data = models.JSONField(null=True, blank=True)

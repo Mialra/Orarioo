@@ -598,7 +598,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                 return Response({"status": job.status, "error": safe_error})
             return Response({"status": job.status, "error": raw_error})
 
-        return Response({"status": job.status, "started_at": job.started_at})
+        return Response({"status": job.status, "current_phase": job.current_phase, "started_at": job.started_at})
 
     def _saved_queryset(self):
         """Return a queryset of all saved (non-auto-generated) schedules for the active team.

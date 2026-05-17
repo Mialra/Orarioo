@@ -49,6 +49,7 @@ def solve_session_assignment(
     random_seed=None,
     fixed_assignments=None,
     generation_options=None,
+    on_phase2_start=None,
 ):
     """Assign each session to a slot and classroom using a two-phase CP-SAT solve.
 
@@ -104,6 +105,7 @@ def solve_session_assignment(
             random_seed=random_seed,
             fixed_assignments=fixed_assignments,
             generation_options=generation_options,
+            on_phase2_start=on_phase2_start,
         )
     )
     return slot_by_session, classroom_by_session, is_optimal, soft_score_info
@@ -132,6 +134,7 @@ def _cp_sat_session_assignment(
     random_seed,
     fixed_assignments,
     generation_options,
+    on_phase2_start=None,
 ):
     """Run the full two-phase CP-SAT solve and return the assignment.
     Input: sessions, slots - standard algorithm inputs;
@@ -282,6 +285,12 @@ def _cp_sat_session_assignment(
         x=x,
         y=y,
     )
+
+    if on_phase2_start is not None:
+        try:
+            on_phase2_start()
+        except Exception:
+            pass
 
     optimization_solver = _build_solver(
         timeout_seconds=optimization_timeout,
