@@ -754,7 +754,11 @@ def _log_process_memory(phase_label):
             "Memoria del proceso antes del solver [%s]: %.0f MB", phase_label, mem_mb
         )
     except Exception:
-        pass
+        logger.debug(
+            "Could not collect process memory usage for phase '%s'.",
+            phase_label,
+            exc_info=True,
+        )
 
 
 # ---------------------------------------------------------------------------
