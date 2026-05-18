@@ -13,6 +13,8 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - depends on local Python version
     cp_model = None
 
+from django.conf import settings
+
 from schedule.algorithm.constraints import (
     add_group_daily_capacity_constraints,
     add_group_no_intraday_gap_constraints,
@@ -34,11 +36,13 @@ from schedule.algorithm.slots import build_real_time_intervals
 
 logger = logging.getLogger(__name__)
 
-_SOLVER_NUM_WORKERS = 1  # single worker to avoid multiplying RAM on constrained hosts
-_SOLVER_MAX_MEMORY_MB = 380  # leave headroom against the 512 MB Render limit
-_SOLVER_LINEARIZATION = (
-    0  # reduces model RAM at the cost of slightly longer solve times
-)
+_SOLVER_NUM_WORKERS_DEFAULT = 1
+_SOLVER_NUM_WORKERS_LARGE = getattr(settings, "SOLVER_NUM_WORKERS_LARGE", 8)
+_SOLVER_LARGE_SESSIONS_THRESHOLD = 40
+_SOLVER_LARGE_SLOTS_THRESHOLD = 25
+_SOLVER_LINEARIZATION = 0
+_SOLVER_MAX_MEMORY_MB = getattr(settings, "SOLVER_MAX_MEMORY_MB", None)
+_SOLVER_PROCESS_LIMIT_MB = getattr(settings, "SOLVER_PROCESS_LIMIT_MB", None)
 
 
 def solve_session_assignment(
@@ -111,6 +115,25 @@ def solve_session_assignment(
     return slot_by_session, classroom_by_session, is_optimal, soft_score_info
 
 
+def _apply_fixed_assignment_constraints(
+    *, model, x, fixed_assignments, session_count, slot_count
+):
+    """Add equality constraints to the model for any locked session→slot assignments.
+    Input: model - CP-SAT CpModel; x - slot decision variables;
+           fixed_assignments - dict {session_idx: slot_idx} or None;
+           session_count, slot_count - bounds for index validation
+    Output: None; raises ScheduleGenerationError on invalid indices
+    """
+    if not fixed_assignments:
+        return
+    for session_idx, slot_idx in fixed_assignments.items():
+        if session_idx < 0 or session_idx >= session_count:
+            raise ScheduleGenerationError(f"Invalid session index: {session_idx}")
+        if slot_idx < 0 or slot_idx >= slot_count:
+            raise ScheduleGenerationError(f"Invalid slot index: {slot_idx}")
+        model.Add(x[(session_idx, slot_idx)] == 1)
+
+
 def _apply_option_constraints(*, model, x, sessions, slots, opts):
     if opts.get("enable_no_intraday_gaps", True):
         add_group_no_intraday_gap_constraints(
@@ -164,14 +187,13 @@ def _cp_sat_session_assignment(
         slot_count=slot_count,
     )
 
-    # Apply fixed assignments (manual change constraints).
-    if fixed_assignments:
-        for session_idx, slot_idx in fixed_assignments.items():
-            if session_idx < 0 or session_idx >= session_count:
-                raise ScheduleGenerationError(f"Invalid session index: {session_idx}")
-            if slot_idx < 0 or slot_idx >= slot_count:
-                raise ScheduleGenerationError(f"Invalid slot index: {slot_idx}")
-            model.Add(x[(session_idx, slot_idx)] == 1)
+    _apply_fixed_assignment_constraints(
+        model=model,
+        x=x,
+        fixed_assignments=fixed_assignments,
+        session_count=session_count,
+        slot_count=slot_count,
+    )
 
     add_recess_slot_hard_constraints(
         model=model,
@@ -223,9 +245,12 @@ def _cp_sat_session_assignment(
     )
 
     # Phase 1: find any feasible assignment with hard constraints only.
+    _check_rss_budget("Phase 1 (feasibility)")
     feasible_solver = _build_solver(
         timeout_seconds=feasible_timeout,
         random_seed=random_seed,
+        session_count=session_count,
+        slot_count=slot_count,
         stop_after_first_solution=True,
     )
     _log_process_memory("Phase 1 (feasibility)")
@@ -286,6 +311,16 @@ def _cp_sat_session_assignment(
         y=y,
     )
 
+    if optimization_timeout == 0:
+        soft_score_info = _build_soft_score_info(
+            phase1_slots=phase1_slots,
+            phase2_slots=phase1_slots,
+            sessions=sessions,
+            slots=slots,
+            generation_options=generation_options,
+        )
+        return phase1_slots, phase1_classrooms, False, soft_score_info
+
     if on_phase2_start is not None:
         try:
             on_phase2_start()
@@ -294,9 +329,21 @@ def _cp_sat_session_assignment(
                 "on_phase2_start callback failed; continuing optimization phase"
             )
 
+    phase2_skip = _skip_phase2_for_memory(
+        phase1_slots=phase1_slots,
+        phase1_classrooms=phase1_classrooms,
+        sessions=sessions,
+        slots=slots,
+        generation_options=generation_options,
+    )
+    if phase2_skip is not None:
+        return phase2_skip
+
     optimization_solver = _build_solver(
         timeout_seconds=optimization_timeout,
         random_seed=random_seed,
+        session_count=session_count,
+        slot_count=slot_count,
         stop_after_first_solution=False,
     )
     _log_process_memory("Phase 2 (optimisation)")
@@ -340,10 +387,13 @@ def _build_solver(
     *,
     timeout_seconds,
     random_seed,
+    session_count,
+    slot_count,
     stop_after_first_solution,
 ):
     """Create and configure a CP-SAT CpSolver instance.
     Input: timeout_seconds - maximum wall-clock time; random_seed - optional int;
+           session_count, slot_count - problem dimensions used to pick worker count;
            stop_after_first_solution - True for the feasibility phase
     Output: configured CpSolver instance
     """
@@ -351,8 +401,15 @@ def _build_solver(
     if timeout_seconds is not None:
         solver.parameters.max_time_in_seconds = timeout_seconds
     solver.parameters.log_search_progress = False
-    solver.parameters.num_search_workers = _SOLVER_NUM_WORKERS
-    solver.parameters.max_memory_in_mb = _SOLVER_MAX_MEMORY_MB
+    num_workers = (
+        _SOLVER_NUM_WORKERS_LARGE
+        if session_count >= _SOLVER_LARGE_SESSIONS_THRESHOLD
+        or slot_count >= _SOLVER_LARGE_SLOTS_THRESHOLD
+        else _SOLVER_NUM_WORKERS_DEFAULT
+    )
+    solver.parameters.num_search_workers = num_workers
+    if _SOLVER_MAX_MEMORY_MB is not None:
+        solver.parameters.max_memory_in_mb = _SOLVER_MAX_MEMORY_MB
     solver.parameters.linearization_level = _SOLVER_LINEARIZATION
     if random_seed is not None:
         solver.parameters.random_seed = int(random_seed)
@@ -625,17 +682,6 @@ def _build_compatible_classroom_index(*, sessions, classrooms):
                 classroom=classroom,
             )
         ]
-        # If user configured allowed classrooms and any of them are shared,
-        # keep only shared options to prefer specialised shared rooms.
-        if allowed_classroom_ids:
-            shared_allowed = [
-                classroom
-                for classroom in compatible_classrooms
-                if getattr(classroom, "is_shared", False)
-            ]
-            if shared_allowed:
-                compatible_classrooms = shared_allowed
-
         if not allowed_classroom_ids:
             default_classroom = _find_group_default_classroom(
                 session=session,
@@ -770,6 +816,73 @@ def _log_process_memory(phase_label):
             phase_label,
             exc_info=True,
         )
+
+
+def _check_rss_budget(phase_label):
+    """Raise ScheduleGenerationError if process RSS is too close to SOLVER_PROCESS_LIMIT_MB.
+    Input: phase_label - string used in log messages
+    Output: None; raises ScheduleGenerationError when the budget is exceeded
+    """
+    if _SOLVER_PROCESS_LIMIT_MB is None:
+        return
+    try:
+        rss_mb = psutil.Process().memory_info().rss / 1024 / 1024
+        logger.info(
+            "RSS antes del solver [%s]: %.0f MB (límite proceso: %d MB)",
+            phase_label,
+            rss_mb,
+            _SOLVER_PROCESS_LIMIT_MB,
+        )
+        if rss_mb > _SOLVER_PROCESS_LIMIT_MB - 40:
+            raise ScheduleGenerationError(
+                "El servidor no tiene suficiente memoria para generar este horario "
+                "ahora mismo. Intentalo de nuevo más tarde",
+                code="SCHEDULE_MEMORY_LIMIT",
+            )
+    except ScheduleGenerationError:
+        raise
+    except Exception:
+        logger.debug(
+            "Could not check RSS memory for phase '%s'.", phase_label, exc_info=True
+        )
+
+
+def _skip_phase2_for_memory(
+    *,
+    phase1_slots,
+    phase1_classrooms,
+    sessions,
+    slots,
+    generation_options,
+):
+    """Return the Phase 1 result if process RSS is too close to the limit, else None.
+    Input: phase1_slots, phase1_classrooms - Phase 1 solution to return on skip;
+           sessions, slots, generation_options - forwarded for soft score computation
+    Output: (phase1_slots, phase1_classrooms, False, soft_score_info) or None
+    """
+    if _SOLVER_PROCESS_LIMIT_MB is None:
+        return None
+    try:
+        rss_mb = psutil.Process().memory_info().rss / 1024 / 1024
+        if rss_mb > _SOLVER_PROCESS_LIMIT_MB - 40:
+            logger.warning(
+                "Saltando fase 2 por memoria insuficiente: %.0f MB > %d MB",
+                rss_mb,
+                _SOLVER_PROCESS_LIMIT_MB - 40,
+            )
+            soft_score_info = _build_soft_score_info(
+                phase1_slots=phase1_slots,
+                phase2_slots=phase1_slots,
+                sessions=sessions,
+                slots=slots,
+                generation_options=generation_options,
+            )
+            return phase1_slots, phase1_classrooms, False, soft_score_info
+    except ScheduleGenerationError:
+        raise
+    except Exception:
+        pass
+    return None
 
 
 # ---------------------------------------------------------------------------

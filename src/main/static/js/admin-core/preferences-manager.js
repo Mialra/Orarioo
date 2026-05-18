@@ -82,6 +82,30 @@
             syncInput();
         }
 
+        function setDayState(day, state) {
+            HOURS.forEach(function (hour) {
+                var key = slotKey(day, hour);
+                preferenceStateBySlot[key] = state;
+                applyStateToCell(
+                    config.gridContainer ? config.gridContainer.querySelector('[data-slot="' + key + '"]') : null,
+                    state
+                );
+            });
+            syncInput();
+        }
+
+        function setHourState(hour, state) {
+            DAYS.forEach(function (day) {
+                var key = slotKey(day, hour);
+                preferenceStateBySlot[key] = state;
+                applyStateToCell(
+                    config.gridContainer ? config.gridContainer.querySelector('[data-slot="' + key + '"]') : null,
+                    state
+                );
+            });
+            syncInput();
+        }
+
         function reset(preferences) {
             DAYS.forEach(function (day) {
                 HOURS.forEach(function (hour) {
@@ -106,7 +130,7 @@
             }
 
             const headCells = DAYS.map(function (day) {
-                return '<div class="pref-grid-header">' + DAY_LABELS[day] + "</div>";
+                return '<button type="button" class="pref-grid-header pref-col-header" data-day="' + day + '" title="Aplicar a todo ' + DAY_LABELS[day] + '">' + DAY_LABELS[day] + "</button>";
             }).join("");
 
             const bodyCells = HOURS.map(function (hour) {
@@ -122,7 +146,7 @@
                         '"></button>'
                     );
                 }).join("");
-                return '<div class="pref-hour">' + hour + "</div>" + rowCells;
+                return '<button type="button" class="pref-hour pref-row-header" data-hour="' + hour + '" title="Aplicar a todas las sesiones de las ' + hour + '">' + hour + "</button>" + rowCells;
             }).join("");
 
             config.gridContainer.innerHTML =
@@ -134,10 +158,11 @@
 
             config.gridContainer.addEventListener("click", function (event) {
                 const cell = event.target.closest("[data-slot]");
-                if (!cell) {
-                    return;
-                }
-                setSlotState(cell.dataset.slot, getBrushState());
+                if (cell) { setSlotState(cell.dataset.slot, getBrushState()); return; }
+                const dayHeader = event.target.closest("[data-day]");
+                if (dayHeader) { setDayState(dayHeader.dataset.day, getBrushState()); return; }
+                const hourLabel = event.target.closest("[data-hour]");
+                if (hourLabel) { setHourState(hourLabel.dataset.hour, getBrushState()); return; }
             });
 
             reset({});

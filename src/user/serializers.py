@@ -354,7 +354,7 @@ class UserChangePasswordSerializer(serializers.Serializer):
             raise_validation_error(
                 "current_password",
                 "INVALID_CREDENTIALS",
-                "Current password is incorrect.",
+                "La contraseña introducida es incorrecta.",
                 context={"field": "current_password"},
             )
         return value

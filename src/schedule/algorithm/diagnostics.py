@@ -929,14 +929,6 @@ def _build_compatible_classrooms_by_session(*, sessions, classrooms):
             for classroom in classrooms
             if _is_classroom_compatible(session=session, classroom=classroom)
         ]
-        if allowed_classroom_ids:
-            shared_allowed = [
-                classroom
-                for classroom in compatible
-                if getattr(classroom, "is_shared", False)
-            ]
-            if shared_allowed:
-                compatible = shared_allowed
         if not allowed_classroom_ids:
             default_classroom = _find_group_default_classroom(
                 session=session,

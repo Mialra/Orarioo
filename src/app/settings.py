@@ -240,3 +240,12 @@ ANYMAIL = {
 
 # Custom User Model
 AUTH_USER_MODEL = "user.User"
+
+# CP-SAT solver tuning
+SOLVER_NUM_WORKERS_LARGE = config("SOLVER_NUM_WORKERS_LARGE", default=8, cast=int)
+SOLVER_MAX_MEMORY_MB = config(
+    "SOLVER_MAX_MEMORY_MB", default=None, cast=lambda v: int(v) if v else None
+)
+SOLVER_PROCESS_LIMIT_MB = config(
+    "SOLVER_PROCESS_LIMIT_MB", default=None, cast=lambda v: int(v) if v else None
+)

@@ -87,15 +87,15 @@ class ClassroomApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("name", response.data)
 
-    def test_create_non_shared_classroom(self):
+    def test_create_classroom_response_includes_name(self):
         response = self.client.post(
             reverse("classroom-list"),
-            {"name": "Aula 3B", "is_shared": False},
+            {"name": "Aula 3B"},
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["is_shared"], False)
+        self.assertEqual(response.data["name"], "Aula 3B")
 
     def test_reject_case_insensitive_duplicate_name(self):
         Classroom.objects.create(name="Aula Norte", team=self.team)

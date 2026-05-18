@@ -124,6 +124,10 @@
     max-width: min(100%, 640px);
 }
 
+.onboarding-step {
+    min-width: 0;
+}
+
 .auth-card .form-control-lg,
 .auth-card .form-select-lg,
 .auth-card .input-group-lg > .form-control,

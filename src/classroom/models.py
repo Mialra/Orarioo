@@ -2,16 +2,12 @@
 Classroom domain model scoped to a collaboration team.
 """
 
-from django.db import models
-
 from auditableEntity.models import AuditableEntity, TeamScopedModel
 from namedEntity.models import team_scoped_case_insensitive_name_constraint
 
 
 class Classroom(TeamScopedModel, AuditableEntity):
     """Classroom entity used by schedules and subjects."""
-
-    is_shared = models.BooleanField(default=True)
 
     class Meta:
         db_table = "classroom"
