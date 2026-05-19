@@ -5,7 +5,6 @@ Run: pytest tests/e2e/specs/ --base-url http://localhost:8000
 """
 import re
 
-import pytest
 from playwright.sync_api import Page, expect
 
 
