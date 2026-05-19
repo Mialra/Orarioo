@@ -33,8 +33,9 @@ def authenticated_context(browser, base_url):
 
 
 @pytest.fixture()
-def authenticated_page(authenticated_context):
-    """Per-test page inside the shared authenticated context."""
+def authenticated_page(authenticated_context, base_url):
+    """Per-test page inside the shared authenticated context, starting at /dashboard/."""
     page = authenticated_context.new_page()
+    page.goto(f"{base_url}/dashboard/")
     yield page
     page.close()
