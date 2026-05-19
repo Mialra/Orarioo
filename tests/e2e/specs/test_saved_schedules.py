@@ -41,3 +41,37 @@ def test_saved_schedule_card_is_clickable(saved_page: Page):
     _cards(page).first.click()
     page.wait_for_load_state("networkidle")
     assert "Error" not in page.title()
+
+
+def test_rename_saved_schedule(saved_page: Page):
+    page = saved_page
+
+    if _cards(page).count() == 0:
+        pytest.skip("No hay horarios guardados para renombrar")
+
+    _cards(page).first.locator(".saved-card-rename").click()
+
+    modal = page.locator("#renameSavedTimetableModal")
+    expect(modal).to_be_visible(timeout=8_000)
+
+    page.fill("#renameSavedTimetableInput", RENAMED_SCHEDULE)
+    page.click("#confirmRenameSavedTimetableBtn")
+
+    expect(modal).not_to_be_visible(timeout=10_000)
+    expect(page.locator("#scheduleAlert")).to_be_visible(timeout=8_000)
+
+
+def test_delete_saved_schedule(saved_page: Page):
+    page = saved_page
+
+    if _cards(page).count() == 0:
+        pytest.skip("No hay horarios guardados para eliminar")
+
+    _cards(page).first.locator(".saved-card-delete").click()
+
+    modal = page.locator("#deleteSavedTimetableModal")
+    expect(modal).to_be_visible(timeout=8_000)
+    page.click("#confirmDeleteSavedTimetableBtn")
+
+    expect(modal).not_to_be_visible(timeout=10_000)
+    expect(page.locator("#scheduleAlert")).to_be_visible(timeout=8_000)

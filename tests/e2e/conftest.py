@@ -18,8 +18,8 @@ def browser_context_args(browser_context_args):
 
 
 @pytest.fixture(scope="session")
-def authenticated_context(browser, base_url):
-    """Login once per session; reuse context for all authenticated tests."""
+def auth_storage_state(browser, base_url):
+    """Login once per session and capture cookies/storage as a snapshot."""
     context = browser.new_context(ignore_https_errors=True)
     page = context.new_page()
     page.goto(f"{base_url}/sign-in/")
@@ -27,15 +27,17 @@ def authenticated_context(browser, base_url):
     page.fill('[name="password"]', PASSWORD)
     page.click('[type="submit"]')
     page.wait_for_url(re.compile(r"dashboard"), timeout=15_000)
-    page.close()
-    yield context
+    state = context.storage_state()
     context.close()
+    return state
 
 
 @pytest.fixture()
-def authenticated_page(authenticated_context, base_url):
-    """Per-test page inside the shared authenticated context, starting at /dashboard/."""
-    page = authenticated_context.new_page()
+def authenticated_page(browser, auth_storage_state, base_url):
+    """Isolated per-test context pre-loaded with auth state, starting at /dashboard/."""
+    context = browser.new_context(ignore_https_errors=True, storage_state=auth_storage_state)
+    page = context.new_page()
     page.goto(f"{base_url}/dashboard/")
+    page.wait_for_load_state("networkidle")
     yield page
-    page.close()
+    context.close()

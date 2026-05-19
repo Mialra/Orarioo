@@ -35,6 +35,12 @@ def _select_custom_option(page: Page, select_id: str, option_index: int) -> bool
     return True
 
 
+def test_subject_list_loads(subjects_page: Page):
+    page = subjects_page
+    expect(page).to_have_url(re.compile(r"subjects"), timeout=8_000)
+    assert "Error" not in page.title()
+
+
 def test_create_subject(subjects_page: Page):
     page = subjects_page
 
