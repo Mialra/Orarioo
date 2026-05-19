@@ -881,7 +881,9 @@ def _skip_phase2_for_memory(
     except ScheduleGenerationError:
         raise
     except Exception:
-        pass
+        logger.debug(
+            "Could not evaluate RSS memory to decide Phase 2 skip.", exc_info=True
+        )
     return None
 
 
