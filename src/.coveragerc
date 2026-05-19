@@ -1,0 +1,27 @@
+[run]
+source = .
+omit =
+    */migrations/*
+    */settings*.py
+    */wsgi.py
+    */asgi.py
+    manage.py
+    */venv/*
+    */__pycache__/*
+    load_test_data.py
+    reset_dev_db.py
+
+[report]
+fail_under = 80
+show_missing = true
+skip_empty = true
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    def __str__
+    if TYPE_CHECKING:
+    raise NotImplementedError
+    \.\.\.
+
+[html]
+directory = htmlcov

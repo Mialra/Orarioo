@@ -1,0 +1,57 @@
+"""E2E: horarios guardados en /dashboard/saved/.
+
+Run: pytest tests/e2e/specs/test_saved_schedules.py --base-url http://localhost:8000 -v
+"""
+import os
+import re
+import time
+
+import pytest
+from playwright.sync_api import Page, expect
+
+EMAIL = os.getenv("E2E_EMAIL", "direccion.academica@test.com")
+PASSWORD = os.getenv("E2E_PASSWORD", "direccion123")
+
+_SUFFIX = str(int(time.time()) % 100_000)
+RENAMED_SCHEDULE = f"HorarioE2E{_SUFFIX}"
+
+
+@pytest.fixture()
+def authenticated_page(page: Page, base_url: str):
+    page.goto(f"{base_url}/sign-in/")
+    page.fill('[name="email"]', EMAIL)
+    page.fill('[name="password"]', PASSWORD)
+    page.click('[type="submit"]')
+    expect(page).to_have_url(re.compile(r"dashboard"), timeout=10_000)
+    return page
+
+
+@pytest.fixture()
+def saved_page(authenticated_page: Page, base_url: str):
+    page = authenticated_page
+    page.goto(f"{base_url}/dashboard/saved/")
+    page.wait_for_load_state("networkidle")
+    # Wait for the cards container to render (AJAX may finish slightly after networkidle)
+    page.wait_for_selector("#savedScheduleCards *", timeout=8_000)
+    return page
+
+
+def _cards(page: Page):
+    return page.locator(".saved-card")
+
+
+def test_saved_schedules_tab_loads(saved_page: Page):
+    page = saved_page
+    expect(page).to_have_url(re.compile(r"saved"), timeout=8_000)
+    assert "Error" not in page.title()
+
+
+def test_saved_schedule_card_is_clickable(saved_page: Page):
+    page = saved_page
+
+    if _cards(page).count() == 0:
+        pytest.skip("No hay horarios guardados para probar")
+
+    _cards(page).first.click()
+    page.wait_for_load_state("networkidle")
+    assert "Error" not in page.title()
