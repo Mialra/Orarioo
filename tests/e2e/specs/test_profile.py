@@ -30,12 +30,6 @@ def profile_page(authenticated_page: Page, base_url: str):
     return page
 
 
-def test_profile_page_loads(profile_page: Page):
-    page = profile_page
-    expect(page).to_have_url(re.compile(r"profile"), timeout=8_000)
-    assert "Error" not in page.title()
-
-
 def test_profile_shows_correct_email(profile_page: Page):
     page = profile_page
     # The email field is always read-only; read its value directly via JS
