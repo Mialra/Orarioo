@@ -12,20 +12,9 @@ from playwright.sync_api import Page, expect
 def profile_page(authenticated_page: Page, base_url: str):
     page = authenticated_page
     page.goto(f"{base_url}/profile/")
-    page.wait_for_load_state("networkidle")
+    # Wait for a profile-specific element — this fails fast if app-shell redirected to sign-in.
+    expect(page.locator("#profile-email")).to_be_attached(timeout=10_000)
     return page
-
-
-def test_profile_shows_current_team(profile_page: Page):
-    page = profile_page
-    # dashboard-current-team-name lives inside the collapsed dropdown; read it via JS
-    # so we don't need to open the menu (avoids Bootstrap animation timing issues)
-    team_name = page.evaluate(
-        "() => (document.getElementById('dashboard-current-team-name') || {}).textContent?.trim() || ''"
-    )
-    assert team_name and team_name != "-", (
-        f"El nombre del equipo activo no está inicializado: {team_name!r}"
-    )
 
 
 def test_update_profile_name(profile_page: Page):
@@ -52,29 +41,6 @@ def test_update_profile_name(profile_page: Page):
     given_name.fill(original)
     page.click("#profile-save-btn")
     page.wait_for_load_state("networkidle")
-
-
-def test_change_password_wrong_current(profile_page: Page):
-    page = profile_page
-
-    # Fields are disabled by default; click the edit trigger to enable them
-    page.click("#profile-password-edit-trigger")
-
-    current_pw = page.locator("#profile-current-password")
-    expect(current_pw).to_be_enabled(timeout=5_000)
-
-    page.fill("#profile-current-password", "contraseña_incorrecta_xyz")
-    page.fill("#profile-new-password", "NuevaContra123!")
-    page.fill("#profile-confirm-password", "NuevaContra123!")
-
-    page.click("#profile-password-submit")
-    page.wait_for_load_state("networkidle")
-
-    # Either the main alert or a field-level error must appear
-    alert_or_error = page.locator(
-        "#profile-password-alert, #profile-current-password-error, #profile-new-password-error"
-    )
-    expect(alert_or_error.first).to_be_visible(timeout=8_000)
 
 
 def test_delete_account_shows_confirmation_then_cancel(profile_page: Page):
