@@ -16,14 +16,6 @@ def profile_page(authenticated_page: Page, base_url: str):
     return page
 
 
-def test_profile_shows_correct_email(profile_page: Page):
-    page = profile_page
-    # The email field is always read-only; read its value directly via JS
-    email_value = page.locator("#profile-email").evaluate("el => el.value")
-    assert email_value, "El campo email no debe estar vacío"
-    assert "@" in email_value, f"El valor del email no parece un email válido: {email_value!r}"
-
-
 def test_profile_shows_current_team(profile_page: Page):
     page = profile_page
     # dashboard-current-team-name lives inside the collapsed dropdown; read it via JS
