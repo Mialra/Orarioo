@@ -2,24 +2,10 @@
 
 Run: pytest tests/e2e/specs/test_navigation.py --base-url http://localhost:8000 -v
 """
-import os
 import re
 
 import pytest
 from playwright.sync_api import Page, expect
-
-EMAIL = os.getenv("E2E_EMAIL", "direccion.academica@test.com")
-PASSWORD = os.getenv("E2E_PASSWORD", "direccion123")
-
-
-@pytest.fixture()
-def authenticated_page(page: Page, base_url: str):
-    page.goto(f"{base_url}/sign-in/")
-    page.fill('[name="email"]', EMAIL)
-    page.fill('[name="password"]', PASSWORD)
-    page.click('[type="submit"]')
-    expect(page).to_have_url(re.compile(r"dashboard"), timeout=10_000)
-    return page
 
 
 def test_root_redirects_to_sign_in(page: Page, base_url: str):

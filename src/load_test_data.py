@@ -113,9 +113,8 @@ def create_users():
             email=email,
             defaults={"name": name, "family_name": family_name},
         )
-        if created:
-            collaboration_user.set_password("direccion123")
-            collaboration_user.save(update_fields=["password"])
+        collaboration_user.set_password("direccion123")
+        collaboration_user.save(update_fields=["password"])
         users.append(collaboration_user)
         print(f"  ✓ Upserted collaboration user: {collaboration_user.email}")
 

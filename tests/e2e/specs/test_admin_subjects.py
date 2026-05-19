@@ -3,27 +3,13 @@
 Prerequisito: debe existir al menos un profesor, un grupo y un aula en la BD.
 Run: pytest tests/e2e/specs/test_admin_subjects.py --base-url http://localhost:8000 -v
 """
-import os
 import re
 import time
 
 import pytest
 from playwright.sync_api import Page, expect
 
-EMAIL = os.getenv("E2E_EMAIL", "direccion.academica@test.com")
-PASSWORD = os.getenv("E2E_PASSWORD", "direccion123")
-
 _SUFFIX = str(int(time.time()) % 100_000)
-
-
-@pytest.fixture()
-def authenticated_page(page: Page, base_url: str):
-    page.goto(f"{base_url}/sign-in/")
-    page.fill('[name="email"]', EMAIL)
-    page.fill('[name="password"]', PASSWORD)
-    page.click('[type="submit"]')
-    expect(page).to_have_url(re.compile(r"dashboard"), timeout=10_000)
-    return page
 
 
 @pytest.fixture()
