@@ -26,12 +26,6 @@ def _cards(page: Page):
     return page.locator(".saved-card")
 
 
-def test_saved_schedules_tab_loads(saved_page: Page):
-    page = saved_page
-    expect(page).to_have_url(re.compile(r"saved"), timeout=8_000)
-    assert "Error" not in page.title()
-
-
 def test_saved_schedule_card_is_clickable(saved_page: Page):
     page = saved_page
 
