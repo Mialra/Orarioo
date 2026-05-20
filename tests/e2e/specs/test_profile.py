@@ -11,21 +11,41 @@ _EMAIL = os.getenv("E2E_EMAIL", "direccion.academica@test.com")
 _PASSWORD = os.getenv("E2E_PASSWORD", "direccion123")
 
 
+def _relogin_and_go_to_profile(page, base_url: str) -> bool:
+    """
+    Log in fresh and navigate to /profile/. Returns True if the profile page
+    loaded successfully (i.e. we are NOT on /sign-in/ after networkidle).
+    """
+    page.goto(f"{base_url}/sign-in/")
+    page.wait_for_load_state("networkidle")
+    page.fill('[name="email"]', _EMAIL)
+    page.fill('[name="password"]', _PASSWORD)
+    page.click('[type="submit"]')
+    try:
+        page.wait_for_url(re.compile(r"dashboard"), timeout=10_000)
+    except Exception:
+        return False
+    page.wait_for_load_state("networkidle")
+    if "/sign-in/" in page.url:
+        # dashboard.js also called clearAuthSession — server still struggling
+        return False
+    page.goto(f"{base_url}/profile/")
+    page.wait_for_load_state("networkidle")
+    return "/sign-in/" not in page.url
+
+
 @pytest.fixture()
 def profile_page(authenticated_page: Page, base_url: str):
     page = authenticated_page
     page.goto(f"{base_url}/profile/")
     page.wait_for_load_state("networkidle")
-    if "/sign-in/" in page.url:
-        # Profile page JS cleared the shared auth session (clearAuthSession + redirect).
-        # Re-authenticate in-place and retry navigating to the profile.
-        page.fill('[name="email"]', _EMAIL)
-        page.fill('[name="password"]', _PASSWORD)
-        page.click('[type="submit"]')
-        page.wait_for_url(re.compile(r"dashboard"), timeout=15_000)
-        page.wait_for_load_state("networkidle")
-        page.goto(f"{base_url}/profile/")
-        page.wait_for_load_state("networkidle")
+    # Retry loop: the server can reject /api/users/me/ for ~20 s after heavy
+    # admin test load. Each attempt takes ~8-10 s, so 4 tries covers ~40 s.
+    for _ in range(4):
+        if "/sign-in/" not in page.url:
+            break
+        if _relogin_and_go_to_profile(page, base_url):
+            break
     expect(page.locator("#profile-email")).to_be_attached(timeout=10_000)
     return page
 
