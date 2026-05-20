@@ -2,6 +2,7 @@
 
 Run: pytest tests/e2e/specs/test_saved_schedules.py --base-url http://localhost:8000 -v
 """
+import re
 import time
 
 import pytest
