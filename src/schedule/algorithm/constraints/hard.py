@@ -377,7 +377,11 @@ def _build_group_day_occupancy_vars(
     for slot_idx in day_slot_list:
         occupied = model.NewBoolVar(f"g{group_id}_d{day_idx}_p{slot_idx}_occ")
         model.Add(
-            sum(x[(s_idx, slot_idx)] for s_idx in group_sessions if (s_idx, slot_idx) in x)
+            sum(
+                x[(s_idx, slot_idx)]
+                for s_idx in group_sessions
+                if (s_idx, slot_idx) in x
+            )
             == occupied
         )
         occupancy_by_slot[slot_idx] = occupied

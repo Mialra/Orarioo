@@ -176,7 +176,9 @@ def _cp_sat_session_assignment(
     allowed_p_by_session = _build_allowed_slots_per_session(
         sessions=sessions, slots=slots
     )
-    zero_valid = [s_idx for s_idx, allowed in allowed_p_by_session.items() if not allowed]
+    zero_valid = [
+        s_idx for s_idx, allowed in allowed_p_by_session.items() if not allowed
+    ]
     if zero_valid:
         raise ScheduleGenerationError(
             f"Sessions {zero_valid} have no valid slots (check stage/recess configuration).",

@@ -211,9 +211,7 @@ def _teacher_gap_minimization_terms(*, model, x, sessions, slots):
                     if (s_idx, p_j) in x
                 )
                 n_at = sum(
-                    x[(s_idx, p_i)]
-                    for s_idx in t_session_indices
-                    if (s_idx, p_i) in x
+                    x[(s_idx, p_i)] for s_idx in t_session_indices if (s_idx, p_i) in x
                 )
 
                 has_before = model.NewBoolVar(f"t{teacher_id}_d{day_idx}_p{p_i}_before")
