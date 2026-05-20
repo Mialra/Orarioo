@@ -113,9 +113,8 @@ def create_users():
             email=email,
             defaults={"name": name, "family_name": family_name},
         )
-        if created:
-            collaboration_user.set_password("direccion123")
-            collaboration_user.save(update_fields=["password"])
+        collaboration_user.set_password("direccion123")
+        collaboration_user.save(update_fields=["password"])
         users.append(collaboration_user)
         print(f"  ✓ Upserted collaboration user: {collaboration_user.email}")
 
@@ -457,41 +456,39 @@ def create_groups(team):
 
 
 def create_classrooms(team):
-    """Create classrooms with shared/non-shared metadata."""
+    """Create classrooms."""
     print("\n🏫 Creating classrooms...")
 
     classrooms_data = [
-        ("Aula 1º Infantil", False),
-        ("Aula 2º Infantil", False),
-        ("Aula 3º Infantil", False),
-        ("Aula 1º Primaria", False),
-        ("Aula 2º Primaria", False),
-        ("Aula 3º Primaria", False),
-        ("Aula 4º Primaria", False),
-        ("Aula 5º Primaria", False),
-        ("Aula 6º Primaria", False),
-        ("Aula 1º ESO", False),
-        ("Aula 2º ESO", False),
-        ("Aula 3º ESO", False),
-        ("Aula 4º ESO", False),
-        ("Laboratorio", True),
-        ("Gimnasio", True),
-        ("Aula de Música", True),
-        ("Aula de Plástica", True),
-        ("Aula de Tecnología", True),
+        "Aula 1º Infantil",
+        "Aula 2º Infantil",
+        "Aula 3º Infantil",
+        "Aula 1º Primaria",
+        "Aula 2º Primaria",
+        "Aula 3º Primaria",
+        "Aula 4º Primaria",
+        "Aula 5º Primaria",
+        "Aula 6º Primaria",
+        "Aula 1º ESO",
+        "Aula 2º ESO",
+        "Aula 3º ESO",
+        "Aula 4º ESO",
+        "Laboratorio",
+        "Gimnasio",
+        "Aula de Música",
+        "Aula de Plástica",
+        "Aula de Tecnología",
     ]
 
     classrooms = []
-    for name, is_shared in classrooms_data:
+    for name in classrooms_data:
         classroom, _ = Classroom.objects.update_or_create(
             name=name,
             team=team,
-            defaults={"is_shared": is_shared, "created_by": "system"},
+            defaults={"created_by": "system"},
         )
         classrooms.append(classroom)
-        print(
-            f"  ✓ Upserted classroom: {classroom.name} [{'shared' if classroom.is_shared else 'exclusive'}]"
-        )
+        print(f"  ✓ Upserted classroom: {classroom.name}")
 
     return classrooms
 

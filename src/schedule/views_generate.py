@@ -126,7 +126,7 @@ def parse_base_generation_int_options(payload, options):
     Output: None on success, or Response with HTTP 400 on validation failure
     """
     int_fields = {
-        "timeout_minutes": (1, 1440),
+        "timeout_minutes": (0, 1440),
         "teachers_on_duty": (0, 20),
     }
 

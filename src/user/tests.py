@@ -457,7 +457,6 @@ class AccountDeletionTests(APITestCase):
         self.classroom = Classroom.objects.create(
             name="Aula RGPD",
             team=self.team,
-            is_shared=True,
         )
         self.group = Group.objects.create(
             name="Grupo RGPD",

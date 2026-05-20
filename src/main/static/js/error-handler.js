@@ -619,12 +619,14 @@
    */
   function renderAlertContent(errorInfo) {
     const info = errorInfo || {};
-    const parts = ["<div>" + escapeHtml(info.message || "Se ha producido un error.") + "</div>"];
     const diagnostics = Array.isArray(info.diagnostics) ? info.diagnostics : [];
-    // The headline already shows the first diagnostic, so skip it in the list.
-    const remainingDiagnostics = diagnostics.length > 0 ? diagnostics.slice(1) : [];
-    const visibleDiagnostics = remainingDiagnostics.slice(0, 5);
-    const extraDiagnostics = remainingDiagnostics.slice(5);
+    const hasHeadline = Boolean(info.headline);
+    const headlineText = hasHeadline ? info.headline : (info.message || "Se ha producido un error.");
+    const parts = ["<div>" + escapeHtml(headlineText) + "</div>"];
+    // If a custom headline is set, show ALL diagnostics; otherwise skip the first (already shown as headline).
+    const shownDiagnostics = hasHeadline ? diagnostics : (diagnostics.length > 0 ? diagnostics.slice(1) : []);
+    const visibleDiagnostics = shownDiagnostics.slice(0, 5);
+    const extraDiagnostics = shownDiagnostics.slice(5);
 
     if (visibleDiagnostics.length) {
       parts.push('<ul class="mb-0 mt-2">');

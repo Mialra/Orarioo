@@ -83,6 +83,7 @@
 
     if (feedback) {
       feedback.textContent = message || "";
+      feedback.classList.toggle("d-block", hasError);
     }
   }
 

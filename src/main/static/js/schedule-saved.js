@@ -124,9 +124,7 @@
       }
       return {
         sessions: listFromPayload(result.data),
-        teacherWorkloadsByName: utils.buildTeacherWorkloadsByNameFromApi(
-          result.data && result.data.teacher_workloads
-        ),
+        teacherWorkloadsByName: utils.buildTeacherWorkloadsByNameFromApi(result.data && result.data.teacher_workloads),
         unavailability: (result.data && result.data.unavailability) || null,
         stageWindows: (result.data && result.data.stage_windows) || null,
       };
@@ -215,9 +213,7 @@
           if (!session || !session.updated_at) {
             return latest;
           }
-          return utils.toDateMillis(session.updated_at) > utils.toDateMillis(latest)
-            ? session.updated_at
-            : latest;
+          return utils.toDateMillis(session.updated_at) > utils.toDateMillis(latest) ? session.updated_at : latest;
         }, selected.updated_at || "");
         if (latestUpdatedAt) {
           selected.updated_at = latestUpdatedAt;
@@ -265,26 +261,44 @@
           resolve(newName && newName.trim() ? newName.trim() : null);
           return;
         }
-        if (input) { input.value = currentName; input.classList.remove("is-invalid"); }
-        if (nameError) { nameError.textContent = ""; }
-        if (alertEl) { alertEl.classList.add("d-none"); alertEl.textContent = ""; }
+        if (input) {
+          input.value = currentName;
+          input.classList.remove("is-invalid");
+        }
+        if (nameError) {
+          nameError.textContent = "";
+        }
+        if (alertEl) {
+          alertEl.classList.add("d-none");
+          alertEl.textContent = "";
+        }
 
         var resolved = false;
-        var instance = window.bootstrap && window.bootstrap.Modal
-          ? window.bootstrap.Modal.getOrCreateInstance(modal)
-          : null;
+        var instance =
+          window.bootstrap && window.bootstrap.Modal ? window.bootstrap.Modal.getOrCreateInstance(modal) : null;
 
         function closeModal() {
-          if (instance) { instance.hide(); }
-          else { modal.classList.remove("show"); modal.style.display = "none"; document.body.classList.remove("modal-open"); }
+          if (instance) {
+            instance.hide();
+          } else {
+            modal.classList.remove("show");
+            modal.style.display = "none";
+            document.body.classList.remove("modal-open");
+          }
         }
 
         function onConfirm() {
-          if (resolved) { return; }
+          if (resolved) {
+            return;
+          }
           var val = (input ? input.value : "").trim();
           if (!val) {
-            if (input) { input.classList.add("is-invalid"); }
-            if (nameError) { nameError.textContent = "El nombre es obligatorio."; }
+            if (input) {
+              input.classList.add("is-invalid");
+            }
+            if (nameError) {
+              nameError.textContent = "El nombre es obligatorio.";
+            }
             return;
           }
           resolved = true;
@@ -293,7 +307,9 @@
         }
 
         function onDismiss() {
-          if (resolved) { return; }
+          if (resolved) {
+            return;
+          }
           resolved = true;
           resolve(null);
         }
@@ -301,9 +317,18 @@
         confirmBtn.addEventListener("click", onConfirm, { once: true });
         modal.addEventListener("hidden.bs.modal", onDismiss, { once: true });
 
-        if (instance) { instance.show(); }
-        else { modal.classList.add("show"); modal.style.display = "block"; document.body.classList.add("modal-open"); }
-        setTimeout(function () { if (input) { input.select(); } }, 300);
+        if (instance) {
+          instance.show();
+        } else {
+          modal.classList.add("show");
+          modal.style.display = "block";
+          document.body.classList.add("modal-open");
+        }
+        setTimeout(function () {
+          if (input) {
+            input.select();
+          }
+        }, 300);
       });
     }
 
@@ -315,8 +340,12 @@
           return;
         }
         var newName = await openRenameModal(selected.name);
-        if (!newName) { return; }
-        if (utils.normalizeForCompare(newName) === utils.normalizeForCompare(selected.name)) { return; }
+        if (!newName) {
+          return;
+        }
+        if (utils.normalizeForCompare(newName) === utils.normalizeForCompare(selected.name)) {
+          return;
+        }
 
         var result = await apiJson("/schedules/rename-saved-timetable/", "POST", {
           old_name: selected.name,
@@ -328,12 +357,18 @@
           if (fieldError) {
             var input = document.getElementById("renameSavedTimetableInput");
             var nameError = document.getElementById("renameSavedTimetableNameError");
-            if (input) { input.classList.add("is-invalid"); }
-            if (nameError) { nameError.textContent = fieldError; }
+            if (input) {
+              input.classList.add("is-invalid");
+            }
+            if (nameError) {
+              nameError.textContent = fieldError;
+            }
             var modal = document.getElementById("renameSavedTimetableModal");
-            var instance = window.bootstrap && window.bootstrap.Modal
-              ? window.bootstrap.Modal.getOrCreateInstance(modal) : null;
-            if (instance) { instance.show(); }
+            var instance =
+              window.bootstrap && window.bootstrap.Modal ? window.bootstrap.Modal.getOrCreateInstance(modal) : null;
+            if (instance) {
+              instance.show();
+            }
             return;
           }
           showAlert("error", extractApiErrorMessage(result.data, "No se pudo renombrar el horario guardado."));
@@ -365,9 +400,8 @@
           nameEl.textContent = name;
         }
         var resolved = false;
-        var instance = window.bootstrap && window.bootstrap.Modal
-          ? window.bootstrap.Modal.getOrCreateInstance(modal)
-          : null;
+        var instance =
+          window.bootstrap && window.bootstrap.Modal ? window.bootstrap.Modal.getOrCreateInstance(modal) : null;
 
         function closeModal() {
           if (instance) {
@@ -380,14 +414,18 @@
         }
 
         function onConfirm() {
-          if (resolved) { return; }
+          if (resolved) {
+            return;
+          }
           resolved = true;
           closeModal();
           resolve(true);
         }
 
         function onDismiss() {
-          if (resolved) { return; }
+          if (resolved) {
+            return;
+          }
           resolved = true;
           resolve(false);
         }
@@ -471,7 +509,7 @@
         state.initialSavedRouteName = "";
         if (!(await openSavedWorkspaceByName(routeRequestedName))) {
           config.onShowSavedPicker();
-          showAlert("warning", 'No se encontro el horario guardado "' + routeRequestedName + '".');
+          showAlert("warning", 'No se encontró el horario guardado "' + routeRequestedName + '".');
         }
         return true;
       }
@@ -504,8 +542,12 @@
         return state.savedSummaryPromise;
       }
       state.savedSummaryPromise = loadSavedSchedules()
-        .catch(function () { return false; })
-        .finally(function () { state.savedSummaryPromise = null; });
+        .catch(function () {
+          return false;
+        })
+        .finally(function () {
+          state.savedSummaryPromise = null;
+        });
       return state.savedSummaryPromise;
     }
 
@@ -525,9 +567,7 @@
           if (!session || !session.updated_at) {
             return latest;
           }
-          return utils.toDateMillis(session.updated_at) > utils.toDateMillis(latest)
-            ? session.updated_at
-            : latest;
+          return utils.toDateMillis(session.updated_at) > utils.toDateMillis(latest) ? session.updated_at : latest;
         }, "") || new Date().toISOString();
       var normalizedName = utils.normalizeForCompare(name);
       var existingIndex = state.savedTimetableGroups.findIndex(function (group) {

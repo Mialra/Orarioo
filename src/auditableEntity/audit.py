@@ -85,7 +85,6 @@ FIELD_LABELS = {
     "weekly_hours_exact": "Carga horaria exacta",
     "working_hours": "Horas de trabajo",
     "time_preferences": "Preferencias horarias",
-    "is_shared": "Compartida",
     "stage": "Etapa",
     "weekly_hours": "Horas semanales",
     "duration": "Duración",

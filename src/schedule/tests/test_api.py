@@ -1168,12 +1168,12 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
 
     def test_generate_rejects_non_positive_timeout_minutes(self):
-        response = self.generate_schedule({"timeout_minutes": 0})
+        response = self.generate_schedule({"timeout_minutes": -1})
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
         self.assertIn(
-            "timeout_minutes must be between 1 and 1440",
+            "timeout_minutes must be between 0 and 1440",
             response.data["detail"],
         )
 
@@ -1192,11 +1192,8 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(timeout_seconds, 900.0)  # 15 min * 60 s
 
     def test_generate_assigns_only_subject_mandatory_classroom(self):
-        self.classroom.is_shared = True
-        self.classroom.save(update_fields=["is_shared"])
         assigned = Classroom.objects.create(
             name="Aula Asignada",
-            is_shared=True,
             team=self.team,
         )
         self.subject.mandatory_classroom = assigned
@@ -1214,11 +1211,9 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
     def test_generate_uses_mandatory_classroom_when_set(self):
         self.classroom.name = "Aula 1A"
-        self.classroom.is_shared = False
-        self.classroom.save(update_fields=["name", "is_shared"])
+        self.classroom.save(update_fields=["name"])
         music_room = Classroom.objects.create(
             name="Aula de Musica",
-            is_shared=True,
             team=self.team,
         )
         self.subject.mandatory_classroom = music_room
@@ -1235,9 +1230,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(generated_classroom_ids, {music_room.id})
 
     def test_generate_uses_any_classroom_when_subject_has_no_restrictions(self):
-        self.classroom.is_shared = True
-        self.classroom.save(update_fields=["is_shared"])
-
         response = self.generate_schedule()
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1248,9 +1240,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         self.assertIn(self.classroom.id, generated_classroom_ids)
 
-    def test_generate_spreads_sessions_when_one_allowed_classroom_is_shared(self):
-        self.classroom.is_shared = True
-        self.classroom.save(update_fields=["is_shared"])
+    def test_generate_spreads_sessions_for_shared_mandatory_classroom(self):
         self.subject.weekly_hours = 1
         self.subject.save(update_fields=["weekly_hours"])
 
@@ -2867,3 +2857,93 @@ class TestTCSessionSwapView(AuthenticatedAdminAPIMixin, APITestCase):
         tc_own = self._create_tc(self.teacher_a, day=0)
         response = self._swap(tc_own, tc_other)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class TestSolverConfig(TestCase):
+    """Unit tests for dynamic worker selection and RSS memory guard."""
+
+    def _make_solver(self, session_count, slot_count, max_memory_mb=None):
+        from unittest.mock import patch as _patch
+
+        with _patch(
+            "schedule.algorithm.assignment._SOLVER_MAX_MEMORY_MB", max_memory_mb
+        ):
+            return schedule_assignment._build_solver(
+                timeout_seconds=None,
+                random_seed=None,
+                session_count=session_count,
+                slot_count=slot_count,
+                stop_after_first_solution=False,
+            )
+
+    def test_small_problem_uses_single_worker(self):
+        """Problems below both thresholds should use the default (1) worker."""
+        solver = self._make_solver(session_count=10, slot_count=10)
+        self.assertEqual(solver.parameters.num_search_workers, 1)
+
+    def test_large_session_count_uses_more_workers(self):
+        """session_count >= 40 should trigger the large-worker count."""
+        solver = self._make_solver(session_count=40, slot_count=10)
+        self.assertEqual(
+            solver.parameters.num_search_workers,
+            schedule_assignment._SOLVER_NUM_WORKERS_LARGE,
+        )
+
+    def test_large_slot_count_uses_more_workers(self):
+        """slot_count >= 25 should trigger the large-worker count."""
+        solver = self._make_solver(session_count=5, slot_count=25)
+        self.assertEqual(
+            solver.parameters.num_search_workers,
+            schedule_assignment._SOLVER_NUM_WORKERS_LARGE,
+        )
+
+    def test_max_memory_mb_none_does_not_set_parameter(self):
+        """When SOLVER_MAX_MEMORY_MB is None the solver keeps the CP-SAT default."""
+        from ortools.sat.python import cp_model as _cp_model
+
+        default_value = _cp_model.CpSolver().parameters.max_memory_in_mb
+        solver = self._make_solver(session_count=5, slot_count=5, max_memory_mb=None)
+        self.assertEqual(solver.parameters.max_memory_in_mb, default_value)
+
+    def test_max_memory_mb_set_applies_parameter(self):
+        """When SOLVER_MAX_MEMORY_MB has a value it must be forwarded to the solver."""
+        solver = self._make_solver(session_count=5, slot_count=5, max_memory_mb=256)
+        self.assertEqual(solver.parameters.max_memory_in_mb, 256)
+
+    def test_check_rss_budget_no_limit_does_not_raise(self):
+        """_check_rss_budget must be a no-op when SOLVER_PROCESS_LIMIT_MB is None."""
+        from unittest.mock import patch as _patch
+
+        with _patch("schedule.algorithm.assignment._SOLVER_PROCESS_LIMIT_MB", None):
+            schedule_assignment._check_rss_budget("test phase")
+
+    def test_check_rss_budget_exceeded_raises(self):
+        """_check_rss_budget must raise ScheduleGenerationError when RSS > limit - 40."""
+        from unittest.mock import MagicMock
+        from unittest.mock import patch as _patch
+
+        from schedule.algorithm.errors import ScheduleGenerationError
+
+        mock_proc = MagicMock()
+        mock_proc.memory_info.return_value.rss = 450 * 1024 * 1024  # 450 MB
+
+        with _patch(
+            "schedule.algorithm.assignment._SOLVER_PROCESS_LIMIT_MB", 480
+        ), _patch("psutil.Process", return_value=mock_proc):
+            with self.assertRaises(ScheduleGenerationError) as ctx:
+                schedule_assignment._check_rss_budget("test phase")
+
+        self.assertEqual(ctx.exception.code, "SCHEDULE_MEMORY_LIMIT")
+
+    def test_check_rss_budget_within_limit_does_not_raise(self):
+        """_check_rss_budget must not raise when RSS is safely below the limit."""
+        from unittest.mock import MagicMock
+        from unittest.mock import patch as _patch
+
+        mock_proc = MagicMock()
+        mock_proc.memory_info.return_value.rss = 200 * 1024 * 1024  # 200 MB
+
+        with _patch(
+            "schedule.algorithm.assignment._SOLVER_PROCESS_LIMIT_MB", 480
+        ), _patch("psutil.Process", return_value=mock_proc):
+            schedule_assignment._check_rss_budget("test phase")
