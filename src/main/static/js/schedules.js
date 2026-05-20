@@ -1642,7 +1642,11 @@
       state.generatedSavedName = "";
       state.generatedMoveInFlight = false;
       showGeneratedLanding();
-      showAlert("error", extractApiErrorInfo(startResult.data, "No se pudo iniciar la generación."));
+      var startErrorInfo = extractApiErrorInfo(startResult.data, "No se pudo iniciar la generación.");
+      if (startErrorInfo.diagnostics && startErrorInfo.diagnostics.length) {
+        startErrorInfo.headline = "El horario no se ha podido generar porque no se cumplen algunas restricciones básicas. Revisa los problemas detectados:";
+      }
+      showAlert("error", startErrorInfo);
       return;
     }
 
@@ -1688,7 +1692,11 @@
       state.generatedSavedName = "";
       state.generatedMoveInFlight = false;
       showGeneratedLanding();
-      showAlert("error", extractApiErrorInfo(result.data, "No se pudo generar el horario."));
+      var pollErrorInfo = extractApiErrorInfo(result.data, "No se pudo generar el horario.");
+      if (pollErrorInfo.diagnostics && pollErrorInfo.diagnostics.length) {
+        pollErrorInfo.headline = "El horario no se ha podido generar porque no se cumplen algunas restricciones básicas. Revisa los problemas detectados:";
+      }
+      showAlert("error", pollErrorInfo);
       return;
     }
     state.latestGeneratedSchedules = (result.data && result.data.schedules) || [];

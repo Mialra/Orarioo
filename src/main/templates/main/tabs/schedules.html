@@ -56,16 +56,21 @@
                 </div>
             </section>
         </div>
-        <section id="generatedProgressSection" class="gen-progress-section d-none" aria-live="polite">
+        <section id="generatedProgressSection"
+                 class="gen-progress-section d-none"
+                 aria-live="polite">
             <div class="gen-progress-inner">
                 <div class="gen-progress-step" id="genProgressStep1">
                     <div class="gen-progress-step-header">
-                        <div class="gen-progress-step-icon gen-progress-step-icon--active" id="genProgressIcon1">
+                        <div class="gen-progress-step-icon gen-progress-step-icon--active"
+                             id="genProgressIcon1">
                             <div class="gen-spinner"></div>
                         </div>
                         <div>
                             <p class="gen-progress-step-title mb-0">Buscando solución válida</p>
-                            <p class="gen-progress-step-desc text-secondary small mb-0">Comprobando que el horario es factible con las restricciones actuales.</p>
+                            <p class="gen-progress-step-desc text-secondary small mb-0">
+                                Comprobando que el horario es factible con las restricciones actuales.
+                            </p>
                         </div>
                     </div>
                     <div class="progress gen-progress-bar mt-2">
@@ -73,7 +78,8 @@
                              id="genProgressBar1"></div>
                     </div>
                 </div>
-                <div class="gen-progress-step gen-progress-step--pending" id="genProgressStep2">
+                <div class="gen-progress-step gen-progress-step--pending"
+                     id="genProgressStep2">
                     <div class="gen-progress-step-header">
                         <div class="gen-progress-step-icon" id="genProgressIcon2">
                             <span class="gen-progress-step-num">2</span>
@@ -83,10 +89,13 @@
                                 Optimizando el horario
                                 <span id="genProgressTimeLabel" class="gen-progress-time-label"></span>
                             </p>
-                            <p class="gen-progress-step-desc text-secondary small mb-0">Minimizando huecos, distribuyendo asignaturas y respetando preferencias.</p>
+                            <p class="gen-progress-step-desc text-secondary small mb-0">
+                                Minimizando huecos, distribuyendo asignaturas y respetando preferencias.
+                            </p>
                         </div>
                     </div>
-                    <div class="progress gen-progress-bar mt-2 d-none" id="genProgressBar2Wrap">
+                    <div class="progress gen-progress-bar mt-2 d-none"
+                         id="genProgressBar2Wrap">
                         <div class="progress-bar bg-success"
                              id="genProgressBar2"
                              role="progressbar"
@@ -94,17 +103,21 @@
                              aria-valuemax="100"></div>
                     </div>
                 </div>
-                <div class="gen-progress-step gen-progress-step--pending" id="genProgressStep3">
+                <div class="gen-progress-step gen-progress-step--pending"
+                     id="genProgressStep3">
                     <div class="gen-progress-step-header">
                         <div class="gen-progress-step-icon" id="genProgressIcon3">
                             <span class="gen-progress-step-num">3</span>
                         </div>
                         <div>
                             <p class="gen-progress-step-title mb-0">Ultimando detalles</p>
-                            <p class="gen-progress-step-desc text-secondary small mb-0">Validando la solución y preparando el horario para mostrarlo. Esto suele tardar unos segundos.</p>
+                            <p class="gen-progress-step-desc text-secondary small mb-0">
+                                Validando la solución y preparando el horario para mostrarlo. Esto suele tardar unos segundos.
+                            </p>
                         </div>
                     </div>
-                    <div class="progress gen-progress-bar mt-2 d-none" id="genProgressBar3Wrap">
+                    <div class="progress gen-progress-bar mt-2 d-none"
+                         id="genProgressBar3Wrap">
                         <div class="progress-bar progress-bar-striped progress-bar-animated gen-progress-bar-phase3"
                              id="genProgressBar3"
                              style="width:100%"
@@ -129,16 +142,19 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content schedule-modal-content schedule-save-modal-content">
             <div class="modal-header">
-                <h5 id="saveGeneratedModalTitle" class="modal-title">Guardar horario</h5>
+                <div>
+                    <h3 class="modal-title h4 mb-0">Guardar horario</h3>
+                    <p class="text-secondary small mb-0 mt-1">Indica un nombre para guardar este horario generado.</p>
+                </div>
                 <button type="button"
                         class="btn-close"
                         data-bs-dismiss="modal"
                         aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <p class="text-secondary small mb-3">Indica un nombre para guardar este horario generado.</p>
                 <div class="mb-0">
-                    <label for="saveGeneratedNameInput" class="form-label">Nombre del horario</label>
+                    <label class="form-label fw-semibold mb-0">Nombre del horario</label>
+                    <span class="text-danger" aria-hidden="true">*</span>
                     <input type="text"
                            id="saveGeneratedNameInput"
                            class="form-control"
@@ -147,7 +163,7 @@
                            autocomplete="off">
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer justify-content-center">
                 <button type="button"
                         class="btn btn-outline-secondary"
                         data-bs-dismiss="modal">Cancelar</button>

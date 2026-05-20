@@ -29,24 +29,26 @@ Orarioo lets school teams generate, visualise, and manually edit weekly timetabl
 
 ## Tech Stack
 
-| Layer             | Technology                    | Version                |
-| ----------------- | ----------------------------- | ---------------------- |
-| Backend framework | Django                        | 6.0.4                  |
-| REST API          | Django REST Framework         | 3.15.2                 |
-| Authentication    | djangorestframework-simplejwt | 5.5.1                  |
-| Constraint solver | OR-Tools CP-SAT               | 9.15.6755              |
-| Database          | PostgreSQL                    | psycopg2-binary 2.9.11 |
-| Data analysis     | Pandas / NumPy                | 3.0.1 / 2.4.2          |
-| PDF export        | ReportLab                     | 4.4.10                 |
-| Excel export      | openpyxl                      | 3.1.5                  |
-| WSGI server       | Gunicorn                      | 25.1.0                 |
-| Static files      | WhiteNoise                    | 6.9.0                  |
-| Frontend          | HTML5 + CSS + Vanilla JS      | —                      |
-| Linting           | Flake8 / Black / isort        | —                      |
-| Testing           | Coverage.py                   | 7.13.4                 |
-| CI/CD             | GitHub Actions                | —                      |
-| Security scanning | CodeQL, Bandit                | —                      |
-| Hosting           | Render                        | —                      |
+| Layer             | Technology                       | Version                |
+| ----------------- | -------------------------------- | ---------------------- |
+| Backend framework | Django                           | 6.0.4                  |
+| REST API          | Django REST Framework            | 3.15.2                 |
+| Authentication    | djangorestframework-simplejwt    | 5.5.1                  |
+| Constraint solver | OR-Tools CP-SAT                  | 9.15.6755              |
+| Database          | PostgreSQL                       | psycopg2-binary 2.9.11 |
+| Data analysis     | Pandas / NumPy                   | 3.0.1 / 2.4.2          |
+| PDF export        | ReportLab                        | 4.4.10                 |
+| Excel export      | openpyxl                         | 3.1.5                  |
+| WSGI server       | Gunicorn                         | 25.1.0                 |
+| Static files      | WhiteNoise                       | 6.9.0                  |
+| Frontend          | HTML5 + CSS + Vanilla JS         | —                      |
+| Linting           | Flake8 / Black / isort           | —                      |
+| Unit testing      | Django test runner + Coverage    | 7.13.4                 |
+| E2E testing       | Playwright + pytest              | 1.52.0                 |
+| Load testing      | Locust                           | 2.37.3                 |
+| CI/CD             | GitHub Actions                   | —                      |
+| Security scanning | CodeQL, Bandit, pip-audit, Trivy | —                      |
+| Hosting           | Render                           | —                      |
 
 ---
 
@@ -208,12 +210,84 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
 ### Tests
 
+The project has three test layers: Django unit/integration tests, Playwright E2E tests, and Locust load tests.
+
+#### Unit & integration tests (Django)
+
 ```bash
 cd src
 python manage.py test
 # with coverage:
 coverage run manage.py test && coverage report
 ```
+
+#### E2E tests (Playwright)
+
+Browser-level tests that exercise the full stack against a running server. They use `pytest-playwright` and are located in `tests/e2e/specs/`.
+
+**Prerequisites:** install dependencies and a running server with seeded data.
+
+```bash
+pip install pytest pytest-playwright
+playwright install chromium
+# Start the server first: cd src && python manage.py runserver
+```
+
+**Run all E2E tests:**
+
+```bash
+pytest tests/e2e/specs/ --base-url http://localhost:8000 -v
+```
+
+**Run a specific spec:**
+
+```bash
+pytest tests/e2e/specs/test_auth.py --base-url http://localhost:8000 -v
+```
+
+**Environment variables** (optional, default to seeded test user):
+
+| Variable       | Default                          | Description               |
+| -------------- | -------------------------------- | ------------------------- |
+| `E2E_EMAIL`    | `direccion.academica@test.com`   | Login email for E2E user  |
+| `E2E_PASSWORD` | `direccion123`                   | Login password            |
+| `BASE_URL`     | `http://localhost:8000`          | Target server URL         |
+
+**E2E test coverage:**
+
+| Spec file                   | What it tests                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `test_auth.py`              | Login success → dashboard redirect; invalid credentials → error alert                                  |
+| `test_navigation.py`        | Root redirect, dashboard/admin/legal pages all load without error                                      |
+| `test_schedule_generate.py` | Generation modal opens, confirm triggers generation, dialog closes                                     |
+| `test_saved_schedules.py`   | Saved schedules tab loads; cards are clickable                                                         |
+| `test_audit.py`             | Audit log renders; filter by entity type; filter by date preset                                        |
+| `test_admin_teachers.py`    | CRUD: create, edit, delete teacher via admin UI                                                        |
+| `test_admin_groups.py`      | CRUD: create, edit, delete student group via admin UI                                                  |
+| `test_admin_subjects.py`    | CRUD: create, edit, delete subject via admin UI                                                        |
+| `test_admin_classrooms.py`  | CRUD: create, edit, delete classroom via admin UI                                                      |
+| `test_profile.py`           | Profile page: email display, active team, name update, wrong-password rejection, delete-account modal  |
+
+#### Load tests (Locust)
+
+Simulates concurrent users against the API. Two user classes:
+
+- **`ScheduleReadUser`** — 50 concurrent users doing GET requests (p95 target < 2 s)
+- **`ScheduleGenerateUser`** — 10 concurrent users hitting `POST /api/schedules/generate/` (p95 target < 30 s)
+
+```bash
+pip install locust
+# Headless run — 20 users, 60 seconds
+locust -f tests/load/locustfile.py --headless -u 20 -r 2 -t 60s --host http://localhost:8000
+```
+
+**Environment variables:**
+
+| Variable          | Default                        | Description               |
+| ----------------- | ------------------------------ | ------------------------- |
+| `LOCUST_EMAIL`    | `direccion.academica@test.com` | Login email for load user |
+| `LOCUST_PASSWORD` | `direccion123`                 | Login password            |
+| `LOCUST_HOST`     | `http://localhost:8000`        | Target server URL         |
 
 ### Linting
 
@@ -226,14 +300,15 @@ flake8 . && black . && isort .
 
 ## CI/CD
 
-GitHub Actions runs on every push and pull request to `main`:
-
-| Workflow              | What it does                                |
-| --------------------- | ------------------------------------------- |
-| `django-ci.yml`       | Full Django test suite                      |
-| `python-lint.yml`     | Flake8 + Black                              |
-| `codeql-analysis.yml` | Static security analysis (weekly + on push) |
-| `deploy-render.yml`   | Auto-deploy to Render on merge to `main`    |
+| Workflow                | Trigger                                  | What it does                                              |
+| ----------------------- | ---------------------------------------- | --------------------------------------------------------- |
+| `django-ci.yml`         | Push / PR to `develop`, `main`           | Full Django unit & integration test suite with coverage   |
+| `e2e.yml`               | PR to `develop`, `main`                  | Playwright E2E suite (real PostgreSQL + Django server)    |
+| `python-lint.yml`       | Push / PR to `develop`, `main`           | Flake8 + Black formatting checks                          |
+| `commits-checker.yml`   | PR to `develop`, `main`                  | Validates commit messages (Conventional Commits spec)     |
+| `security-scan.yml`     | PR to `develop`, `main` + daily at 02:00 | pip-audit, Bandit (SAST), Trivy (fs scan to SARIF)        |
+| `codeql-analysis.yml`   | Push / PR to `main` + weekly              | GitHub CodeQL static security analysis                    |
+| `deploy-render.yml`     | Merge to `main`                           | Auto-deploy to Render                                     |
 
 ---
 

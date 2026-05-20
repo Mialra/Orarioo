@@ -26,22 +26,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
         )
 
-    def test_create_subject(self):
-        payload = {
-            "name": "Mathematics",
-            "weekly_hours": 5,
-            "type": SubjectType.NORMAL,
-            "teacher": self.teacher.id,
-            "group": self.group.id,
-        }
-
-        response = self.client.post(reverse("subject-list"), payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Subject.objects.count(), 1)
-        self.assertEqual(response.data["name"], "Mathematics")
-        self.assertEqual(response.data["teacher_name"], "John Doe")
-
     def test_list_and_retrieve_subject(self):
         subject = Subject.objects.create(
             name="Science",

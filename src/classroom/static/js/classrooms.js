@@ -22,7 +22,6 @@
     modeInput: document.getElementById("admin-classroom-mode"),
     classroomIdInput: document.getElementById("admin-classroom-id"),
     nameInput: document.getElementById("admin-classroom-name"),
-    isSharedInput: document.getElementById("admin-classroom-is-shared"),
     submitButton: document.getElementById("admin-classroom-submit-btn"),
     submitText: document.getElementById("admin-classroom-submit-text"),
     submitSpinner: document.getElementById("admin-classroom-submit-spinner"),
@@ -42,18 +41,6 @@
    */
   function resolveClassroomName(classroom) {
     return classroom.name || "Aula";
-  }
-
-  /**
-   * Builds a pill badge reflecting the shared status of a classroom.
-   * Input: isShared - boolean indicating whether the classroom is shared
-   * Output: DOM span element with the appropriate admin-pill variant
-   */
-  function sharedPill(isShared) {
-    return dom.createElement("span", {
-      className: "admin-pill " + (isShared ? "variant-blue" : "variant-gray"),
-      text: isShared ? "Compartida" : "No compartida",
-    });
   }
 
   /**
@@ -83,10 +70,6 @@
                         dom.createElement("h3", {
                           className: "h6 mb-0",
                           text: resolveClassroomName(classroom),
-                        }),
-                        dom.createElement("div", {
-                          className: "admin-card-meta",
-                          children: [sharedPill(classroom.is_shared)],
                         }),
                       ],
                     }),
@@ -191,7 +174,6 @@
       resetValues: function () {
         elements.classroomIdInput.value = "";
         elements.nameInput.value = "";
-        elements.isSharedInput.checked = true;
       },
       setEditingId: function (id) {
         elements.classroomIdInput.value = id || "";
@@ -201,12 +183,10 @@
       },
       fillValues: function (item) {
         elements.nameInput.value = item.name || "";
-        elements.isSharedInput.checked = Boolean(item.is_shared);
       },
       buildPayload: function () {
         return {
           name: elements.nameInput.value.trim(),
-          is_shared: Boolean(elements.isSharedInput.checked),
         };
       },
     },

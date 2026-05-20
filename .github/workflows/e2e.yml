@@ -1,0 +1,100 @@
+# ----------------------------------------------------------------------------
+# E2E Tests Workflow
+# Runs the Playwright/pytest E2E suite on every PR to develop and main.
+# Spins up a real PostgreSQL database, loads test data, starts the Django
+# dev server, then executes all specs under tests/e2e/specs/.
+# Uploads Playwright test-results as an artifact on failure.
+# ----------------------------------------------------------------------------
+
+name: E2E Tests
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-test-secret-key-with-32plus-chars
+      DB_NAME: orarioo_ci
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_SSLMODE: disable
+      LOGIN_THROTTLE_RATE: 1000/min
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: orarioo_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r src/requirements.txt
+
+      - name: Run migrations
+        run: python manage.py migrate --noinput
+        working-directory: src
+
+      - name: Load test data
+        run: python load_test_data.py
+        working-directory: src
+
+      - name: Install Playwright browsers
+        run: playwright install chromium --with-deps
+
+      - name: Start Django server
+        run: python manage.py runserver &
+        working-directory: src
+
+      - name: Wait for server to be ready
+        run: |
+          python - <<'EOF'
+          import urllib.request, time, sys
+          for _ in range(30):
+              try:
+                  urllib.request.urlopen("http://localhost:8000/sign-in/")
+                  print("Server is ready.")
+                  sys.exit(0)
+              except Exception:
+                  time.sleep(1)
+          print("Server did not start in time.")
+          sys.exit(1)
+          EOF
+
+      - name: Run E2E tests
+        env:
+          E2E_EMAIL: direccion.academica@test.com
+          E2E_PASSWORD: direccion123
+        run: pytest tests/e2e/specs/ --base-url http://localhost:8000 -v
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/e2e/test-results/
+          retention-days: 7
