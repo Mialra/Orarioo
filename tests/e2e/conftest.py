@@ -18,14 +18,16 @@ def browser_context_args(browser_context_args):
 
 
 def _do_login(page, base_url):
-    """Perform a full login and wait until the dashboard is stable."""
+    """Perform a full login and wait until app-shell.js has committed tokens to localStorage."""
     page.goto(f"{base_url}/sign-in/")
     page.fill('[name="email"]', EMAIL)
     page.fill('[name="password"]', PASSWORD)
     page.click('[type="submit"]')
     page.wait_for_url(re.compile(r"dashboard"), timeout=15_000)
-    # Wait for app-shell.js to finish writing JWT tokens to localStorage.
     page.wait_for_load_state("networkidle")
+    # #logout-button is only rendered after app-shell.js successfully verifies the JWT
+    # and writes tokens to localStorage — proves storage_state will contain valid tokens.
+    page.wait_for_selector("#logout-button", state="attached", timeout=15_000)
 
 
 @pytest.fixture(scope="session")
@@ -46,9 +48,10 @@ def authenticated_page(browser, auth_storage_state, base_url):
     page = context.new_page()
     page.goto(f"{base_url}/dashboard/")
     page.wait_for_load_state("networkidle")
-    # If app-shell.js cleared the session (e.g. blacklisted refresh token or server blip),
-    # fall back to a fresh login so the test still runs.
     if "/sign-in/" in page.url:
         _do_login(page, base_url)
+    else:
+        # Confirm app-shell.js finished its auth check in this isolated context too.
+        page.wait_for_selector("#logout-button", state="attached", timeout=15_000)
     yield page
     context.close()
