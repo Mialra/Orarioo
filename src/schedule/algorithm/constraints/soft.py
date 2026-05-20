@@ -114,6 +114,8 @@ def _preference_terms(
 
     for s_idx, session in enumerate(sessions):
         for p_idx, slot_key in slot_preference_by_idx.items():
+            if (s_idx, p_idx) not in x:
+                continue
             state = state_resolver(
                 session=session,
                 slot_preference_key=slot_key,
@@ -150,7 +152,10 @@ def _subject_day_spread_terms(*, model, x, sessions, slots):
         for day_idx, day_slots in slots_by_day.items():
             has_session_on_day = model.NewBoolVar(f"subj{subj_id}_day{day_idx}")
             sessions_on_day_expr = sum(
-                x[(s_idx, p_idx)] for s_idx in s_indices for p_idx in day_slots
+                x[(s_idx, p_idx)]
+                for s_idx in s_indices
+                for p_idx in day_slots
+                if (s_idx, p_idx) in x
             )
             _bind_has_any(
                 model=model,
@@ -197,13 +202,17 @@ def _teacher_gap_minimization_terms(*, model, x, sessions, slots):
                     x[(s_idx, p_j)]
                     for s_idx in t_session_indices
                     for p_j in before_slots
+                    if (s_idx, p_j) in x
                 )
                 n_after = sum(
                     x[(s_idx, p_j)]
                     for s_idx in t_session_indices
                     for p_j in after_slots
+                    if (s_idx, p_j) in x
                 )
-                n_at = sum(x[(s_idx, p_i)] for s_idx in t_session_indices)
+                n_at = sum(
+                    x[(s_idx, p_i)] for s_idx in t_session_indices if (s_idx, p_i) in x
+                )
 
                 has_before = model.NewBoolVar(f"t{teacher_id}_d{day_idx}_p{p_i}_before")
                 has_after = model.NewBoolVar(f"t{teacher_id}_d{day_idx}_p{p_i}_after")

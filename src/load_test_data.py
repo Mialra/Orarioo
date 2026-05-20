@@ -937,9 +937,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
     for row in subjects_data:
         subject, _ = Subject.objects.update_or_create(
             name=row["name"],
-            group=groups[row["group_name"]],
             team=team,
             defaults={
+                "group": groups[row["group_name"]],
                 "weekly_hours": row["weekly_hours"],
                 "duration": row.get("duration", 1.0),
                 "time_preferences": row.get("time_preferences", {}),

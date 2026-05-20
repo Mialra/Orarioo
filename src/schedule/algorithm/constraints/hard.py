@@ -241,7 +241,8 @@ def add_recess_slot_hard_constraints(*, model, x, sessions, slots):
     for p_idx, slot in enumerate(slots):
         if slot.get("is_recess"):
             for s_idx in range(len(sessions)):
-                model.Add(x[(s_idx, p_idx)] == 0)
+                if (s_idx, p_idx) in x:
+                    model.Add(x[(s_idx, p_idx)] == 0)
 
 
 def add_stage_slot_hard_constraints(*, model, x, sessions, slots):
@@ -257,7 +258,8 @@ def add_stage_slot_hard_constraints(*, model, x, sessions, slots):
         allowed_slots = allowed_slots_by_stage.get(stage_code, set())
         for p_idx in range(len(slots)):
             if p_idx not in allowed_slots:
-                model.Add(x[(s_idx, p_idx)] == 0)
+                if (s_idx, p_idx) in x:
+                    model.Add(x[(s_idx, p_idx)] == 0)
 
 
 def add_group_daily_capacity_constraints(*, model, x, sessions, slots):
@@ -291,6 +293,7 @@ def add_group_daily_capacity_constraints(*, model, x, sessions, slots):
                     x[(s_idx, p_idx)]
                     for s_idx in resource_sessions
                     for p_idx in day_slots
+                    if (s_idx, p_idx) in x
                 )
                 <= daily_limit
             )
@@ -373,7 +376,14 @@ def _build_group_day_occupancy_vars(
     occupancy_by_slot = {}
     for slot_idx in day_slot_list:
         occupied = model.NewBoolVar(f"g{group_id}_d{day_idx}_p{slot_idx}_occ")
-        model.Add(sum(x[(s_idx, slot_idx)] for s_idx in group_sessions) == occupied)
+        model.Add(
+            sum(
+                x[(s_idx, slot_idx)]
+                for s_idx in group_sessions
+                if (s_idx, slot_idx) in x
+            )
+            == occupied
+        )
         occupancy_by_slot[slot_idx] = occupied
     return occupancy_by_slot
 
@@ -492,6 +502,8 @@ def _add_unavailable_time_hard_constraints(
 
     for s_idx, session in enumerate(sessions):
         for p_idx, slot_key in slot_preference_by_idx.items():
+            if (s_idx, p_idx) not in x:
+                continue
             state = state_resolver(
                 session=session,
                 slot_preference_key=slot_key,
