@@ -25,9 +25,12 @@ def _do_login(page, base_url):
     page.click('[type="submit"]')
     page.wait_for_url(re.compile(r"dashboard"), timeout=15_000)
     page.wait_for_load_state("networkidle")
-    # #logout-button is only rendered after app-shell.js successfully verifies the JWT
-    # and writes tokens to localStorage — proves storage_state will contain valid tokens.
-    page.wait_for_selector("#logout-button", state="attached", timeout=15_000)
+    # Wait until app-shell.js has written the access token to localStorage.
+    # #logout-button is server-rendered so it cannot be used as a readiness signal.
+    page.wait_for_function(
+        "() => Boolean(window.localStorage.getItem('orarioo_access_token'))",
+        timeout=15_000,
+    )
 
 
 @pytest.fixture(scope="session")
@@ -51,7 +54,9 @@ def authenticated_page(browser, auth_storage_state, base_url):
     if "/sign-in/" in page.url:
         _do_login(page, base_url)
     else:
-        # Confirm app-shell.js finished its auth check in this isolated context too.
-        page.wait_for_selector("#logout-button", state="attached", timeout=15_000)
+        page.wait_for_function(
+            "() => Boolean(window.localStorage.getItem('orarioo_access_token'))",
+            timeout=15_000,
+        )
     yield page
     context.close()
