@@ -46,5 +46,12 @@ def authenticated_page(authenticated_context, base_url):
     page.wait_for_load_state("networkidle")
     if "/sign-in/" in page.url:
         _do_login(page, base_url)
+    elif not page.evaluate(
+        "() => !!(window.localStorage.getItem('orarioo_access_token')"
+        " || window.localStorage.getItem('orarioo_refresh_token'))"
+    ):
+        # Tokens were wiped from shared localStorage by a prior page's clearAuthSession()
+        # even though the URL hasn't redirected yet. Re-login to restore the session.
+        _do_login(page, base_url)
     yield page
     page.close()

@@ -1,4 +1,5 @@
 """E2E: perfil de usuario en /profile/."""
+import os
 import re
 import time
 
@@ -6,6 +7,8 @@ import pytest
 from playwright.sync_api import Page, expect
 
 _SUFFIX = str(int(time.time()) % 100_000)
+_EMAIL = os.getenv("E2E_EMAIL", "direccion.academica@test.com")
+_PASSWORD = os.getenv("E2E_PASSWORD", "direccion123")
 
 
 @pytest.fixture()
@@ -13,6 +16,16 @@ def profile_page(authenticated_page: Page, base_url: str):
     page = authenticated_page
     page.goto(f"{base_url}/profile/")
     page.wait_for_load_state("networkidle")
+    if "/sign-in/" in page.url:
+        # Profile page JS cleared the shared auth session (clearAuthSession + redirect).
+        # Re-authenticate in-place and retry navigating to the profile.
+        page.fill('[name="email"]', _EMAIL)
+        page.fill('[name="password"]', _PASSWORD)
+        page.click('[type="submit"]')
+        page.wait_for_url(re.compile(r"dashboard"), timeout=15_000)
+        page.wait_for_load_state("networkidle")
+        page.goto(f"{base_url}/profile/")
+        page.wait_for_load_state("networkidle")
     expect(page.locator("#profile-email")).to_be_attached(timeout=10_000)
     return page
 
