@@ -191,11 +191,14 @@ def _teacher_gap_minimization_terms(*, model, x, sessions, slots):
         if len(t_session_indices) < 2:
             continue
 
-        t_stages = {session_stage_code(session=sessions[s_idx]) for s_idx in t_session_indices}
+        t_stages = {
+            session_stage_code(session=sessions[s_idx]) for s_idx in t_session_indices
+        }
 
         for day_idx, raw_day_slots in slots_by_day.items():
             day_slot_list = [
-                p for p in raw_day_slots
+                p
+                for p in raw_day_slots
                 if slots[p].get("stage") in t_stages
                 and not slots[p].get("is_recess", False)
             ]
@@ -344,7 +347,8 @@ def _eval_teacher_gap_score(*, slot_by_session, sessions, slots):
         t_stages = teacher_stages.get(teacher_id, set())
         for day_idx, assigned_in_day in days.items():
             day_slot_list = [
-                idx for idx in slots_by_day.get(day_idx, [])
+                idx
+                for idx in slots_by_day.get(day_idx, [])
                 if slots[idx].get("stage") in t_stages
                 and not slots[idx].get("is_recess", False)
             ]
@@ -352,7 +356,7 @@ def _eval_teacher_gap_score(*, slot_by_session, sessions, slots):
                 continue
             for inner_pos, p_i in enumerate(day_slot_list[1:-1], start=1):
                 before_slots = set(day_slot_list[:inner_pos])
-                after_slots = set(day_slot_list[inner_pos + 1:])
+                after_slots = set(day_slot_list[inner_pos + 1 :])
                 has_before = bool(assigned_in_day & before_slots)
                 has_after = bool(assigned_in_day & after_slots)
                 has_at = p_i in assigned_in_day
