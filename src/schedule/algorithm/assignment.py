@@ -4,6 +4,7 @@ Exposes solve_session_assignment as the single entry point.  All internal
 functions build decision variables, add constraints and extract the solution.
 """
 
+import gc
 import logging
 
 import psutil
@@ -154,6 +155,36 @@ def _apply_option_constraints(*, model, x, sessions, slots, opts):
 
 
 def _cp_sat_session_assignment(
+    *,
+    sessions,
+    slots,
+    compatible_classrooms_by_session,
+    random_seed,
+    fixed_assignments,
+    generation_options,
+    on_phase2_start=None,
+):
+    """Run the full two-phase CP-SAT solve and return the assignment.
+
+    Wraps _cp_sat_session_assignment_impl so that OR-Tools model and solver
+    objects go out of scope before gc.collect() runs, releasing C++ memory
+    that Python's reference counting may not free immediately due to
+    circular references inside the OR-Tools wrappers.
+    """
+    result = _cp_sat_session_assignment_impl(
+        sessions=sessions,
+        slots=slots,
+        compatible_classrooms_by_session=compatible_classrooms_by_session,
+        random_seed=random_seed,
+        fixed_assignments=fixed_assignments,
+        generation_options=generation_options,
+        on_phase2_start=on_phase2_start,
+    )
+    gc.collect()
+    return result
+
+
+def _cp_sat_session_assignment_impl(
     *,
     sessions,
     slots,
@@ -875,7 +906,7 @@ def _check_rss_budget(phase_label):
         if rss_mb > _SOLVER_PROCESS_LIMIT_MB - 40:
             raise ScheduleGenerationError(
                 "El servidor no tiene suficiente memoria para generar este horario "
-                "ahora mismo. Intentalo de nuevo más tarde",
+                "ahora mismo. Inténtalo de nuevo más tarde",
                 code="SCHEDULE_MEMORY_LIMIT",
             )
     except ScheduleGenerationError:
