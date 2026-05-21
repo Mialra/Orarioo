@@ -1,5 +1,6 @@
 """Background thread logic for async schedule generation jobs."""
 
+import gc
 import logging
 
 from django.db import connection
@@ -84,3 +85,4 @@ def run_generation_job(
 
     finally:
         connection.close()
+        gc.collect()
