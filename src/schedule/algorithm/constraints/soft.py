@@ -11,6 +11,7 @@ from schedule.algorithm.constraints.hard import (
 from schedule.algorithm.slots import (
     build_slot_day_index,
     build_slot_preference_index,
+    session_stage_code,
     slot_time_bounds,
 )
 from subject.models import SubjectTimePreferenceState
@@ -114,6 +115,8 @@ def _preference_terms(
 
     for s_idx, session in enumerate(sessions):
         for p_idx, slot_key in slot_preference_by_idx.items():
+            if (s_idx, p_idx) not in x:
+                continue
             state = state_resolver(
                 session=session,
                 slot_preference_key=slot_key,
@@ -150,7 +153,10 @@ def _subject_day_spread_terms(*, model, x, sessions, slots):
         for day_idx, day_slots in slots_by_day.items():
             has_session_on_day = model.NewBoolVar(f"subj{subj_id}_day{day_idx}")
             sessions_on_day_expr = sum(
-                x[(s_idx, p_idx)] for s_idx in s_indices for p_idx in day_slots
+                x[(s_idx, p_idx)]
+                for s_idx in s_indices
+                for p_idx in day_slots
+                if (s_idx, p_idx) in x
             )
             _bind_has_any(
                 model=model,
@@ -185,7 +191,17 @@ def _teacher_gap_minimization_terms(*, model, x, sessions, slots):
         if len(t_session_indices) < 2:
             continue
 
-        for day_idx, day_slot_list in slots_by_day.items():
+        t_stages = {
+            session_stage_code(session=sessions[s_idx]) for s_idx in t_session_indices
+        }
+
+        for day_idx, raw_day_slots in slots_by_day.items():
+            day_slot_list = [
+                p
+                for p in raw_day_slots
+                if slots[p].get("stage") in t_stages
+                and not slots[p].get("is_recess", False)
+            ]
             if len(day_slot_list) < 3:
                 continue
 
@@ -197,13 +213,17 @@ def _teacher_gap_minimization_terms(*, model, x, sessions, slots):
                     x[(s_idx, p_j)]
                     for s_idx in t_session_indices
                     for p_j in before_slots
+                    if (s_idx, p_j) in x
                 )
                 n_after = sum(
                     x[(s_idx, p_j)]
                     for s_idx in t_session_indices
                     for p_j in after_slots
+                    if (s_idx, p_j) in x
                 )
-                n_at = sum(x[(s_idx, p_i)] for s_idx in t_session_indices)
+                n_at = sum(
+                    x[(s_idx, p_i)] for s_idx in t_session_indices if (s_idx, p_i) in x
+                )
 
                 has_before = model.NewBoolVar(f"t{teacher_id}_d{day_idx}_p{p_i}_before")
                 has_after = model.NewBoolVar(f"t{teacher_id}_d{day_idx}_p{p_i}_after")
@@ -306,6 +326,7 @@ def _eval_teacher_gap_score(*, slot_by_session, sessions, slots):
     slot_day_index = build_slot_day_index(slots=slots)
     slots_by_day = _build_slots_by_day(slots=slots)
 
+    teacher_stages = {}
     teacher_slots_by_day = {}
     for s_idx, session in enumerate(sessions):
         teacher_id = session.get("teacher_id")
@@ -315,16 +336,24 @@ def _eval_teacher_gap_score(*, slot_by_session, sessions, slots):
         day_idx = slot_day_index.get(assigned)
         if day_idx is None:
             continue
+        stage = slots[assigned].get("stage")
+        teacher_stages.setdefault(teacher_id, set()).add(stage)
         teacher_slots_by_day.setdefault(teacher_id, {}).setdefault(day_idx, set()).add(
             assigned
         )
 
     total = 0
-    for _teacher_id, days in teacher_slots_by_day.items():
-        for day_idx, day_slot_list in slots_by_day.items():
+    for teacher_id, days in teacher_slots_by_day.items():
+        t_stages = teacher_stages.get(teacher_id, set())
+        for day_idx, assigned_in_day in days.items():
+            day_slot_list = [
+                idx
+                for idx in slots_by_day.get(day_idx, [])
+                if slots[idx].get("stage") in t_stages
+                and not slots[idx].get("is_recess", False)
+            ]
             if len(day_slot_list) < 3:
                 continue
-            assigned_in_day = days.get(day_idx, set())
             for inner_pos, p_i in enumerate(day_slot_list[1:-1], start=1):
                 before_slots = set(day_slot_list[:inner_pos])
                 after_slots = set(day_slot_list[inner_pos + 1 :])

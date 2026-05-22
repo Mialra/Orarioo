@@ -1322,7 +1322,6 @@
     const modal = document.getElementById("scheduleGenerateModal");
     const title = document.getElementById("scheduleGenerateModalTitle");
     const text = document.getElementById("scheduleGenerateModalText");
-    const hintText = document.getElementById("scheduleGenerateModalHintText");
     const confirmButton = document.getElementById("confirmScheduleGenerateBtn");
     if (!modal || !title || !text || !confirmButton) {
       handleGenerate();
@@ -1334,22 +1333,27 @@
       text.textContent = state.generatedSaved
         ? "Se generará una nueva propuesta en borrador. El horario guardado actual seguirá disponible."
         : "Se generará una nueva propuesta y reemplazará el borrador actual que estás viendo.";
-      if (hintText) {
-        hintText.textContent =
-          "Usará las restricciones actuales y puede tardar unos segundos si el problema es complejo.";
-      }
       confirmButton.textContent = "Regenerar horario";
     } else {
       title.textContent = "Generar horario";
       text.textContent = "Se lanzará una nueva generación con las restricciones actuales.";
-      if (hintText) {
-        hintText.textContent = "Este proceso puede tardar bastante tiempo si el problema es complejo.";
-      }
       confirmButton.textContent = "Generar horario";
     }
     resetGenerationTimeoutControls();
+    var advBody = document.getElementById("gen-advanced-body");
+    var advToggle = document.querySelector('[data-bs-target="#gen-advanced-body"]');
+    if (advBody) {
+      advBody.classList.remove("show");
+    }
+    if (advToggle) {
+      advToggle.setAttribute("aria-expanded", "false");
+    }
     showModalElement(modal, function () {
       confirmButton.focus();
+      var modalBody = modal.querySelector(".modal-body");
+      if (window.lucide && typeof window.lucide.createIcons === "function") {
+        window.lucide.createIcons(modalBody ? { nodes: [modalBody] } : undefined);
+      }
       if (window.orariooAuth && typeof window.orariooAuth.initBootstrapTooltips === "function") {
         window.orariooAuth.initBootstrapTooltips();
       }
@@ -1492,8 +1496,26 @@
    */
   function resetGenerationTimeoutControls() {
     var timeoutInput = document.getElementById("gen-timeout-minutes");
+    var editBtn = document.getElementById("gen-timeout-edit-btn");
     if (timeoutInput) {
       timeoutInput.value = "15";
+      timeoutInput.readOnly = true;
+    }
+    _setTimeoutFieldError("");
+    if (editBtn) {
+      editBtn.classList.remove("opacity-50");
+      if (!editBtn._timeoutListenerAttached) {
+        editBtn._timeoutListenerAttached = true;
+        editBtn.addEventListener("click", function () {
+          if (!timeoutInput) return;
+          timeoutInput.readOnly = !timeoutInput.readOnly;
+          editBtn.classList.toggle("opacity-50", !timeoutInput.readOnly);
+          if (!timeoutInput.readOnly) {
+            timeoutInput.focus();
+            timeoutInput.select();
+          }
+        });
+      }
     }
   }
 
@@ -1536,6 +1558,33 @@
     return {
       timeout_minutes: timeoutInput ? timeoutInput.value : "15",
     };
+  }
+
+  function _setTimeoutFieldError(message) {
+    var input = document.getElementById("gen-timeout-minutes");
+    var feedback = document.getElementById("gen-timeout-minutes-error");
+    var validators = window.OrariooValidators;
+    if (validators && typeof validators.setFieldValidity === "function") {
+      validators.setFieldValidity(input, message, feedback);
+    }
+  }
+
+  function _validateTimeoutField() {
+    var input = document.getElementById("gen-timeout-minutes");
+    if (!input || input.readOnly) {
+      return true;
+    }
+    var val = parseInt(input.value, 10);
+    if (isNaN(val) || !Number.isInteger(val)) {
+      _setTimeoutFieldError("El tiempo de ejecución debe ser un número entero.");
+      return false;
+    }
+    if (val < 0 || val > 720) {
+      _setTimeoutFieldError("El tiempo de ejecución debe estar entre 0 y 720 minutos.");
+      return false;
+    }
+    _setTimeoutFieldError("");
+    return true;
   }
 
   /**
@@ -1626,6 +1675,9 @@
    * Output: Promise<void>; shows error alert and landing view on failure
    */
   async function handleGenerate() {
+    if (!_validateTimeoutField()) {
+      return;
+    }
     setGenerateActionButtonsDisabled(true);
     generatedWorkspace.clearDropFeedback();
     resetGeneratedDragState();
@@ -1642,6 +1694,15 @@
       state.generatedSavedName = "";
       state.generatedMoveInFlight = false;
       showGeneratedLanding();
+      var detail = startResult.data && startResult.data.detail;
+      if (typeof detail === "string" && detail.includes("timeout_minutes")) {
+        var msg = "El tiempo de ejecución debe estar entre 1 y 720 minutos.";
+        if (detail.includes("integer")) {
+          msg = "El tiempo de ejecución debe ser un número entero.";
+        }
+        _setTimeoutFieldError(msg);
+        return;
+      }
       var startErrorInfo = extractApiErrorInfo(startResult.data, "No se pudo iniciar la generación.");
       if (startErrorInfo.diagnostics && startErrorInfo.diagnostics.length) {
         startErrorInfo.headline = "El horario no se ha podido generar porque no se cumplen algunas restricciones básicas. Revisa los problemas detectados:";
@@ -1742,6 +1803,9 @@
    * Output: Promise<void>
    */
   async function handleGenerateModalConfirm() {
+    if (!_validateTimeoutField()) {
+      return;
+    }
     closeGenerateModal();
     await handleGenerate();
   }

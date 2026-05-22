@@ -4,6 +4,7 @@ Exposes solve_session_assignment as the single entry point.  All internal
 functions build decision variables, add constraints and extract the solution.
 """
 
+import gc
 import logging
 
 import psutil
@@ -32,7 +33,11 @@ from schedule.algorithm.diagnostics import (
     raise_schedule_generation_diagnostics,
 )
 from schedule.algorithm.errors import ScheduleGenerationError
-from schedule.algorithm.slots import build_real_time_intervals
+from schedule.algorithm.slots import (
+    build_real_time_intervals,
+    build_stage_allowed_slot_index,
+    session_stage_code,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +165,36 @@ def _cp_sat_session_assignment(
     on_phase2_start=None,
 ):
     """Run the full two-phase CP-SAT solve and return the assignment.
+
+    Wraps _cp_sat_session_assignment_impl so that OR-Tools model and solver
+    objects go out of scope before gc.collect() runs, releasing C++ memory
+    that Python's reference counting may not free immediately due to
+    circular references inside the OR-Tools wrappers.
+    """
+    result = _cp_sat_session_assignment_impl(
+        sessions=sessions,
+        slots=slots,
+        compatible_classrooms_by_session=compatible_classrooms_by_session,
+        random_seed=random_seed,
+        fixed_assignments=fixed_assignments,
+        generation_options=generation_options,
+        on_phase2_start=on_phase2_start,
+    )
+    gc.collect()
+    return result
+
+
+def _cp_sat_session_assignment_impl(
+    *,
+    sessions,
+    slots,
+    compatible_classrooms_by_session,
+    random_seed,
+    fixed_assignments,
+    generation_options,
+    on_phase2_start=None,
+):
+    """Run the full two-phase CP-SAT solve and return the assignment.
     Input: sessions, slots - standard algorithm inputs;
            compatible_classrooms_by_session - index from _build_compatible_classroom_index;
            random_seed, fixed_assignments, generation_options - forwarded from solve_session_assignment
@@ -169,22 +204,34 @@ def _cp_sat_session_assignment(
     session_count = len(sessions)
     slot_count = len(slots)
 
+    allowed_p_by_session = _build_allowed_slots_per_session(
+        sessions=sessions, slots=slots
+    )
+    zero_valid = [
+        s_idx for s_idx, allowed in allowed_p_by_session.items() if not allowed
+    ]
+    if zero_valid:
+        raise ScheduleGenerationError(
+            f"Sessions {zero_valid} have no valid slots (check stage/recess configuration).",
+            code="SCHEDULE_NO_VALID_SLOTS",
+        )
+
     y = _build_classroom_slot_decision_variables(
         model=model,
         compatible_classrooms_by_session=compatible_classrooms_by_session,
-        slot_count=slot_count,
+        allowed_p_by_session=allowed_p_by_session,
     )
     x = _build_slot_projection_variables(
         model=model,
         y=y,
         compatible_classrooms_by_session=compatible_classrooms_by_session,
-        slot_count=slot_count,
+        allowed_p_by_session=allowed_p_by_session,
     )
     _add_exactly_one_slot_and_classroom_constraints(
         model=model,
         y=y,
         compatible_classrooms_by_session=compatible_classrooms_by_session,
-        slot_count=slot_count,
+        allowed_p_by_session=allowed_p_by_session,
     )
 
     _apply_fixed_assignment_constraints(
@@ -294,6 +341,7 @@ def _cp_sat_session_assignment(
         compatible_classrooms_by_session=compatible_classrooms_by_session,
         session_count=session_count,
         slot_count=slot_count,
+        allowed_p_by_session=allowed_p_by_session,
     )
 
     # Phase 2: optimise soft constraints, starting from the feasible solution.
@@ -357,6 +405,7 @@ def _cp_sat_session_assignment(
             compatible_classrooms_by_session=compatible_classrooms_by_session,
             session_count=session_count,
             slot_count=slot_count,
+            allowed_p_by_session=allowed_p_by_session,
         )
         soft_score_info = _build_soft_score_info(
             phase1_slots=phase1_slots,
@@ -462,17 +511,33 @@ def _solver_status_name(status):
     return status_map.get(status, f"UNKNOWN_STATUS_{status}")
 
 
+def _build_allowed_slots_per_session(*, sessions, slots):
+    """Pre-compute valid slot indices per session (stage-filtered, recess-excluded).
+    Output: dict {session_idx: frozenset[int]}
+    """
+    allowed_slots_by_stage = build_stage_allowed_slot_index(slots=slots)
+    recess_slot_indices = frozenset(
+        p_idx for p_idx, slot in enumerate(slots) if slot.get("is_recess")
+    )
+    result = {}
+    for s_idx, session in enumerate(sessions):
+        stage_code = session_stage_code(session=session)
+        stage_allowed = allowed_slots_by_stage.get(stage_code, set())
+        result[s_idx] = frozenset(stage_allowed - recess_slot_indices)
+    return result
+
+
 def _build_classroom_slot_decision_variables(
-    *, model, compatible_classrooms_by_session, slot_count
+    *, model, compatible_classrooms_by_session, allowed_p_by_session
 ):
     """Create binary y[s, p, c] variables: 1 iff session s is in slot p with classroom c.
     Input: model - CP-SAT CpModel; compatible_classrooms_by_session - compatibility index;
-           slot_count - total number of slots
+           allowed_p_by_session - valid slot indices per session (stage-filtered, recess-excluded)
     Output: dict {(session_idx, slot_idx, classroom_id): BoolVar}
     """
     y = {}
     for s_idx, classrooms in compatible_classrooms_by_session.items():
-        for p_idx in range(slot_count):
+        for p_idx in allowed_p_by_session[s_idx]:
             for classroom in classrooms:
                 y[(s_idx, p_idx, classroom.id)] = model.NewBoolVar(
                     f"y_s{s_idx}_p{p_idx}_c{classroom.id}"
@@ -481,17 +546,18 @@ def _build_classroom_slot_decision_variables(
 
 
 def _build_slot_projection_variables(
-    *, model, y, compatible_classrooms_by_session, slot_count
+    *, model, y, compatible_classrooms_by_session, allowed_p_by_session
 ):
     """Create binary x[s, p] variables as the projection of y over classrooms.
     Input: model - CP-SAT CpModel; y - classroom-slot decision variables;
-           compatible_classrooms_by_session - compatibility index; slot_count - total slots
+           compatible_classrooms_by_session - compatibility index;
+           allowed_p_by_session - valid slot indices per session
     Output: dict {(session_idx, slot_idx): BoolVar}
     """
     x = {}
     for s_idx, classrooms in compatible_classrooms_by_session.items():
         classroom_ids = [classroom.id for classroom in classrooms]
-        for p_idx in range(slot_count):
+        for p_idx in allowed_p_by_session[s_idx]:
             x[(s_idx, p_idx)] = model.NewBoolVar(f"x_s{s_idx}_p{p_idx}")
             model.Add(
                 sum(y[(s_idx, p_idx, classroom_id)] for classroom_id in classroom_ids)
@@ -501,11 +567,12 @@ def _build_slot_projection_variables(
 
 
 def _add_exactly_one_slot_and_classroom_constraints(
-    *, model, y, compatible_classrooms_by_session, slot_count
+    *, model, y, compatible_classrooms_by_session, allowed_p_by_session
 ):
     """Constrain each session to exactly one (slot, classroom) pair.
     Input: model - CP-SAT CpModel; y - classroom-slot decision variables;
-           compatible_classrooms_by_session - compatibility index; slot_count - total slots
+           compatible_classrooms_by_session - compatibility index;
+           allowed_p_by_session - valid slot indices per session
     Output: None; side-effect: adds sum == 1 constraints to model
     """
     for s_idx, classrooms in compatible_classrooms_by_session.items():
@@ -513,7 +580,7 @@ def _add_exactly_one_slot_and_classroom_constraints(
         model.Add(
             sum(
                 y[(s_idx, p_idx, classroom_id)]
-                for p_idx in range(slot_count)
+                for p_idx in allowed_p_by_session[s_idx]
                 for classroom_id in classroom_ids
             )
             == 1
@@ -607,6 +674,7 @@ def _add_resource_interval_capacity_constraints(
             x[(session_idx, slot_idx)]
             for session_idx in resource_sessions
             for slot_idx in interval["slot_indices"]
+            if (session_idx, slot_idx) in x
         ]
         if interval_terms:
             model.Add(sum(interval_terms) <= 1)
@@ -620,11 +688,13 @@ def _extract_slot_and_classroom_assignment(
     compatible_classrooms_by_session,
     session_count,
     slot_count,
+    allowed_p_by_session,
 ):
     """Read the solver's variable values and build the result lists.
     Input: solver - solved CpSolver instance; x, y - decision variables;
            compatible_classrooms_by_session - compatibility index;
-           session_count, slot_count - problem dimensions
+           session_count, slot_count - problem dimensions;
+           allowed_p_by_session - valid slot indices per session
     Output: tuple (slot_by_session, classroom_by_session);
             raises ScheduleGenerationError if any session has no assignment
     """
@@ -634,7 +704,7 @@ def _extract_slot_and_classroom_assignment(
     for s_idx in range(session_count):
         selected = None
         selected_classroom = None
-        for p_idx in range(slot_count):
+        for p_idx in allowed_p_by_session[s_idx]:
             if solver.Value(x[(s_idx, p_idx)]) == 1:
                 selected = p_idx
                 for classroom in compatible_classrooms_by_session[s_idx]:
@@ -836,7 +906,7 @@ def _check_rss_budget(phase_label):
         if rss_mb > _SOLVER_PROCESS_LIMIT_MB - 40:
             raise ScheduleGenerationError(
                 "El servidor no tiene suficiente memoria para generar este horario "
-                "ahora mismo. Intentalo de nuevo más tarde",
+                "ahora mismo. Inténtalo de nuevo más tarde",
                 code="SCHEDULE_MEMORY_LIMIT",
             )
     except ScheduleGenerationError:

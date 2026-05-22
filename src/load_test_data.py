@@ -937,9 +937,9 @@ def create_subjects(teachers, groups, team):  # noqa: C901
     for row in subjects_data:
         subject, _ = Subject.objects.update_or_create(
             name=row["name"],
-            group=groups[row["group_name"]],
             team=team,
             defaults={
+                "group": groups[row["group_name"]],
                 "weekly_hours": row["weekly_hours"],
                 "duration": row.get("duration", 1.0),
                 "time_preferences": row.get("time_preferences", {}),
@@ -4635,6 +4635,17 @@ def create_admin_saved_timetable(*, users, team):
     return created
 
 
+def _purge_e2e_leftovers(team):
+    """Remove stale records left by interrupted E2E test runs."""
+    deleted = {}
+    for Model in [Teacher, Classroom, Group, Subject]:
+        count, _ = Model.objects.filter(team=team, name__icontains="E2E").delete()
+        if count:
+            deleted[Model.__name__] = count
+    if deleted:
+        print(f"  🧹 Purged E2E leftovers: {deleted}")
+
+
 def main():
     """Main function to load all test data"""
     print("🚀 Starting test data load...")
@@ -4642,6 +4653,7 @@ def main():
 
     try:
         users, demo_team = create_users()
+        _purge_e2e_leftovers(demo_team)
         teachers = create_teachers(demo_team)
         groups = create_groups(demo_team)
         classrooms = create_classrooms(demo_team)

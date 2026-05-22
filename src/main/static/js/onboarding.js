@@ -335,12 +335,10 @@
       escapeHtml(currentBreak.start || "") +
       '">' +
       "</div>" +
-      '<div class="col">' +
-      '<label class="form-label mb-0">Fin</label>' +
-      '<span class="text-danger" aria-hidden="true">*</span>' +
-      '<input type="time" class="form-control form-control-sm ob-break-end" value="' +
-      escapeHtml(currentBreak.end || "") +
-      '">' +
+      '<div class="col-auto d-flex align-items-end pb-1">' +
+      '<span class="badge bg-light text-muted border px-2 py-2"' +
+      ' data-bs-toggle="tooltip" data-bs-placement="top"' +
+      ' data-bs-title="La duración del recreo es fija: 30 minutos.">&#9201; 30 min</span>' +
       "</div>" +
       '<div class="col-auto pt-3">' +
       '<button type="button" class="btn btn-sm btn-outline-danger ob-remove-break" aria-label="Eliminar recreo">&times;</button>' +
@@ -547,6 +545,9 @@
     if (window.lucide && typeof window.lucide.createIcons === "function") {
       window.lucide.createIcons();
     }
+    if (window.orariooAuth && typeof window.orariooAuth.initBootstrapTooltips === "function") {
+      window.orariooAuth.initBootstrapTooltips();
+    }
   }
 
   function refreshBreakEmptyState(item) {
@@ -589,6 +590,9 @@
         bindAccordionEvents();
         refreshBreakEmptyState(item);
         updateStageSummary(item);
+        if (window.orariooAuth && typeof window.orariooAuth.initBootstrapTooltips === "function") {
+          window.orariooAuth.initBootstrapTooltips();
+        }
       };
     });
 
@@ -632,19 +636,13 @@
     for (var i = 0; i < rows.length; i += 1) {
       var row = rows[i];
       var startEl = row.querySelector(".ob-break-start");
-      var endEl = row.querySelector(".ob-break-end");
       var startVal = startEl ? startEl.value : "";
-      var endVal = endEl ? endEl.value : "";
-      if (!startVal && !endVal) {
+      if (!startVal) {
         continue;
       }
-      if (!startVal || !endVal || startVal >= endVal) {
-        showAlert(
-          "Cada recreo debe tener hora de inicio y fin, y la hora de fin debe ser posterior a la de inicio.",
-          "error",
-        );
-        return null;
-      }
+      var parts = startVal.split(":");
+      var total = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10) + 30;
+      var endVal = String(Math.floor(total / 60) % 24).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0");
       breaks.push({ start: startVal, end: endVal });
     }
     return breaks;

@@ -312,9 +312,19 @@
 
   // ── Break rows ────────────────────────────────────────────────────
 
+  var BREAK_DURATION_MINUTES = 30;
+
+  function addMinutesToTime(timeStr, minutes) {
+    var parts = timeStr.split(":");
+    var total = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10) + minutes;
+    var hh = String(Math.floor(total / 60) % 24).padStart(2, "0");
+    var mm = String(total % 60).padStart(2, "0");
+    return hh + ":" + mm;
+  }
+
   /**
    * Builds a single break row DOM element for the modal form.
-   * Input: cfg - break object with optional start/end values
+   * Input: cfg - break object with optional start value
    * Output: DOM div element representing one break row
    */
   function buildBreakRow(cfg) {
@@ -328,13 +338,15 @@
       startInput.value = current.start;
     }
 
-    const endInput = dom.createElement("input", {
-      className: "form-control form-control-sm sc-break-end",
-      attrs: { type: "time", "aria-label": "Fin del recreo" },
+    const durationBadge = dom.createElement("span", {
+      className: "badge bg-light text-muted border px-2 py-2",
+      text: "⏱ 30 min",
+      attrs: {
+        "data-bs-toggle": "tooltip",
+        "data-bs-placement": "top",
+        "data-bs-title": "La duración del recreo es fija: 30 minutos.",
+      },
     });
-    if (current.end) {
-      endInput.value = current.end;
-    }
 
     const removeBtn = dom.createElement("button", {
       className: "btn btn-sm btn-outline-danger sc-remove-break-btn",
@@ -356,14 +368,8 @@
           ],
         }),
         dom.createElement("div", {
-          className: "col",
-          children: [
-            dom.createElement("label", {
-              className: "form-label small fw-semibold mb-1",
-              text: "Fin recreo",
-            }),
-            endInput,
-          ],
+          className: "col-auto d-flex align-items-end pb-1",
+          children: [durationBadge],
         }),
         dom.createElement("div", {
           className: "col-auto d-flex align-items-end",
@@ -390,6 +396,9 @@
     if (window.lucide && typeof window.lucide.createIcons === "function") {
       window.lucide.createIcons();
     }
+    if (window.orariooAuth && typeof window.orariooAuth.initBootstrapTooltips === "function") {
+      window.orariooAuth.initBootstrapTooltips();
+    }
   }
 
   /**
@@ -404,6 +413,9 @@
     refreshBreaksEmptyState();
     if (window.lucide && typeof window.lucide.createIcons === "function") {
       window.lucide.createIcons();
+    }
+    if (window.orariooAuth && typeof window.orariooAuth.initBootstrapTooltips === "function") {
+      window.orariooAuth.initBootstrapTooltips();
     }
   }
 
@@ -432,19 +444,11 @@
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const startEl = row.querySelector(".sc-break-start");
-      const endEl = row.querySelector(".sc-break-end");
       const start = startEl ? startEl.value : "";
-      const end = endEl ? endEl.value : "";
-      if (!start && !end) {
+      if (!start) {
         continue;
       }
-      if (!start || !end || start >= end) {
-        if (elements.breaksError) {
-          elements.breaksError.textContent =
-            "Cada recreo debe tener hora de inicio y fin, con el fin posterior al inicio.";
-        }
-        return null;
-      }
+      const end = addMinutesToTime(start, BREAK_DURATION_MINUTES);
       breaks.push({ start: start, end: end });
     }
     return breaks;

@@ -1062,6 +1062,41 @@
     color: #5a7abf;
 }
 
+.gen-advanced-toggle {
+    background: transparent;
+    border: none;
+    text-decoration: none;
+    color: inherit;
+}
+
+.gen-advanced-toggle:hover {
+    background-color: rgba(0, 0, 0, 0.025);
+    border-radius: 0.375rem;
+}
+
+.gen-advanced-chevron {
+    transition: transform 0.2s ease;
+}
+
+.gen-advanced-toggle[aria-expanded="true"] .gen-advanced-chevron {
+    transform: rotate(180deg);
+}
+
+.gen-timeout-input {
+    max-width: 80px;
+    transition: background-color 0.2s ease;
+}
+
+.gen-timeout-input[readonly] {
+    background-color: #e9ecef;
+    cursor: default;
+}
+
+.gen-timeout-edit-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
 .export-entity-card.active {
     background: #e7f0ff !important;
     border-color: #80a6ff !important;
