@@ -134,6 +134,9 @@
     INVALID_INTEGER: function () {
       return "Debes introducir un número entero válido.";
     },
+    INVALID_POSITIVE_INTEGER: function () {
+      return "El valor debe ser mayor que cero.";
+    },
     WEEKLY_HOURS_EXCEEDS_LIMIT: function () {
       return "Las horas semanales no pueden ser superior a 168.";
     },
@@ -539,6 +542,10 @@
     if (cannotBeLogerMatch) {
       var maxLength = parseInt(cannotBeLogerMatch[1], 10);
       return "Este campo no puede tener más de " + maxLength + " caracteres.";
+    }
+
+    if (/weekly hours must be greater than zero/i.test(rawMessage)) {
+      return "Las horas semanales deben ser mayores que cero.";
     }
 
     if (/already exists/i.test(rawMessage)) {

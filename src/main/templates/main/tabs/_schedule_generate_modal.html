@@ -184,59 +184,78 @@
                     </div>
                 </div>
                 <hr class="my-3">
-                <p class="text-uppercase text-muted gen-opt-section-label mb-2">Semilla de aleatoriedad</p>
-                <div class="mb-3">
-                    <div class="row g-2 align-items-center">
-                        <div class="col-sm-4">
-                            <input class="form-control form-control-sm"
-                                   type="number"
-                                   id="gen-opt-seed"
-                                   min="0"
-                                   step="1"
-                                   placeholder="Aleatoria"
-                                   aria-label="Semilla de aleatoriedad">
-                        </div>
-                        <div class="col-sm-8">
-                            <p class="small text-secondary mb-0">
-                                Semilla (reproducibilidad)
-                                <i data-lucide="info"
-                                   class="gen-opt-info-icon"
-                                   data-bs-toggle="tooltip"
-                                   data-bs-placement="top"
-                                   data-bs-title="Usa la misma semilla para comparar generaciones con distintos pesos. Déjalo vacío para obtener un horario diferente cada vez."></i>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <hr class="my-3">
                 <p class="text-uppercase text-muted gen-opt-section-label mb-2">Tiempo de ejecución</p>
-                <div class="mb-3">
-                    <div class="row g-2 align-items-center mb-2">
-                        <div class="col-sm-4">
-                            <input class="form-control form-control-sm"
+                <div class="border rounded p-3 mb-3">
+                    <p class="small text-secondary mb-2">
+                        Minutos de optimización
+                        <i data-lucide="info"
+                           class="gen-opt-info-icon"
+                           data-bs-toggle="tooltip"
+                           data-bs-placement="top"
+                           data-bs-title="Minutos dedicados a las preferencias de optimización marcadas una vez encontrada una solución válida."></i>
+                    </p>
+                    <div class="d-flex align-items-center gap-2">
+                        <div>
+                            <input class="form-control form-control-sm gen-timeout-input"
                                    type="number"
                                    id="gen-timeout-minutes"
                                    min="0"
+                                   max="720"
                                    step="1"
                                    value="15"
+                                   readonly
                                    aria-label="Tiempo máximo en minutos">
+                            <div class="invalid-feedback" id="gen-timeout-minutes-error"></div>
                         </div>
-                        <div class="col-sm-8">
-                            <p class="small text-secondary mb-0">
-                                Minutos de optimización
-                                <i data-lucide="info"
-                                   class="gen-opt-info-icon"
-                                   data-bs-toggle="tooltip"
-                                   data-bs-placement="top"
-                                   data-bs-title="Minutos dedicados a optimizar el horario (distribución de asignaturas, huecos del profesor, preferencias) una vez encontrada una solución válida."></i>
-                            </p>
+                        <button type="button"
+                                id="gen-timeout-edit-btn"
+                                class="btn btn-link text-primary p-0 admin-action-btn admin-action-btn--edit flex-shrink-0"
+                                aria-label="Editar tiempo de ejecución">
+                            <i data-lucide="pencil" class="gen-timeout-edit-icon"></i>
+                        </button>
+                    </div>
+                    <p class="small text-muted mt-2 mb-0">15 min es suficiente para la mayoría de casos.</p>
+                </div>
+                <hr class="my-3">
+                <div class="border rounded gen-advanced-accordion">
+                    <button type="button"
+                            class="btn w-100 text-start d-flex align-items-center justify-content-between p-3 gen-advanced-toggle"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#gen-advanced-body"
+                            aria-expanded="false"
+                            aria-controls="gen-advanced-body">
+                        <span class="small fw-semibold d-flex align-items-center gap-2">
+                            <i data-lucide="settings-2" class="gen-opt-info-icon"></i>
+                            Opciones avanzadas
+                        </span>
+                        <i data-lucide="chevron-down"
+                           class="gen-opt-info-icon gen-advanced-chevron"></i>
+                    </button>
+                    <div class="collapse" id="gen-advanced-body">
+                        <div class="border-top p-3">
+                            <div class="row g-2 align-items-center">
+                                <div class="col-sm-4">
+                                    <input class="form-control form-control-sm"
+                                           type="number"
+                                           id="gen-opt-seed"
+                                           min="0"
+                                           step="1"
+                                           placeholder="Aleatoria"
+                                           aria-label="Semilla de aleatoriedad">
+                                </div>
+                                <div class="col-sm-8">
+                                    <p class="small text-secondary mb-0">
+                                        Semilla (reproducibilidad)
+                                        <i data-lucide="info"
+                                           class="gen-opt-info-icon"
+                                           data-bs-toggle="tooltip"
+                                           data-bs-placement="top"
+                                           data-bs-title="Usa la misma semilla para comparar generaciones con distintos pesos. Déjalo vacío para obtener un horario diferente cada vez."></i>
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div id="scheduleGenerateModalHint"
-                     class="d-flex align-items-start gap-2 rounded p-2 small gen-opt-hint">
-                    <i data-lucide="info" class="gen-opt-hint-icon"></i>
-                    <span id="scheduleGenerateModalHintText">Este proceso puede tardar bastante tiempo si el problema es complejo.</span>
                 </div>
             </div>
             <div class="modal-footer">
