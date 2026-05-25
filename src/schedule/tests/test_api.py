@@ -1,4 +1,4 @@
-﻿from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta
 from io import BytesIO
 from types import SimpleNamespace
 from unittest import skipIf
@@ -70,6 +70,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
         )
 
     def build_payload(self):
@@ -303,6 +304,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
+            classroom=self.classroom,
         )
 
         self.create_schedule(
@@ -348,6 +350,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=second_teacher,
             group=self.group,
+            classroom=self.classroom,
         )
 
         self.create_schedule(
@@ -399,6 +402,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=second_teacher,
             group=self.group,
+            classroom=self.classroom,
         )
 
         self.create_schedule(
@@ -621,7 +625,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("subject", response.data)
 
     def test_generate_basic_schedule(self):
-        Classroom.objects.all().delete()
         AuditEntry.objects.all().delete()
 
         response = self.generate_schedule()
@@ -682,6 +685,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
         )
 
         response = self.generate_schedule()
@@ -709,6 +713,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=group_2,
+            classroom=self.classroom,
         )
 
         response = self.generate_schedule()
@@ -734,6 +739,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=self.group,
+            classroom=self.classroom,
         )
 
         response = self.generate_schedule()
@@ -821,6 +827,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=other_teacher,
             group=other_group,
+            classroom=other_classroom,
         )
 
         source_schedule = self.create_schedule(
@@ -899,6 +906,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
+            classroom=self.classroom,
         )
 
         source_schedule = self.create_schedule(
@@ -1264,6 +1272,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=group_2,
+            classroom=self.classroom,
         )
         self.teacher.max_weekly_hours = 7
         self.teacher.save(update_fields=["max_weekly_hours"])
@@ -1287,6 +1296,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
         )
 
         # 5h (Math) + 21h (Science) = 26h, above PRIMARY weekly limit (25h).
@@ -1356,13 +1366,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(timeout_seconds, 900.0)  # 15 min * 60 s
 
-    def test_generate_assigns_only_subject_mandatory_classroom(self):
+    def test_generate_assigns_only_subject_classroom(self):
         assigned = Classroom.objects.create(
             name="Aula Asignada",
             team=self.team,
         )
-        self.subject.mandatory_classroom = assigned
-        self.subject.save(update_fields=["mandatory_classroom"])
+        self.subject.classroom = assigned
+        self.subject.save(update_fields=["classroom"])
 
         response = self.generate_schedule()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1374,15 +1384,15 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         self.assertEqual(generated_classroom_ids, {assigned.id})
 
-    def test_generate_uses_mandatory_classroom_when_set(self):
+    def test_generate_uses_classroom_when_set(self):
         self.classroom.name = "Aula 1A"
         self.classroom.save(update_fields=["name"])
         music_room = Classroom.objects.create(
             name="Aula de Musica",
             team=self.team,
         )
-        self.subject.mandatory_classroom = music_room
-        self.subject.save(update_fields=["mandatory_classroom"])
+        self.subject.classroom = music_room
+        self.subject.save(update_fields=["classroom"])
 
         response = self.generate_schedule()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1394,7 +1404,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         self.assertEqual(generated_classroom_ids, {music_room.id})
 
-    def test_generate_uses_any_classroom_when_subject_has_no_restrictions(self):
+    def test_generate_uses_subject_classroom_by_default(self):
         response = self.generate_schedule()
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1403,9 +1413,9 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
                 "classroom_id", flat=True
             )
         )
-        self.assertIn(self.classroom.id, generated_classroom_ids)
+        self.assertEqual(generated_classroom_ids, {self.classroom.id})
 
-    def test_generate_spreads_sessions_for_shared_mandatory_classroom(self):
+    def test_generate_spreads_sessions_for_shared_classroom(self):
         self.subject.weekly_hours = 1
         self.subject.save(update_fields=["weekly_hours"])
 
@@ -1427,11 +1437,12 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=group_2,
+            classroom=self.classroom,
         )
-        self.subject.mandatory_classroom = self.classroom
-        self.subject.save(update_fields=["mandatory_classroom"])
-        other_subject.mandatory_classroom = self.classroom
-        other_subject.save(update_fields=["mandatory_classroom"])
+        self.subject.classroom = self.classroom
+        self.subject.save(update_fields=["classroom"])
+        other_subject.classroom = self.classroom
+        other_subject.save(update_fields=["classroom"])
 
         response = self.generate_schedule()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1562,8 +1573,8 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
     def test_generate_returns_classroom_bottleneck_diagnostic(self):
         self.subject.weekly_hours = 1
         self.subject.save(update_fields=["weekly_hours"])
-        self.subject.mandatory_classroom = self.classroom
-        self.subject.save(update_fields=["mandatory_classroom"])
+        self.subject.classroom = self.classroom
+        self.subject.save(update_fields=["classroom"])
 
         other_teacher = Teacher.objects.create(
             team=self.team,
@@ -1583,9 +1594,10 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=other_teacher,
             group=other_group,
+            classroom=self.classroom,
         )
-        other_subject.mandatory_classroom = self.classroom
-        other_subject.save(update_fields=["mandatory_classroom"])
+        other_subject.classroom = self.classroom
+        other_subject.save(update_fields=["classroom"])
 
         slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
         self.teacher.time_preferences = {
@@ -1707,6 +1719,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=self.group,
+            classroom=self.classroom,
         )
 
         slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
@@ -1915,6 +1928,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=secondary_group,
+            classroom=self.classroom,
         )
 
         today = timezone.now().date()
@@ -1980,9 +1994,10 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
         )
-        self.subject.mandatory_classroom = self.classroom
-        self.subject.save(update_fields=["mandatory_classroom"])
+        self.subject.classroom = self.classroom
+        self.subject.save(update_fields=["classroom"])
 
     def test_build_windows_from_stage_config_keeps_primary_half_slot_split_by_break(
         self,
@@ -2142,9 +2157,10 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
+            classroom=self.classroom,
         )
-        other_subject.mandatory_classroom = self.classroom
-        other_subject.save(update_fields=["mandatory_classroom"])
+        other_subject.classroom = self.classroom
+        other_subject.save(update_fields=["classroom"])
 
         sessions = [
             {

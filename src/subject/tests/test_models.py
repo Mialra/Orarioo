@@ -8,6 +8,7 @@ Uses Django TestCase (DB needed for FK dependencies).
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from classroom.models import Classroom
 from common.stages import GroupEducationalStage
 from group.models import Group
 from subject.models import Subject
@@ -31,6 +32,7 @@ class SubjectCleanTest(TestCase):
             stage=GroupEducationalStage.PRIMARY,
             team=cls.team,
         )
+        cls.classroom = Classroom.objects.create(name="Subject Room", team=cls.team)
 
     def _make(self, **kwargs):
         defaults = {
@@ -39,6 +41,7 @@ class SubjectCleanTest(TestCase):
             "duration": 1.0,
             "teacher": self.teacher,
             "group": self.group,
+            "classroom": self.classroom,
             "team": self.team,
         }
         defaults.update(kwargs)
@@ -97,3 +100,11 @@ class SubjectCleanTest(TestCase):
     def test_weekly_hours_large_value_is_valid(self):
         """EP valid: large (but positive) weekly_hours must be accepted."""
         self._make(weekly_hours=30).clean()
+
+    def test_classroom_cascades_when_classroom_is_deleted(self):
+        subject = self._make()
+        subject.save()
+
+        self.classroom.delete()
+
+        self.assertFalse(Subject.objects.filter(pk=subject.pk).exists())

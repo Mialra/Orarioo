@@ -114,7 +114,7 @@ class BasicScheduleGenerator:
         teacher = teachers[0] if teachers else None
         subjects = list(
             Subject.objects.filter(team=team)
-            .select_related("teacher", "group", "mandatory_classroom")
+            .select_related("teacher", "group", "classroom")
             .order_by("id")
         )
         fallback_classroom = _get_or_create_classroom(actor_email, team)
@@ -275,7 +275,7 @@ class BasicScheduleGenerator:
     @staticmethod
     def _build_sessions(*, subjects, fallback_teacher):
         """Build the list of session dicts to be scheduled from the subject list.
-        Input: subjects - list of Subject instances (with related teacher, group, mandatory_classroom);
+        Input: subjects - list of Subject instances (with related teacher, group, classroom);
                fallback_teacher - Teacher instance used when subjects list is empty
         Output: list of session dicts; empty list if subjects is empty
         """
@@ -293,9 +293,7 @@ class BasicScheduleGenerator:
                         "group": subject.group,
                         "subject": subject,
                         "allowed_classroom_ids": (
-                            {subject.mandatory_classroom_id}
-                            if subject.mandatory_classroom_id
-                            else set()
+                            {subject.classroom_id}
                         ),
                         "name": subject.name,
                     }

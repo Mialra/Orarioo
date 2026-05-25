@@ -934,20 +934,8 @@ def create_subjects(teachers, groups, team):  # noqa: C901
 
     subjects = []
     for row in subjects_data:
-        subject, _ = Subject.objects.update_or_create(
-            name=row["name"],
-            team=team,
-            defaults={
-                "group": groups[row["group_name"]],
-                "weekly_hours": row["weekly_hours"],
-                "duration": row.get("duration", 1.0),
-                "time_preferences": row.get("time_preferences", {}),
-                "type": row.get("type", SubjectType.NORMAL),
-                "teacher": teachers[row["teacher_key"]],
-                "created_by": "system",
-            },
-        )
-        room_name_hint = f"Aula {subject.group.name}"
+        group = groups[row["group_name"]]
+        room_name_hint = f"Aula {group.name}"
         default_room = next(
             (
                 room
@@ -956,36 +944,48 @@ def create_subjects(teachers, groups, team):  # noqa: C901
             ),
             None,
         )
-        lower_name = subject.name.lower()
-        mandatory_room = None
+        if default_room is None:
+            default_room = Classroom.objects.filter(team=team).order_by("id").first()
+        lower_name = row["name"].lower()
+        classroom = None
         if "educación física" in lower_name or "psicomotricidad" in lower_name:
-            mandatory_room = Classroom.objects.filter(
+            classroom = Classroom.objects.filter(
                 team=team, name="Gimnasio"
             ).first()
         elif "tecnología" in lower_name:
-            mandatory_room = Classroom.objects.filter(
+            classroom = Classroom.objects.filter(
                 team=team, name="Aula de Tecnología"
             ).first()
         elif "música" in lower_name:
-            mandatory_room = Classroom.objects.filter(
+            classroom = Classroom.objects.filter(
                 team=team, name="Aula de Música"
             ).first()
         elif "plástica" in lower_name or "artística" in lower_name:
-            mandatory_room = Classroom.objects.filter(
+            classroom = Classroom.objects.filter(
                 team=team, name="Aula de Plástica"
             ).first()
         elif "biología" in lower_name or "física y química" in lower_name:
-            mandatory_room = Classroom.objects.filter(
+            classroom = Classroom.objects.filter(
                 team=team, name="Laboratorio"
             ).first()
 
-        if mandatory_room is None:
-            mandatory_room = default_room
+        if classroom is None:
+            classroom = default_room
 
-        if mandatory_room:
-            subject.mandatory_classroom = mandatory_room
-            subject.save(update_fields=["mandatory_classroom"])
-
+        subject, _ = Subject.objects.update_or_create(
+            name=row["name"],
+            team=team,
+            defaults={
+                "group": group,
+                "weekly_hours": row["weekly_hours"],
+                "duration": row.get("duration", 1.0),
+                "time_preferences": row.get("time_preferences", {}),
+                "type": row.get("type", SubjectType.NORMAL),
+                "teacher": teachers[row["teacher_key"]],
+                "classroom": classroom,
+                "created_by": "system",
+            },
+        )
         subjects.append(subject)
         print(
             f"  ✓ Upserted subject: {subject.name} "

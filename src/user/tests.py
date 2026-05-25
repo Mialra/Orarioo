@@ -468,6 +468,7 @@ class AccountDeletionTests(APITestCase):
             weekly_hours=2,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
         )
         now = timezone.now()
         self.schedule = Schedule.objects.create(

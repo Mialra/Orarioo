@@ -33,7 +33,7 @@
     weeklyHoursInput: document.getElementById("admin-subject-weekly-hours"),
     teacherInput: document.getElementById("admin-subject-teacher"),
     groupInput: document.getElementById("admin-subject-group"),
-    mandatoryClassroomInput: document.getElementById("admin-subject-mandatory-classroom"),
+    classroomInput: document.getElementById("admin-subject-classroom"),
     timePreferencesInput: document.getElementById("admin-subject-time-preferences"),
     preferenceBrushInput: document.getElementById("admin-subject-preference-brush"),
     preferenceClearButton: document.getElementById("admin-subject-preference-clear-btn"),
@@ -51,7 +51,7 @@
     weeklyHoursError: document.getElementById("admin-subject-weekly-hours-error"),
     teacherError: document.getElementById("admin-subject-teacher-error"),
     groupError: document.getElementById("admin-subject-group-error"),
-    mandatoryClassroomError: document.getElementById("admin-subject-mandatory-classroom-error"),
+    classroomError: document.getElementById("admin-subject-classroom-error"),
     timePreferencesError: document.getElementById("admin-subject-time-preferences-error"),
   };
 
@@ -94,7 +94,7 @@
    * Refreshes all custom select inputs in the subject form.
    */
   function refreshSubjectSelects() {
-    [elements.teacherInput, elements.groupInput, elements.mandatoryClassroomInput].forEach(refreshCustomSelect);
+    [elements.teacherInput, elements.groupInput, elements.classroomInput].forEach(refreshCustomSelect);
   }
 
   /**
@@ -275,7 +275,7 @@
 
         fillSelect(elements.teacherInput, relationState.teachers, "Selecciona profesor");
         fillSelect(elements.groupInput, relationState.groups, "Selecciona curso");
-        fillSelect(elements.mandatoryClassroomInput, relationState.classrooms, "Selecciona aula");
+        fillSelect(elements.classroomInput, relationState.classrooms, "Selecciona aula");
 
         relationState.loaded = teachersResponse.ok && groupsResponse.ok && classroomsResponse.ok;
         return relationState;
@@ -299,7 +299,7 @@
     elements.formModal.addEventListener("show.bs.modal", function () {
       var result = loadRelationData();
       var repopulate = function () {
-        fillSelect(elements.mandatoryClassroomInput, relationState.classrooms, "Selecciona aula");
+        fillSelect(elements.classroomInput, relationState.classrooms, "Selecciona aula");
       };
       if (result && typeof result.then === "function") {
         result.then(repopulate);
@@ -401,10 +401,10 @@
           rules: [fv.requiredPositiveInt(function () { return elements.groupInput; })],
         },
         {
-          name: "mandatory_classroom",
-          input: elements.mandatoryClassroomInput,
-          feedback: elements.mandatoryClassroomError,
-          rules: [fv.requiredPositiveInt(function () { return elements.mandatoryClassroomInput; })],
+          name: "classroom",
+          input: elements.classroomInput,
+          feedback: elements.classroomError,
+          rules: [fv.requiredPositiveInt(function () { return elements.classroomInput; })],
         },
         {
           name: "time_preferences",
@@ -420,7 +420,7 @@
         { input: elements.weeklyHoursInput, feedback: elements.weeklyHoursError, event: "input" },
         { input: elements.teacherInput, feedback: elements.teacherError, event: "change" },
         { input: elements.groupInput, feedback: elements.groupError, event: "change" },
-        { input: elements.mandatoryClassroomInput, feedback: elements.mandatoryClassroomError, event: "change" },
+        { input: elements.classroomInput, feedback: elements.classroomError, event: "change" },
         { input: elements.timePreferencesInput, feedback: elements.timePreferencesError, event: "input" },
       ],
       resetValues: function () {
@@ -429,7 +429,7 @@
         elements.weeklyHoursInput.value = "";
         elements.teacherInput.value = "";
         elements.groupInput.value = "";
-        elements.mandatoryClassroomInput.value = "";
+        elements.classroomInput.value = "";
         prefManager.reset({});
         refreshSubjectSelects();
       },
@@ -444,7 +444,7 @@
         elements.weeklyHoursInput.value = item.weekly_hours ?? "";
         elements.teacherInput.value = item.teacher ? String(item.teacher) : "";
         elements.groupInput.value = item.group ? String(item.group) : "";
-        elements.mandatoryClassroomInput.value = item.mandatory_classroom ? String(item.mandatory_classroom) : "";
+        elements.classroomInput.value = item.classroom ? String(item.classroom) : "";
         prefManager.reset(item.time_preferences || {});
         refreshSubjectSelects();
       },
@@ -455,7 +455,7 @@
           time_preferences: admin.parsePreferences(elements.timePreferencesInput.value),
           teacher: Number(elements.teacherInput.value),
           group: Number(elements.groupInput.value),
-          mandatory_classroom: Number(elements.mandatoryClassroomInput.value) || null,
+          classroom: Number(elements.classroomInput.value),
         };
       },
     },

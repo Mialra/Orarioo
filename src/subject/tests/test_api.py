@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from classroom.models import Classroom
 from common.stages import EducationalStage
 from common.test_utils import AuthenticatedAdminAPIMixin
 from group.models import EducationalStage as GroupEducationalStage
@@ -24,6 +25,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             stage=GroupEducationalStage.SECONDARY,
             team=self.team,
         )
+        self.classroom = Classroom.objects.create(name="Aula 1", team=self.team)
 
     def test_list_and_retrieve_subject(self):
         subject = Subject.objects.create(
@@ -33,6 +35,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
             team=self.team,
         )
 
@@ -44,6 +47,10 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(detail_response.data["name"], "Science")
         self.assertEqual(detail_response.data["stage"], EducationalStage.SECONDARY)
         self.assertEqual(detail_response.data["stage_color"], "orange")
+        self.assertEqual(detail_response.data["classroom"], self.classroom.id)
+        self.assertEqual(detail_response.data["classroom_name"], self.classroom.name)
+        self.assertNotIn("mandatory_classroom", detail_response.data)
+        self.assertNotIn("mandatory_classroom_name", detail_response.data)
 
     def test_update_subject(self):
         subject = Subject.objects.create(
@@ -53,6 +60,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
             team=self.team,
         )
 
@@ -62,6 +70,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
+            "classroom": self.classroom.id,
         }
 
         response = self.client.put(
@@ -82,6 +91,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
             team=self.team,
         )
 
@@ -98,6 +108,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
+            "classroom": self.classroom.id,
         }
 
         response = self.client.post(reverse("subject-list"), payload, format="json")
@@ -112,6 +123,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
+            "classroom": self.classroom.id,
         }
 
         response = self.client.post(reverse("subject-list"), payload, format="json")
@@ -127,6 +139,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
             team=self.team,
         )
 
@@ -154,6 +167,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
+            "classroom": self.classroom.id,
         }
 
         response = self.client.post(reverse("subject-list"), payload, format="json")
@@ -169,6 +183,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
             team=self.team,
         )
 
@@ -178,6 +193,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "type": SubjectType.NORMAL,
             "teacher": self.teacher.id,
             "group": self.group.id,
+            "classroom": self.classroom.id,
         }
 
         response = self.client.post(reverse("subject-list"), payload, format="json")
@@ -193,6 +209,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
             team=self.team,
         )
         other_user, other_team = self.create_isolated_user(
@@ -208,6 +225,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             stage=GroupEducationalStage.SECONDARY,
             team=other_team,
         )
+        other_classroom = Classroom.objects.create(name="Other Room", team=other_team)
         self.client.force_authenticate(other_user)
 
         response = self.client.post(
@@ -218,6 +236,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
                 "type": SubjectType.NORMAL,
                 "teacher": other_teacher.id,
                 "group": other_group.id,
+                "classroom": other_classroom.id,
             },
             format="json",
         )
@@ -241,6 +260,7 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
             team=self.team,
         )
 
@@ -251,3 +271,46 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.data[0]["name"], "Tutoria")
         self.assertEqual(response.data[0]["type"], SubjectType.NORMAL)
         self.assertEqual(set(response.data[0].keys()), {"id", "name", "type"})
+
+    def test_reject_missing_classroom(self):
+        payload = {
+            "name": "Sin aula",
+            "weekly_hours": 3,
+            "type": SubjectType.NORMAL,
+            "teacher": self.teacher.id,
+            "group": self.group.id,
+        }
+
+        response = self.client.post(reverse("subject-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("classroom", response.data)
+
+    def test_reject_null_classroom(self):
+        payload = {
+            "name": "Aula nula",
+            "weekly_hours": 3,
+            "type": SubjectType.NORMAL,
+            "teacher": self.teacher.id,
+            "group": self.group.id,
+            "classroom": None,
+        }
+
+        response = self.client.post(reverse("subject-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("classroom", response.data)
+
+    def test_reject_missing_teacher(self):
+        payload = {
+            "name": "Sin profesor",
+            "weekly_hours": 3,
+            "type": SubjectType.NORMAL,
+            "group": self.group.id,
+            "classroom": self.classroom.id,
+        }
+
+        response = self.client.post(reverse("subject-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("teacher", response.data)

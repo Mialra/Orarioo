@@ -95,6 +95,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
             team=self.team,
         )
         AuditEntry.objects.all().delete()
@@ -173,14 +174,14 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             sorted([self.user.get_full_name(), self.team_user.get_full_name()]),
         )
 
-    def test_subject_mandatory_classroom_change_is_audited(self):
+    def test_subject_classroom_change_is_audited(self):
         classroom = Classroom.objects.create(name="Lab 2", team=self.team)
         AuditEntry.objects.all().delete()
 
         response = self.client.patch(
             reverse("subject-detail", args=[self.subject.id]),
             {
-                "mandatory_classroom": classroom.id,
+                "classroom": classroom.id,
             },
             format="json",
         )

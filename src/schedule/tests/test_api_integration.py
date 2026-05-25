@@ -190,6 +190,7 @@ class ScheduleGenerationFlowTest(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
         )
         AuditEntry.objects.all().delete()
 
