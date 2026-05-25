@@ -17,7 +17,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.teacher = Teacher.objects.create(
             name="John Doe",
             max_weekly_hours=40,
-            working_hours=20,
             team=self.team,
         )
         self.group = Group.objects.create(
@@ -202,7 +201,6 @@ class SubjectApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         other_teacher = Teacher.objects.create(
             name="Other Teacher",
             max_weekly_hours=40,
-            working_hours=20,
             team=other_team,
         )
         other_group = Group.objects.create(

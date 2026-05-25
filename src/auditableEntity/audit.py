@@ -47,7 +47,6 @@ AUDIT_EXCLUDED_FIELD_NAMES = frozenset(
         "first_name",
         "last_name",
         "is_active",
-        "working_hours",
         "type",
         "duration",
     }
@@ -83,7 +82,6 @@ FIELD_LABELS = {
     "max_weekly_hours": "Máximo de horas semanales",
     "max_weekly_minutes": "Minutos semanales",
     "weekly_hours_exact": "Carga horaria exacta",
-    "working_hours": "Horas de trabajo",
     "time_preferences": "Preferencias horarias",
     "stage": "Etapa",
     "weekly_hours": "Horas semanales",

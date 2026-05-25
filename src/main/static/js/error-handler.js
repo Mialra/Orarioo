@@ -77,9 +77,6 @@
     INVALID_SCHEDULE_CONFIG: function () {
       return "La configuracion de tramos no es valida.";
     },
-    INVALID_HOUR_RANGE: function () {
-      return "Las horas de trabajo no pueden superar el máximo semanal.";
-    },
     INVALID_TIME_PREFERENCE_STATE: function () {
       return "Hay preferencias horarias con valores no válidos.";
     },

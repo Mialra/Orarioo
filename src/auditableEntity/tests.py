@@ -78,7 +78,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.teacher = Teacher.objects.create(
             name="Audit Teacher",
             max_weekly_hours=20,
-            working_hours=10,
             team=self.team,
         )
         self.classroom = Classroom.objects.create(
@@ -126,7 +125,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             {
                 "name": "Ana Auditoria",
                 "max_weekly_hours": 22,
-                "working_hours": 14,
             },
             format="json",
         )
@@ -197,7 +195,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         teacher = Teacher.objects.create(
             name="Laura Inicial",
             max_weekly_hours=18,
-            working_hours=9,
             team=self.team,
         )
         AuditEntry.objects.all().delete()
@@ -233,7 +230,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             {
                 "name": "Teacher Filter",
                 "max_weekly_hours": 18,
-                "working_hours": 12,
             },
             format="json",
         )
@@ -420,7 +416,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             entity_id=31,
             entity_name="Profesor exportable",
             action_type=AuditActionType.CREATE,
-            detail='Se creÃ³ el profesor "Profesor exportable".',
+            detail='Se creó el profesor "Profesor exportable".',
             changed_fields=[
                 {
                     "campo": "Preferencias horarias",
@@ -441,7 +437,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             entity_id=32,
             entity_name="Aula descartada",
             action_type=AuditActionType.UPDATE,
-            detail='Se modificÃ³ el aula "Aula descartada".',
+            detail='Se modificó el aula "Aula descartada".',
             actor=self.user,
             actor_name=self.user.get_full_name(),
             team=self.team,

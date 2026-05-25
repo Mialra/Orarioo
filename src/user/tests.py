@@ -451,7 +451,6 @@ class AccountDeletionTests(APITestCase):
             name="Profesor RGPD",
             team=self.team,
             max_weekly_hours=20,
-            working_hours=10,
             time_preferences={},
         )
         self.classroom = Classroom.objects.create(

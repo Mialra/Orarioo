@@ -407,7 +407,6 @@ def create_teachers(team):
             team=team,
             defaults={
                 "max_weekly_hours": max_hours,
-                "working_hours": 0,
                 "time_preferences": time_preferences,
                 "created_by": "system",
                 **extra,

@@ -55,7 +55,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Ana Perez",
             max_weekly_hours=20,
-            working_hours=12,
         )
         self.classroom = Classroom.objects.create(name="Aula 1A", team=self.team)
         self.group = Group.objects.create(
@@ -340,7 +339,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Julian",
             max_weekly_hours=20,
-            working_hours=12,
         )
         second_subject = Subject.objects.create(
             team=self.team,
@@ -392,7 +390,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Julian",
             max_weekly_hours=20,
-            working_hours=12,
         )
         second_subject = Subject.objects.create(
             team=self.team,
@@ -728,7 +725,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Carlos Torres",
             max_weekly_hours=20,
-            working_hours=8,
         )
         Subject.objects.create(
             team=self.team,
@@ -810,7 +806,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Lucia Martin",
             max_weekly_hours=20,
-            working_hours=12,
         )
         other_classroom = Classroom.objects.create(name="Aula 2A", team=self.team)
         other_group = Group.objects.create(
@@ -1418,7 +1413,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Elena Ruiz",
             max_weekly_hours=20,
-            working_hours=8,
         )
         group_2 = Group.objects.create(
             name="2A",
@@ -1575,7 +1569,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Lucia Lopez",
             max_weekly_hours=20,
-            working_hours=8,
         )
         other_group = Group.objects.create(
             name="2A",
@@ -1705,7 +1698,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Lucia Lopez",
             max_weekly_hours=20,
-            working_hours=8,
         )
         Subject.objects.create(
             team=self.team,
@@ -1973,7 +1965,6 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Ana Perez",
             max_weekly_hours=40,
-            working_hours=12,
         )
         self.classroom = Classroom.objects.create(name="Aula 1A", team=self.team)
         self.group = Group.objects.create(
