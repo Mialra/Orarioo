@@ -24,7 +24,6 @@ class Teacher(TeamScopedModel, AuditableEntity):
     max_weekly_hours = models.PositiveIntegerField()
     max_weekly_minutes = models.PositiveIntegerField(default=0)
     weekly_hours_exact = models.BooleanField(default=False)
-    working_hours = models.PositiveIntegerField(default=0)
     time_preferences = models.JSONField(default=dict, blank=True)
 
     class Meta:
@@ -44,14 +43,6 @@ class Teacher(TeamScopedModel, AuditableEntity):
         if self.max_weekly_hours == 0 and self.max_weekly_minutes == 0:
             raise ValidationError(
                 {"max_weekly_hours": "Total weekly load cannot be zero."}
-            )
-        if self.working_hours > self.max_weekly_hours:
-            raise ValidationError(
-                {
-                    "working_hours": (
-                        "working_hours cannot be greater than max_weekly_hours."
-                    )
-                }
             )
 
     def __str__(self):

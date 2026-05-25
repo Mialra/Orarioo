@@ -114,7 +114,7 @@ class BasicScheduleGenerator:
         teacher = teachers[0] if teachers else None
         subjects = list(
             Subject.objects.filter(team=team)
-            .select_related("teacher", "group", "mandatory_classroom")
+            .select_related("teacher", "group", "classroom")
             .order_by("id")
         )
         fallback_classroom = _get_or_create_classroom(actor_email, team)
@@ -275,7 +275,7 @@ class BasicScheduleGenerator:
     @staticmethod
     def _build_sessions(*, subjects, fallback_teacher):
         """Build the list of session dicts to be scheduled from the subject list.
-        Input: subjects - list of Subject instances (with related teacher, group, mandatory_classroom);
+        Input: subjects - list of Subject instances (with related teacher, group, classroom);
                fallback_teacher - Teacher instance used when subjects list is empty
         Output: list of session dicts; empty list if subjects is empty
         """
@@ -292,11 +292,7 @@ class BasicScheduleGenerator:
                         "teacher_id": subject.teacher_id,
                         "group": subject.group,
                         "subject": subject,
-                        "allowed_classroom_ids": (
-                            {subject.mandatory_classroom_id}
-                            if subject.mandatory_classroom_id
-                            else set()
-                        ),
+                        "allowed_classroom_ids": ({subject.classroom_id}),
                         "name": subject.name,
                     }
                 )
@@ -345,9 +341,7 @@ class BasicScheduleGenerator:
             entity_id=schedules[0].id,
             entity_name="Generacion automatica",
             action_type=AuditActionType.CREATE,
-            detail=(
-                f"Se generó el horario {schedules[0].name} con {len(schedules)} sesiones."
-            ),
+            detail="Se generó un horario.",
             changed_fields=[
                 {
                     "campo": "Sesiones generadas",

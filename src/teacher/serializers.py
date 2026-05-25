@@ -28,7 +28,6 @@ class TeacherSerializer(
             "max_weekly_hours",
             "max_weekly_minutes",
             "weekly_hours_exact",
-            "working_hours",
             "time_preferences",
             "team",
         )
@@ -47,29 +46,12 @@ class TeacherSerializer(
             "max_weekly_minutes",
             self.instance.max_weekly_minutes if self.instance else 0,
         )
-        working_hours = attrs.get(
-            "working_hours",
-            self.instance.working_hours if self.instance else 0,
-        )
-
         if max_weekly_hours == 0 and max_weekly_minutes == 0:
             raise_validation_error(
                 "max_weekly_hours",
                 "ZERO_WEEKLY_LOAD",
                 "Total weekly load cannot be zero.",
                 context={"field": "max_weekly_hours"},
-            )
-
-        if max_weekly_hours is not None and working_hours > max_weekly_hours:
-            raise_validation_error(
-                "working_hours",
-                "INVALID_HOUR_RANGE",
-                "working_hours cannot be greater than max_weekly_hours.",
-                context={
-                    "field": "working_hours",
-                    "max_weekly_hours": max_weekly_hours,
-                    "working_hours": working_hours,
-                },
             )
 
         time_preferences = attrs.get(

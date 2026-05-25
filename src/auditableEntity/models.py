@@ -14,8 +14,6 @@ class TeamScopedModel(models.Model):
     team = models.ForeignKey(
         "user.CollaborationTeam",
         on_delete=models.CASCADE,
-        null=True,
-        blank=True,
         related_name="%(app_label)s_%(class)s_items",
     )
 

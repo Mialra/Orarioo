@@ -1197,7 +1197,7 @@
       detailPageSize: state.detailPageSize,
       enableDragDrop: !state.generatedTCViewMode,
       teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
-      scheduleConfig: state.scheduleConfig,
+      scheduleConfig: getFilterValue(generatedFilterIds.subjectId) ? null : state.scheduleConfig,
       enableTcCreate: enableTcCreate,
     });
     state.generatedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
@@ -1264,7 +1264,7 @@
       detailPageSize: state.detailPageSize,
       enableDragDrop: !state.savedTCViewMode,
       teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
-      scheduleConfig: state.scheduleConfig,
+      scheduleConfig: getFilterValue(savedFilterIds.subjectId) ? null : state.scheduleConfig,
       enableTcCreate: enableTcCreate,
     });
     state.savedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
@@ -1607,10 +1607,11 @@
   /**
    * Creates a TC session for the active teacher at the given cell slot.
    * Input: day - weekday name string (e.g. "Lunes"), startHm - "HH:MM", endHm - "HH:MM",
-   *        filterIds - workspace filter IDs object
+   *        filterIds - workspace filter IDs object,
+   *        timetableName - name of the saved timetable (empty string for draft)
    * Output: Promise<void>
    */
-  async function handleTCSessionCreate(day, startHm, endHm, filterIds) {
+  async function handleTCSessionCreate(day, startHm, endHm, filterIds, timetableName) {
     const teacherName = getFilterValue(filterIds.teacherId);
     if (!teacherName) {
       return;
@@ -1624,12 +1625,16 @@
     if (dayIndex === undefined) {
       return;
     }
-    const result = await apiJson("/tc-sessions/create/", "POST", {
+    const body = {
       teacher: teacherId,
       day: dayIndex,
       start_time: startHm + ":00",
       end_time: endHm + ":00",
-    });
+    };
+    if (timetableName) {
+      body.timetable_name = timetableName;
+    }
+    const result = await apiJson("/tc-sessions/create/", "POST", body);
     if (!result.ok) {
       const msg = (result.data && result.data.detail) || "No se pudo crear la guardia TC.";
       showAlert("error", msg);
@@ -2071,7 +2076,9 @@
         if (tcAddBtn) {
           const cell = tcAddBtn.closest("td[data-board-day]");
           if (cell) {
-            handleTCSessionCreate(cell.dataset.boardDay, cell.dataset.boardStart, cell.dataset.boardEnd, savedFilterIds);
+            const savedGroup = savedManager.getSelectedSavedGroup();
+            const savedTimetableName = (savedGroup && savedGroup.name) ? String(savedGroup.name) : "";
+            handleTCSessionCreate(cell.dataset.boardDay, cell.dataset.boardStart, cell.dataset.boardEnd, savedFilterIds, savedTimetableName);
           }
           return;
         }

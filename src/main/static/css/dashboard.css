@@ -493,3 +493,29 @@
         min-width: min(20rem, calc(100vw - 1rem));
     }
 }
+
+.dash-help-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7a99;
+    background: transparent;
+    border: 1.5px solid #dbe4f3;
+    padding: 0;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.dash-help-btn:hover,
+.dash-help-btn:focus-visible {
+    background: #f0f4ff;
+    color: #2458f0;
+    border-color: #c2d0f0;
+}
+
+.dash-help-icon {
+    width: 18px;
+    height: 18px;
+}

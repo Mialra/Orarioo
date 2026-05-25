@@ -1,11 +1,12 @@
 """Tests for Teacher.clean() field constraints.
 
-Patterns: Boundary Value Analysis (minutes ∈ {0,30}, working_hours ≤ max),
-          Equivalence Partitioning (valid/invalid classes for each rule), AAA.
+Patterns: Boundary Value Analysis (minutes ∈ {0,30}),
+          Equivalence Partitioning (valid/invalid classes), AAA.
 Uses Django TestCase (DB needed to build CollaborationTeam FK).
 """
 
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from teacher.models import Teacher
@@ -23,7 +24,6 @@ class TeacherCleanTest(TestCase):
             "name": "Test Teacher",
             "max_weekly_hours": 10,
             "max_weekly_minutes": 0,
-            "working_hours": 0,
             "team": self.team,
         }
         defaults.update(kwargs)
@@ -84,27 +84,12 @@ class TeacherCleanTest(TestCase):
         """EP valid: any positive hours value must pass."""
         self._make(max_weekly_hours=1, max_weekly_minutes=0).clean()
 
-    # ── working_hours vs max_weekly_hours BVA ─────────────────────────────
-
-    def test_working_hours_equal_to_max_is_valid(self):
-        """BVA: working_hours == max_weekly_hours must be accepted."""
-        self._make(max_weekly_hours=10, working_hours=10).clean()
-
-    def test_working_hours_zero_is_valid(self):
-        """BVA lower bound: working_hours=0 is always valid."""
-        self._make(max_weekly_hours=10, working_hours=0).clean()
-
-    def test_working_hours_one_over_max_raises(self):
-        """BVA: working_hours = max + 1 must raise for the working_hours field."""
-        with self.assertRaises(ValidationError) as ctx:
-            self._make(max_weekly_hours=5, working_hours=6).clean()
-        self.assertIn(
-            "working_hours",
-            ctx.exception.message_dict,
-            "working_hours > max must target the working_hours field",
-        )
-
-    def test_working_hours_far_over_max_raises(self):
-        """EP invalid: greatly exceeding max_weekly_hours must raise."""
-        with self.assertRaises(ValidationError):
-            self._make(max_weekly_hours=5, working_hours=100).clean()
+    def test_team_is_required_by_database(self):
+        """A teacher cannot be persisted outside a collaboration team."""
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Teacher.objects.create(
+                name="No Team Teacher",
+                max_weekly_hours=10,
+                max_weekly_minutes=0,
+                team=None,
+            )

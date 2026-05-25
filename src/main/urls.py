@@ -15,6 +15,7 @@ from main.views import (
     security_protocol,
     terms_and_conditions,
 )
+from main.views_manual import UserManualPDFView
 from subject.views import admin_subjects
 from teacher.views import admin_teachers
 from user.views import admin_users, sign_in, sign_up
@@ -84,4 +85,5 @@ urlpatterns = [
         name="dashboard-administration-schedule-config",
     ),
     path("onboarding/", onboarding, name="onboarding"),
+    path("manual/", UserManualPDFView.as_view(), name="user-manual"),
 ]

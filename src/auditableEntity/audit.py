@@ -47,7 +47,6 @@ AUDIT_EXCLUDED_FIELD_NAMES = frozenset(
         "first_name",
         "last_name",
         "is_active",
-        "working_hours",
         "type",
         "duration",
     }
@@ -83,7 +82,6 @@ FIELD_LABELS = {
     "max_weekly_hours": "Máximo de horas semanales",
     "max_weekly_minutes": "Minutos semanales",
     "weekly_hours_exact": "Carga horaria exacta",
-    "working_hours": "Horas de trabajo",
     "time_preferences": "Preferencias horarias",
     "stage": "Etapa",
     "weekly_hours": "Horas semanales",
@@ -91,13 +89,15 @@ FIELD_LABELS = {
     "type": "Tipo",
     "teacher": "Profesor",
     "group": "Curso",
-    "mandatory_classroom": "Aula",
+    "classroom": "Aula",
     "observations": "Observaciones",
     "start_time": "Hora de inicio",
     "end_time": "Hora de fin",
-    "classroom": "Aula",
     "subject": "Asignatura",
     "users": "Usuarios",
+    "team": "Equipo",
+    "active_team": "Equipo",
+    "collaboration_team": "Equipo",
     "schedule_config": "Configuración de tramos",
 }
 DISPLAY_VALUE_TRANSLATIONS = {
