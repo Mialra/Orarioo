@@ -21,6 +21,10 @@ class TeamScopedModelSerializerMixin:
 
     def _scope_related_fields_to_active_team(self):
         """Restrict configured serializer relations to the request's active team."""
+        if "team" in self.fields:
+            self.fields["team"].read_only = True
+            self.fields["team"].required = False
+
         request = self.context.get("request")
         if not request or not getattr(request, "user", None):
             return

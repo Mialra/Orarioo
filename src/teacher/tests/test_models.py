@@ -6,6 +6,7 @@ Uses Django TestCase (DB needed to build CollaborationTeam FK).
 """
 
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from teacher.models import Teacher
@@ -108,3 +109,14 @@ class TeacherCleanTest(TestCase):
         """EP invalid: greatly exceeding max_weekly_hours must raise."""
         with self.assertRaises(ValidationError):
             self._make(max_weekly_hours=5, working_hours=100).clean()
+
+    def test_team_is_required_by_database(self):
+        """A teacher cannot be persisted outside a collaboration team."""
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Teacher.objects.create(
+                name="No Team Teacher",
+                max_weekly_hours=10,
+                max_weekly_minutes=0,
+                working_hours=0,
+                team=None,
+            )
