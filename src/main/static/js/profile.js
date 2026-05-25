@@ -463,7 +463,15 @@
         const payload = await response.json().catch(function () {
           return null;
         });
-        const detail = payload && payload.detail ? payload.detail : "No se pudo generar la exportación de datos.";
+        let detail;
+        if (response.status === 429) {
+          const retryAfter = parseInt(response.headers.get("Retry-After") || "0", 10);
+          detail = retryAfter > 0
+            ? "Has superado el límite de exportaciones. Inténtalo de nuevo en " + retryAfter + " segundos."
+            : "Has superado el límite de exportaciones. Inténtalo de nuevo más tarde.";
+        } else {
+          detail = payload && payload.detail ? payload.detail : "No se pudo generar la exportación de datos.";
+        }
         showAlert(exportAlertEl, detail, "alert-danger");
         return;
       }

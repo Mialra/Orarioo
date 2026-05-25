@@ -349,7 +349,7 @@
                             </div>
                         </div>
                         <p class="small text-body-secondary mb-4">
-                            Limite de seguridad: {{ export_rate_limit_max_requests }} solicitud cada {{ export_rate_limit_window_minutes }} minutos.
+                            Limite de seguridad: 1 solicitud cada {{ export_cooldown_minutes }} minutos.
                         </p>
                         <button id="profile-export-btn"
                                 type="button"
