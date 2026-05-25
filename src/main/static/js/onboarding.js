@@ -329,8 +329,7 @@
     return (
       '<div class="row g-2 align-items-end ob-break-row mb-2">' +
       '<div class="col">' +
-      '<label class="form-label mb-0">Inicio</label>' +
-      '<span class="text-danger" aria-hidden="true">*</span>' +
+      '<label class="form-label small fw-semibold mb-1">Hora de inicio</label>' +
       '<input type="time" class="form-control form-control-sm ob-break-start" value="' +
       escapeHtml(currentBreak.start || "") +
       '">' +

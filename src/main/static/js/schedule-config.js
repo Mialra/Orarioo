@@ -362,7 +362,7 @@
           children: [
             dom.createElement("label", {
               className: "form-label small fw-semibold mb-1",
-              text: "Inicio recreo",
+              text: "Hora de inicio",
             }),
             startInput,
           ],
