@@ -1197,7 +1197,7 @@
       detailPageSize: state.detailPageSize,
       enableDragDrop: !state.generatedTCViewMode,
       teacherWorkloadsByName: state.generatedTeacherWorkloadsByName,
-      scheduleConfig: state.scheduleConfig,
+      scheduleConfig: getFilterValue(generatedFilterIds.subjectId) ? null : state.scheduleConfig,
       enableTcCreate: enableTcCreate,
     });
     state.generatedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
@@ -1264,7 +1264,7 @@
       detailPageSize: state.detailPageSize,
       enableDragDrop: !state.savedTCViewMode,
       teacherWorkloadsByName: state.savedTeacherWorkloadsByName,
-      scheduleConfig: state.scheduleConfig,
+      scheduleConfig: getFilterValue(savedFilterIds.subjectId) ? null : state.scheduleConfig,
       enableTcCreate: enableTcCreate,
     });
     state.savedDetailPage = detail && detail.currentPage ? detail.currentPage : 1;
