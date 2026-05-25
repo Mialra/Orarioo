@@ -581,7 +581,7 @@
 
     stagesContainer.querySelectorAll(".ob-add-break").forEach(function (btn) {
       btn.onclick = function () {
-        var item = btn.closest("[data-stage]");
+        var item = btn.closest(".ob-stage-item");
         var list = item && item.querySelector(".ob-breaks-list");
         if (!list) {
           return;
