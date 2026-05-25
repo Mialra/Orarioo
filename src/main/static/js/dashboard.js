@@ -729,4 +729,20 @@
     }
 
     ensureAuthenticated();
+
+    const manualBtn = document.getElementById("open-user-manual-btn");
+    if (manualBtn) {
+        manualBtn.addEventListener("click", function () {
+            const token = window.orariooAuth.getTokens().access;
+            fetch("/manual/", { headers: { Authorization: "Bearer " + token } })
+                .then(function (res) {
+                    if (!res.ok) return;
+                    return res.blob();
+                })
+                .then(function (blob) {
+                    if (!blob) return;
+                    window.open(URL.createObjectURL(blob), "_blank");
+                });
+        });
+    }
 })();
