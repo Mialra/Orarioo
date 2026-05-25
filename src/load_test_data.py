@@ -3,17 +3,17 @@ Script to load test data into all entities for easy testing.
 Run from the src directory with: python load_test_data.py
 
 Dataset target:
-- 1º, 2º, 3º de Infantil
-- 1º a 6º de Primaria
-- 1º a 4º de ESO
+- 1st, 2nd, 3rd grade of Infantil
+- 1st to 6th grade of Primaria
+- 1st to 4th grade of ESO
 - One group per year (no A/B split)
 
 Soft-constraint coverage designed into this dataset:
-- Teacher preferences: mañaneros fuertes, tardes fuertes, sin prefs, mix PREFER_YES/PREFER_NO
-- Subject preferences: cognitivas de mañana, EF/Música de mediodía, tarde para arte
-- Gap minimization: Rubén (EF) enseña 13 grupos con unavailabilities → candidatos a huecos
-- Subject day spread: Lengua y Matemáticas con 5-6 sesiones/semana
-- TC distribution: 13 grupos con tutoría repartida entre tutores y orientación
+- Teacher preferences: strong morning preference, strong afternoon preference, no preference, mix PREFER_YES/PREFER_NO
+- Subject preferences: cognitive subjects in the morning, PE/Music at midday, afternoon for arts
+- Gap minimization: Rubén (PE) teaches 13 groups with unavailabilities → gap candidates
+- Subject day spread: Spanish and Maths with 5-6 sessions/week
+- TC distribution: 13 groups with tutoring spread across tutors and guidance counsellor
 """
 
 import os
