@@ -48,12 +48,10 @@ class Subject(TeamScopedModel, AuditableEntity):
         on_delete=models.CASCADE,
         related_name="subjects",
     )
-    mandatory_classroom = models.ForeignKey(
+    classroom = models.ForeignKey(
         "classroom.Classroom",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="mandatory_subjects",
+        on_delete=models.CASCADE,
+        related_name="subjects",
     )
 
     class Meta:

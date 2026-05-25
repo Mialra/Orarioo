@@ -19,7 +19,7 @@ on:
       - main
   schedule:
     # Run security scan daily at 2 AM UTC
-    - cron: '0 2 * * *'
+    - cron: "0 2 * * *"
 
 jobs:
   security:
@@ -35,8 +35,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
 
       # Step 3: Install security scanning tools
       - name: Install security tools
@@ -48,10 +48,8 @@ jobs:
       - name: Run dependency vulnerability scan
         run: |
           pip-audit -r src/requirements.txt \
-            --ignore-vuln PYSEC-2025-183 \
-            --ignore-vuln PYSEC-2024-271
+            --ignore-vuln PYSEC-2025-183
           # PYSEC-2025-183: Disputed PyJWT advisory (all versions affected, no fix exists upstream)
-          # PYSEC-2024-271: flask-cors log injection (transitive dep of locust, no fix released, only triggered with debug logging enabled)
 
       # Step 5: Run Bandit for static security analysis
       - name: Run Bandit for security issues
@@ -61,16 +59,16 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
 
       # Step 7: Upload Trivy results to GitHub Security
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
       # Step 8: Create security report
       - name: Create security report

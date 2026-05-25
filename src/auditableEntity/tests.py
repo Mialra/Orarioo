@@ -1,4 +1,5 @@
 from datetime import timedelta
+from io import BytesIO
 from unittest import skipIf
 
 from django.test import SimpleTestCase
@@ -7,6 +8,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from auditableEntity.audit import format_changed_fields_for_export, get_field_label
 from auditableEntity.models import AuditableEntity, AuditActionType, AuditEntry
 from classroom.models import Classroom
 from common.export_utils import REPORTLAB_AVAILABLE
@@ -18,6 +20,13 @@ from schedule.models import Schedule
 from subject.models import Subject, SubjectType
 from teacher.models import Teacher
 from user.models import CollaborationTeam
+
+try:
+    from openpyxl import load_workbook
+
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 
 
 class AuditableEntityTests(SimpleTestCase):
@@ -31,6 +40,24 @@ class AuditableEntityTests(SimpleTestCase):
         self.assertIn("updated_at", field_names)
         self.assertIn("created_by", field_names)
         self.assertIn("updated_by", field_names)
+
+    def test_team_field_label_is_exported_in_spanish(self):
+        self.assertEqual(get_field_label("team"), "Equipo")
+        self.assertEqual(get_field_label("active_team"), "Equipo")
+        self.assertEqual(get_field_label("collaboration_team"), "Equipo")
+
+        export_text = format_changed_fields_for_export(
+            [
+                {
+                    "campo": get_field_label("team"),
+                    "valor_anterior": "Equipo A",
+                    "valor_nuevo": "Equipo B",
+                }
+            ]
+        )
+
+        self.assertIn("Equipo: cambió de Equipo A a Equipo B.", export_text)
+        self.assertNotIn("Team", export_text)
 
 
 class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
@@ -51,7 +78,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.teacher = Teacher.objects.create(
             name="Audit Teacher",
             max_weekly_hours=20,
-            working_hours=10,
             team=self.team,
         )
         self.classroom = Classroom.objects.create(
@@ -69,6 +95,7 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
             team=self.team,
         )
         AuditEntry.objects.all().delete()
@@ -99,7 +126,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             {
                 "name": "Ana Auditoria",
                 "max_weekly_hours": 22,
-                "working_hours": 14,
             },
             format="json",
         )
@@ -148,14 +174,14 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             sorted([self.user.get_full_name(), self.team_user.get_full_name()]),
         )
 
-    def test_subject_mandatory_classroom_change_is_audited(self):
+    def test_subject_classroom_change_is_audited(self):
         classroom = Classroom.objects.create(name="Lab 2", team=self.team)
         AuditEntry.objects.all().delete()
 
         response = self.client.patch(
             reverse("subject-detail", args=[self.subject.id]),
             {
-                "mandatory_classroom": classroom.id,
+                "classroom": classroom.id,
             },
             format="json",
         )
@@ -170,7 +196,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         teacher = Teacher.objects.create(
             name="Laura Inicial",
             max_weekly_hours=18,
-            working_hours=9,
             team=self.team,
         )
         AuditEntry.objects.all().delete()
@@ -206,7 +231,6 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             {
                 "name": "Teacher Filter",
                 "max_weekly_hours": 18,
-                "working_hours": 12,
             },
             format="json",
         )
@@ -384,6 +408,87 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertNotIn("Aula descartada", csv_text)
         self.assertIn("Preferidas: Lunes a las 09:30.", csv_text)
         self.assertIn("Disponibles: Lunes a las 10:30.", csv_text)
+
+    @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
+    def test_audit_entries_export_xlsx_applies_filters(self):
+        now = timezone.now()
+        own_entry = AuditEntry.objects.create(
+            entity_type="teacher",
+            entity_id=31,
+            entity_name="Profesor exportable",
+            action_type=AuditActionType.CREATE,
+            detail='Se creó el profesor "Profesor exportable".',
+            changed_fields=[
+                {
+                    "campo": "Preferencias horarias",
+                    "valor_nuevo": {
+                        "MON_09:30": "PREFER_YES",
+                        "MON_10:30": "AVAILABLE",
+                    },
+                }
+            ],
+            actor=self.user,
+            actor_name=self.user.get_full_name(),
+            team=self.team,
+        )
+        own_entry.occurred_at = now
+        own_entry.save(update_fields=["occurred_at"])
+        AuditEntry.objects.create(
+            entity_type="classroom",
+            entity_id=32,
+            entity_name="Aula descartada",
+            action_type=AuditActionType.UPDATE,
+            detail='Se modificó el aula "Aula descartada".',
+            actor=self.user,
+            actor_name=self.user.get_full_name(),
+            team=self.team,
+        )
+
+        response = self.client.get(
+            reverse("auditentry-export"),
+            {
+                "export_format": "xlsx",
+                "tipo_entidad": "profesor",
+                "tipo_accion": "CREATE",
+                "usuario_id": self.user.id,
+                "fecha_desde": now.date().isoformat(),
+                "columns": "Fecha",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+            getattr(response, "data", response.content[:200]),
+        )
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertIn(".xlsx", response["Content-Disposition"])
+        workbook = load_workbook(filename=BytesIO(response.content))
+        sheet = workbook.active
+        rows = list(sheet.iter_rows(values_only=True))
+        self.assertEqual(rows[0], ("Fecha", "Resumen", "Detalle"))
+        joined = " ".join(str(value) for row in rows for value in row if value)
+        self.assertIn(now.strftime("%d/%m/%Y"), joined)
+        self.assertNotIn("'" + now.strftime("%d/%m/%Y"), joined)
+        self.assertIn("Profesor exportable", joined)
+        self.assertNotIn("Aula descartada", joined)
+        self.assertIn("Preferidas: Lunes a las 09:30.", joined)
+
+    def test_audit_entries_export_rejects_invalid_format_with_supported_formats(self):
+        response = self.client.get(
+            reverse("auditentry-export"),
+            {"export_format": "ods"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("export_format", response.data)
+        self.assertEqual(
+            response.data["export_format"][0],
+            "Debe ser uno de: csv, xlsx, pdf.",
+        )
 
     @skipIf(not REPORTLAB_AVAILABLE, "reportlab is not installed")
     def test_audit_entries_export_pdf_returns_pdf(self):

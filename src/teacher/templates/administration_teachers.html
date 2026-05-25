@@ -96,7 +96,6 @@
                             <div class="invalid-feedback" id="admin-teacher-max-weekly-hours-error"></div>
                         </div>
                         <input type="hidden" id="admin-teacher-weekly-hours-exact" value="false">
-                        <input type="hidden" id="admin-teacher-working-hours" value="0">
                         <div class="col-12">
                             <input type="hidden" id="admin-teacher-time-preferences" value="{}">
                             <div class="admin-preferences-panel">
@@ -163,7 +162,9 @@
                     <p class="mb-2 text-center fw-semibold">
                         ¿Está seguro de que quiere eliminar al profesor <strong id="admin-teacher-delete-name">seleccionado</strong>?
                     </p>
-                    <p class="mb-0 text-center text-body-secondary">Esta acción no se puede deshacer.</p>
+                    <p class="mb-0 text-center text-body-secondary">
+                        Ten en cuenta que las asignaturas asociadas también serán eliminadas. Esta acción no se puede deshacer.
+                    </p>
                 </div>
                 <div class="modal-footer justify-content-center gap-2">
                     <button type="button"

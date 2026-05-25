@@ -29,7 +29,6 @@
     modeMaxButton: document.getElementById("admin-teacher-mode-max"),
     modeExactButton: document.getElementById("admin-teacher-mode-exact"),
     weeklyLoadHint: document.getElementById("admin-teacher-weekly-load-hint"),
-    workingHoursInput: document.getElementById("admin-teacher-working-hours"),
     timePreferencesInput: document.getElementById("admin-teacher-time-preferences"),
     preferenceBrushInput: document.getElementById("admin-teacher-preference-brush"),
     preferenceClearButton: document.getElementById("admin-teacher-preference-clear-btn"),
@@ -46,7 +45,6 @@
     nameError: document.getElementById("admin-teacher-name-error"),
     surnamesError: document.getElementById("admin-teacher-surnames-error"),
     maxWeeklyHoursError: document.getElementById("admin-teacher-max-weekly-hours-error"),
-    workingHoursError: document.getElementById("admin-teacher-working-hours-error"),
     timePreferencesError: document.getElementById("admin-teacher-time-preferences-error"),
   };
 
@@ -275,12 +273,6 @@
           rules: [fv.weeklyHours(function () { return elements.maxWeeklyHoursInput; })],
         },
         {
-          name: "working_hours",
-          input: elements.workingHoursInput,
-          feedback: elements.workingHoursError,
-          required: false,
-        },
-        {
           name: "time_preferences",
           input: elements.timePreferencesInput,
           feedback: elements.timePreferencesError,
@@ -293,7 +285,6 @@
         { input: elements.nameInput, feedback: elements.nameError, event: "input" },
         { input: elements.maxWeeklyHoursInput, feedback: elements.maxWeeklyHoursError, event: "input" },
         { input: elements.maxWeeklyMinutesInput, feedback: elements.maxWeeklyHoursError, event: "change" },
-        { input: elements.workingHoursInput, feedback: elements.workingHoursError, event: "change" },
         { input: elements.timePreferencesInput, feedback: elements.timePreferencesError, event: "input" },
       ],
       resetValues: function () {
@@ -309,7 +300,6 @@
         if (elements.weeklyHoursExactInput) {
           elements.weeklyHoursExactInput.value = "false";
         }
-        elements.workingHoursInput.value = "0";
         _updateHoursModeUI();
         prefManager.reset({});
       },
@@ -339,7 +329,6 @@
           elements.weeklyHoursExactInput.value = item.weekly_hours_exact ? "true" : "false";
         }
         _updateHoursModeUI();
-        elements.workingHoursInput.value = item.working_hours ?? "";
         prefManager.reset(item.time_preferences || {});
       },
       buildPayload: function () {
@@ -350,7 +339,6 @@
           max_weekly_hours: Number(elements.maxWeeklyHoursInput.value) || 0,
           max_weekly_minutes: Number(elements.maxWeeklyMinutesInput ? elements.maxWeeklyMinutesInput.value : 0),
           weekly_hours_exact: elements.weeklyHoursExactInput.value === "true",
-          working_hours: Number(elements.workingHoursInput.value),
           time_preferences: admin.parsePreferences(elements.timePreferencesInput.value),
         };
       },

@@ -451,7 +451,6 @@ class AccountDeletionTests(APITestCase):
             name="Profesor RGPD",
             team=self.team,
             max_weekly_hours=20,
-            working_hours=10,
             time_preferences={},
         )
         self.classroom = Classroom.objects.create(
@@ -469,6 +468,7 @@ class AccountDeletionTests(APITestCase):
             weekly_hours=2,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
         )
         now = timezone.now()
         self.schedule = Schedule.objects.create(

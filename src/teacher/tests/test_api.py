@@ -1,4 +1,4 @@
-from django.urls import reverse
+﻿from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -14,7 +14,6 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         payload = {
             "name": "Ana Perez",
             "max_weekly_hours": 20,
-            "working_hours": 12,
         }
 
         response = self.client.post(reverse("teacher-list"), payload, format="json")
@@ -27,7 +26,6 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         teacher = Teacher.objects.create(
             name="Carlos Gomez",
             max_weekly_hours=18,
-            working_hours=10,
             team=self.team,
         )
 
@@ -42,14 +40,12 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         teacher = Teacher.objects.create(
             name="Laura Ruiz",
             max_weekly_hours=22,
-            working_hours=15,
             team=self.team,
         )
 
         payload = {
             "name": "Laura Ruiz Updated",
             "max_weekly_hours": 24,
-            "working_hours": 18,
         }
 
         response = self.client.put(
@@ -65,7 +61,6 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         teacher = Teacher.objects.create(
             name="Marta Lopez",
             max_weekly_hours=20,
-            working_hours=10,
             team=self.team,
         )
 
@@ -74,30 +69,16 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Teacher.objects.filter(id=teacher.id).exists())
 
-    def test_reject_if_working_hours_exceeds_max_weekly_hours(self):
-        payload = {
-            "name": "Invalid Teacher",
-            "max_weekly_hours": 10,
-            "working_hours": 12,
-        }
-
-        response = self.client.post(reverse("teacher-list"), payload, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("working_hours", response.data)
-
     def test_reject_case_insensitive_duplicate_name(self):
         Teacher.objects.create(
             name="Pedro",
             max_weekly_hours=20,
-            working_hours=10,
             team=self.team,
         )
 
         payload = {
             "name": "pedro",
             "max_weekly_hours": 18,
-            "working_hours": 8,
         }
         response = self.client.post(reverse("teacher-list"), payload, format="json")
 
@@ -108,7 +89,6 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         Teacher.objects.create(
             name="Laura",
             max_weekly_hours=20,
-            working_hours=10,
             team=self.team,
         )
         other_user, other_team = self.create_isolated_user(
@@ -121,7 +101,6 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             {
                 "name": "laura",
                 "max_weekly_hours": 18,
-                "working_hours": 8,
             },
             format="json",
         )
@@ -137,7 +116,6 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "Luis Mora",
             "max_weekly_hours": 10,
             "max_weekly_minutes": 30,
-            "working_hours": 8,
         }
 
         response = self.client.post(reverse("teacher-list"), payload, format="json")
@@ -151,7 +129,6 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "Eva Blanco",
             "max_weekly_hours": 12,
             "weekly_hours_exact": True,
-            "working_hours": 10,
         }
 
         response = self.client.post(reverse("teacher-list"), payload, format="json")
@@ -165,7 +142,6 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "Bad Teacher",
             "max_weekly_hours": 10,
             "max_weekly_minutes": 45,
-            "working_hours": 8,
         }
 
         response = self.client.post(reverse("teacher-list"), payload, format="json")
@@ -180,7 +156,6 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "Bad Teacher 2",
             "max_weekly_hours": 10,
             "max_weekly_minutes": 60,
-            "working_hours": 8,
         }
 
         response = self.client.post(reverse("teacher-list"), payload, format="json")
@@ -193,7 +168,6 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             "name": "Zero Teacher",
             "max_weekly_hours": 0,
             "max_weekly_minutes": 0,
-            "working_hours": 0,
         }
 
         response = self.client.post(reverse("teacher-list"), payload, format="json")
@@ -207,7 +181,6 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         payload = {
             "name": "Default Teacher",
             "max_weekly_hours": 20,
-            "working_hours": 10,
         }
 
         response = self.client.post(reverse("teacher-list"), payload, format="json")
@@ -220,20 +193,17 @@ class TeacherApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         Teacher.objects.create(
             name="Ana Perez",
             max_weekly_hours=20,
-            working_hours=10,
             team=self.team,
         )
         Teacher.objects.create(
             name="Carlos Gomez",
             max_weekly_hours=18,
-            working_hours=12,
             team=self.team,
         )
         _, isolated_team = self.create_isolated_user(email_prefix="teacher-summary")
         Teacher.objects.create(
             name="Fuera de equipo",
             max_weekly_hours=16,
-            working_hours=8,
             team=isolated_team,
         )
 

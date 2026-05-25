@@ -3,17 +3,17 @@ Script to load test data into all entities for easy testing.
 Run from the src directory with: python load_test_data.py
 
 Dataset target:
-- 1º, 2º, 3º de Infantil
-- 1º a 6º de Primaria
-- 1º a 4º de ESO
+- 1st, 2nd, 3rd grade of Infantil
+- 1st to 6th grade of Primaria
+- 1st to 4th grade of ESO
 - One group per year (no A/B split)
 
 Soft-constraint coverage designed into this dataset:
-- Teacher preferences: mañaneros fuertes, tardes fuertes, sin prefs, mix PREFER_YES/PREFER_NO
-- Subject preferences: cognitivas de mañana, EF/Música de mediodía, tarde para arte
-- Gap minimization: Rubén (EF) enseña 13 grupos con unavailabilities → candidatos a huecos
-- Subject day spread: Lengua y Matemáticas con 5-6 sesiones/semana
-- TC distribution: 13 grupos con tutoría repartida entre tutores y orientación
+- Teacher preferences: strong morning preference, strong afternoon preference, no preference, mix PREFER_YES/PREFER_NO
+- Subject preferences: cognitive subjects in the morning, PE/Music at midday, afternoon for arts
+- Gap minimization: Rubén (PE) teaches 13 groups with unavailabilities → gap candidates
+- Subject day spread: Spanish and Maths with 5-6 sessions/week
+- TC distribution: 13 groups with tutoring spread across tutors and guidance counsellor
 """
 
 import os
@@ -407,7 +407,6 @@ def create_teachers(team):
             team=team,
             defaults={
                 "max_weekly_hours": max_hours,
-                "working_hours": 0,
                 "time_preferences": time_preferences,
                 "created_by": "system",
                 **extra,
@@ -935,20 +934,8 @@ def create_subjects(teachers, groups, team):  # noqa: C901
 
     subjects = []
     for row in subjects_data:
-        subject, _ = Subject.objects.update_or_create(
-            name=row["name"],
-            team=team,
-            defaults={
-                "group": groups[row["group_name"]],
-                "weekly_hours": row["weekly_hours"],
-                "duration": row.get("duration", 1.0),
-                "time_preferences": row.get("time_preferences", {}),
-                "type": row.get("type", SubjectType.NORMAL),
-                "teacher": teachers[row["teacher_key"]],
-                "created_by": "system",
-            },
-        )
-        room_name_hint = f"Aula {subject.group.name}"
+        group = groups[row["group_name"]]
+        room_name_hint = f"Aula {group.name}"
         default_room = next(
             (
                 room
@@ -957,36 +944,44 @@ def create_subjects(teachers, groups, team):  # noqa: C901
             ),
             None,
         )
-        lower_name = subject.name.lower()
-        mandatory_room = None
+        if default_room is None:
+            default_room = Classroom.objects.filter(team=team).order_by("id").first()
+        lower_name = row["name"].lower()
+        classroom = None
         if "educación física" in lower_name or "psicomotricidad" in lower_name:
-            mandatory_room = Classroom.objects.filter(
-                team=team, name="Gimnasio"
-            ).first()
+            classroom = Classroom.objects.filter(team=team, name="Gimnasio").first()
         elif "tecnología" in lower_name:
-            mandatory_room = Classroom.objects.filter(
+            classroom = Classroom.objects.filter(
                 team=team, name="Aula de Tecnología"
             ).first()
         elif "música" in lower_name:
-            mandatory_room = Classroom.objects.filter(
+            classroom = Classroom.objects.filter(
                 team=team, name="Aula de Música"
             ).first()
         elif "plástica" in lower_name or "artística" in lower_name:
-            mandatory_room = Classroom.objects.filter(
+            classroom = Classroom.objects.filter(
                 team=team, name="Aula de Plástica"
             ).first()
         elif "biología" in lower_name or "física y química" in lower_name:
-            mandatory_room = Classroom.objects.filter(
-                team=team, name="Laboratorio"
-            ).first()
+            classroom = Classroom.objects.filter(team=team, name="Laboratorio").first()
 
-        if mandatory_room is None:
-            mandatory_room = default_room
+        if classroom is None:
+            classroom = default_room
 
-        if mandatory_room:
-            subject.mandatory_classroom = mandatory_room
-            subject.save(update_fields=["mandatory_classroom"])
-
+        subject, _ = Subject.objects.update_or_create(
+            name=row["name"],
+            team=team,
+            defaults={
+                "group": group,
+                "weekly_hours": row["weekly_hours"],
+                "duration": row.get("duration", 1.0),
+                "time_preferences": row.get("time_preferences", {}),
+                "type": row.get("type", SubjectType.NORMAL),
+                "teacher": teachers[row["teacher_key"]],
+                "classroom": classroom,
+                "created_by": "system",
+            },
+        )
         subjects.append(subject)
         print(
             f"  ✓ Upserted subject: {subject.name} "

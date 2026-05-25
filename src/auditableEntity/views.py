@@ -3,7 +3,9 @@ Read-only API endpoints for filtering, listing, and exporting audit entries.
 """
 
 from datetime import datetime, time
+from io import BytesIO
 
+from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import pagination, permissions, viewsets
@@ -324,22 +326,58 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
     def _parse_export_format(raw_value):
         """Parse and validate the requested export format.
         Input: raw_value - str from query params, or None
-        Output: str 'csv' or 'pdf'
+        Output: str 'csv', 'xlsx' or 'pdf'
         """
         export_format = (raw_value or "csv").strip().lower()
-        if export_format not in {"csv", "pdf"}:
-            raise ValidationError({"export_format": "Debe ser uno de: csv, pdf."})
+        if export_format not in {"csv", "xlsx", "pdf"}:
+            raise ValidationError({"export_format": "Debe ser uno de: csv, xlsx, pdf."})
         return export_format
 
     @staticmethod
     def _build_export_filename(export_format):
         """Build the timestamped filename used by audit exports.
-        Input: export_format - str 'csv' or 'pdf'
+        Input: export_format - str 'csv', 'xlsx' or 'pdf'
         Output: str filename with timestamp and extension (e.g. 'orarioo_audit_20240101_120000.csv')
         """
         stamp = timezone.localtime().strftime("%Y%m%d_%H%M%S")
         stem = sanitize_filename_stem(f"orarioo_audit_{stamp}", "orarioo_audit")
         return f"{stem}.{export_format}"
+
+    @staticmethod
+    def _build_excel_response(headers, rows, filename):
+        """Build an Excel response for audit exports.
+        Input: headers - selected column labels; rows - audit row values; filename - .xlsx download filename
+        Output: HttpResponse with XLSX content
+        """
+        try:
+            from openpyxl import Workbook
+        except ImportError as exc:
+            raise ValidationError(
+                {
+                    "detail": (
+                        "La exportacion Excel no esta disponible porque openpyxl "
+                        "no esta instalado."
+                    )
+                }
+            ) from exc
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Auditoria"
+        sheet.append(headers)
+        for row in rows:
+            sheet.append(row)
+
+        buffer = BytesIO()
+        workbook.save(buffer)
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
     @staticmethod
     def _build_export_rows(queryset, *, for_csv=False, optional_indices=None):
@@ -372,9 +410,9 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="export")
     def export(self, request):
-        """Export the filtered audit history as CSV or PDF.
+        """Export the filtered audit history as CSV, Excel or PDF.
         Input: request - HTTP GET with optional export_format, columns, and filter query params
-        Output: HttpResponse with CSV or PDF content and appropriate Content-Disposition header
+        Output: HttpResponse with exported content and appropriate Content-Disposition header
         """
         export_format = self._parse_export_format(
             request.query_params.get("export_format")
@@ -403,6 +441,10 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
                 queryset, for_csv=True, optional_indices=optional_indices
             )
             return build_csv_response(headers, rows, filename)
+
+        if export_format == "xlsx":
+            rows = self._build_export_rows(queryset, optional_indices=optional_indices)
+            return self._build_excel_response(headers, rows, filename)
 
         if not REPORTLAB_AVAILABLE:
             raise ValidationError(

@@ -28,8 +28,8 @@ SUBJECT_SERIALIZER_FIELDS = with_audit_fields(
     "teacher_name",
     "group",
     "group_name",
-    "mandatory_classroom",
-    "mandatory_classroom_name",
+    "classroom",
+    "classroom_name",
 )
 # NOTE: `stage` and `stage_color` are read-only derived fields (from group.stage); not DB columns.
 
@@ -46,12 +46,17 @@ class SubjectSerializer(
     team_scoped_field_models = {
         "teacher": Teacher,
         "group": Group,
-        "mandatory_classroom": Classroom,
+        "classroom": Classroom,
     }
     teacher_name = serializers.CharField(source="teacher.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
-    mandatory_classroom_name = serializers.CharField(
-        source="mandatory_classroom.name", read_only=True, default=None
+    classroom_name = serializers.CharField(
+        source="classroom.name", read_only=True, default=None
+    )
+    classroom = serializers.PrimaryKeyRelatedField(
+        queryset=Classroom.objects.all(),
+        required=True,
+        allow_null=False,
     )
     stage = serializers.SerializerMethodField(read_only=True)
     stage_color = serializers.SerializerMethodField(read_only=True)
@@ -64,7 +69,7 @@ class SubjectSerializer(
             "duration",
             "teacher_name",
             "group_name",
-            "mandatory_classroom_name",
+            "classroom_name",
             "stage",
             "stage_color",
         ]

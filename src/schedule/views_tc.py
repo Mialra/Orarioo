@@ -34,23 +34,39 @@ def _is_teacher_unavailable(teacher, day, start_time, end_time):
     return False
 
 
-def _teacher_has_schedule_at(teacher_id, team, day, start_time):
-    """Return True if the teacher already has a Schedule at (day, start_time) for the team."""
+def _teacher_has_schedule_at(teacher_id, team, day, start_time, timetable_name=None):
+    """Return True if the teacher already has a Schedule at (day, start_time) for the team.
+
+    If timetable_name is given, checks only that saved timetable's schedules.
+    Otherwise checks only the current draft (excludes all saved timetables).
+    """
     # Django iso_week_day: Monday=1 … Friday=5; our day is 0-indexed Mon=0
-    return Schedule.objects.filter(
+    qs = Schedule.objects.filter(
         teacher_id=teacher_id,
         team=team,
         start_time__iso_week_day=day + 1,
         start_time__time=start_time,
-    ).exists()
+    )
+    if timetable_name:
+        qs = qs.filter(observations=f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}")
+    else:
+        qs = qs.exclude(observations__startswith=SAVED_TIMETABLE_PREFIX)
+    return qs.exists()
 
 
-def _teacher_has_tc_at(teacher_id, team, day, start_time, exclude_id=None):
-    """Return True if the teacher already has a draft TCSession at (day, start_time) for the team."""
+def _teacher_has_tc_at(
+    teacher_id, team, day, start_time, exclude_id=None, timetable_name=None
+):
+    """Return True if the teacher already has a TCSession at (day, start_time) for the team.
+
+    If timetable_name is given, checks only that saved timetable's TC sessions.
+    Otherwise checks only draft TC sessions (observations="").
+    """
+    obs = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}" if timetable_name else ""
     qs = TCSession.objects.filter(
         teacher_id=teacher_id,
         team=team,
-        observations="",
+        observations=obs,
         day=day,
         start_time=start_time,
     )
@@ -204,6 +220,7 @@ def _parse_tc_create_params(request, team):
     day_raw = request.data.get("day")
     start_time_raw = request.data.get("start_time")
     end_time_raw = request.data.get("end_time")
+    timetable_name = str(request.data.get("timetable_name") or "").strip()
 
     if any(v is None for v in [teacher_id, day_raw, start_time_raw, end_time_raw]):
         return None, Response(
@@ -237,19 +254,24 @@ def _parse_tc_create_params(request, team):
         "day": day,
         "start_time": start_time,
         "end_time": end_time,
+        "timetable_name": timetable_name,
     }, None
 
 
-def _check_tc_slot_conflicts(teacher, team, day, start_time, end_time):
+def _check_tc_slot_conflicts(
+    teacher, team, day, start_time, end_time, timetable_name=None
+):
     """Return a conflict Response if the slot is taken, else None."""
-    if _teacher_has_schedule_at(teacher.id, team, day, start_time):
+    if _teacher_has_schedule_at(teacher.id, team, day, start_time, timetable_name):
         return Response(
             {
                 "detail": f"{teacher.name} ya tiene una clase el {_DAY_LABELS[day]} a las {start_time:%H:%M}."
             },
             status=status.HTTP_409_CONFLICT,
         )
-    if _teacher_has_tc_at(teacher.id, team, day, start_time):
+    if _teacher_has_tc_at(
+        teacher.id, team, day, start_time, timetable_name=timetable_name
+    ):
         return Response(
             {
                 "detail": f"{teacher.name} ya tiene una guardia TC el {_DAY_LABELS[day]} a las {start_time:%H:%M}."
@@ -280,20 +302,27 @@ class TCSessionCreateView(APIView):
         day = params["day"]
         start_time = params["start_time"]
         end_time = params["end_time"]
+        timetable_name = params["timetable_name"]
 
-        conflict = _check_tc_slot_conflicts(teacher, team, day, start_time, end_time)
+        conflict = _check_tc_slot_conflicts(
+            teacher, team, day, start_time, end_time, timetable_name
+        )
         if conflict:
             return conflict
 
         duration_minutes = _slot_duration(start_time, end_time).seconds // 60
         warning = _build_hours_warning(teacher, team, duration_minutes)
 
+        observations = (
+            f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}" if timetable_name else ""
+        )
         tc = TCSession.objects.create(
             teacher=teacher,
             day=day,
             start_time=start_time,
             end_time=end_time,
             team=team,
+            observations=observations,
         )
 
         response_data = {"tc_session": TCSessionSerializer(tc).data}
@@ -368,8 +397,19 @@ class TCSessionSwapView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Derive timetable context from the TC session observations so conflict
+        # checks only look at schedules belonging to the same timetable.
+        saved_prefix = f"{SAVED_TIMETABLE_PREFIX}: "
+        swap_timetable_name = (
+            tc_a.observations[len(saved_prefix) :]
+            if tc_a.observations.startswith(saved_prefix)
+            else None
+        )
+
         # Check that teacher A can occupy slot B
-        if _teacher_has_schedule_at(tc_a.teacher_id, team, tc_b.day, tc_b.start_time):
+        if _teacher_has_schedule_at(
+            tc_a.teacher_id, team, tc_b.day, tc_b.start_time, swap_timetable_name
+        ):
             return Response(
                 {
                     "detail": (
@@ -381,7 +421,9 @@ class TCSessionSwapView(APIView):
             )
 
         # Check that teacher B can occupy slot A
-        if _teacher_has_schedule_at(tc_b.teacher_id, team, tc_a.day, tc_a.start_time):
+        if _teacher_has_schedule_at(
+            tc_b.teacher_id, team, tc_a.day, tc_a.start_time, swap_timetable_name
+        ):
             return Response(
                 {
                     "detail": (

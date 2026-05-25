@@ -25,53 +25,58 @@ def profile(request):
     Input: request - HttpRequest
     Output: HttpResponse with the profile template and export config values
     """
-    max_requests, window_seconds = _get_export_rate_limit_config()
+    cooldown_seconds = _get_export_cooldown_seconds()
     return render(
         request,
         "profile/profile.html",
         {
             "show_authenticated_footer": True,
-            "export_rate_limit_max_requests": max_requests,
-            "export_rate_limit_window_minutes": window_seconds // 60,
+            "export_cooldown_minutes": cooldown_seconds // 60,
         },
     )
 
 
-def _get_export_rate_limit_config():
-    """Read data-export rate-limit settings with safe minimum defaults.
-    Input: None; reads DATA_EXPORT_RATE_LIMIT_MAX_REQUESTS and DATA_EXPORT_RATE_LIMIT_WINDOW_SECONDS from settings
-    Output: tuple (max_requests: int, window_seconds: int) clamped to minimums of 1 and 60
+def _get_export_cooldown_seconds():
+    """Read data-export cooldown setting with a safe minimum default.
+    Input: None; reads DATA_EXPORT_COOLDOWN_SECONDS from settings
+    Output: int seconds clamped to a minimum of 60
     """
-    max_requests = int(getattr(settings, "DATA_EXPORT_RATE_LIMIT_MAX_REQUESTS", 3))
-    window_seconds = int(
-        getattr(settings, "DATA_EXPORT_RATE_LIMIT_WINDOW_SECONDS", 3600)
-    )
-    return max(1, max_requests), max(60, window_seconds)
+    return max(60, int(getattr(settings, "DATA_EXPORT_COOLDOWN_SECONDS", 600)))
 
 
-def _consume_export_rate_limit(user_id):
-    """Consume one export token from a per-user fixed-window rate-limit bucket.
+_EXPORT_WINDOW_LIMIT = 2  # exports allowed per cooldown window before rate-limiting
+
+
+def _check_export_cooldown(user_id):
+    """Check whether a user has exhausted their export quota for the current window.
     Input: user_id - int/str primary key of the requesting user
-    Output: tuple (limited: bool, remaining: int, retry_after: int seconds until window resets)
+    Output: tuple (limited: bool, retry_after: int seconds remaining in cooldown)
     """
-    max_requests, window_seconds = _get_export_rate_limit_config()
-    now = int(time.time())
-    window_id = now // window_seconds
-    key = f"gdpr_export:{user_id}:{window_id}"
+    cooldown = _get_export_cooldown_seconds()
+    key = f"gdpr_export_cooldown:{user_id}"
+    data = cache.get(key)
+    if not isinstance(data, dict):
+        return False, 0
+    count = data.get("count", 0)
+    if count < _EXPORT_WINDOW_LIMIT:
+        return False, 0
+    elapsed = int(time.time()) - int(data.get("ts", int(time.time())))
+    retry_after = cooldown - elapsed
+    return (retry_after > 0), max(1, retry_after)
 
-    if cache.add(key, 1, timeout=window_seconds):
-        return False, max_requests - 1, window_seconds
 
-    try:
-        current_count = cache.incr(key)
-    except ValueError:
-        cache.set(key, 1, timeout=window_seconds)
-        current_count = 1
-
-    remaining = max(0, max_requests - current_count)
-    limited = current_count > max_requests
-    retry_after = window_seconds - (now % window_seconds)
-    return limited, remaining, retry_after
+def _start_export_cooldown(user_id):
+    """Increment the export counter for the current window, opening one if needed.
+    Input: user_id - int/str primary key of the requesting user
+    Output: None
+    """
+    cooldown = _get_export_cooldown_seconds()
+    key = f"gdpr_export_cooldown:{user_id}"
+    data = cache.get(key)
+    if not isinstance(data, dict):
+        data = {"count": 0, "ts": int(time.time())}
+    data["count"] = data.get("count", 0) + 1
+    cache.set(key, data, timeout=cooldown)
 
 
 def _build_export_payload(user):
@@ -150,7 +155,7 @@ class ProfileExportDataView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        limited, _remaining, retry_after = _consume_export_rate_limit(user.pk)
+        limited, retry_after = _check_export_cooldown(user.pk)
         if limited:
             _safe_create_export_log(
                 user=user,
@@ -184,6 +189,7 @@ class ProfileExportDataView(APIView):
             response["Pragma"] = "no-cache"
             response["X-Content-Type-Options"] = "nosniff"
 
+            _start_export_cooldown(user.pk)
             _safe_create_export_log(
                 user=user,
                 outcome=UserDataExportLog.Outcome.SUCCESS,

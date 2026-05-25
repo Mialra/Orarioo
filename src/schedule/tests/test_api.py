@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from io import BytesIO
 from types import SimpleNamespace
 from unittest import skipIf
@@ -29,6 +29,7 @@ from schedule.algorithm.slots import (
 from schedule.algorithm.tc_assigner import assign_tc_sessions
 from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule, TCSession
+from schedule.views_export import REPORTLAB_AVAILABLE
 from subject.models import Subject, SubjectTimePreferenceState, SubjectType
 from teacher.models import Teacher, TeacherTimePreferenceState
 
@@ -54,7 +55,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Ana Perez",
             max_weekly_hours=20,
-            working_hours=12,
         )
         self.classroom = Classroom.objects.create(name="Aula 1A", team=self.team)
         self.group = Group.objects.create(
@@ -70,6 +70,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
         )
 
     def build_payload(self):
@@ -303,6 +304,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
+            classroom=self.classroom,
         )
 
         self.create_schedule(
@@ -334,13 +336,11 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("Mathematics", csv_text)
         self.assertNotIn("Language 2A", csv_text)
 
-    @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
     def test_export_cards_mode_with_specific_teacher_without_teacher_all(self):
         second_teacher = Teacher.objects.create(
             team=self.team,
             name="Julian",
             max_weekly_hours=20,
-            working_hours=12,
         )
         second_subject = Subject.objects.create(
             team=self.team,
@@ -350,6 +350,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=second_teacher,
             group=self.group,
+            classroom=self.classroom,
         )
 
         self.create_schedule(
@@ -380,10 +381,63 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        self.assertIn(".csv", response["Content-Disposition"])
+        csv_text = response.content.decode("utf-8-sig")
+        self.assertIn("Julian", csv_text)
+        self.assertNotIn("Ana Perez", csv_text)
+
+    @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
+    def test_export_cards_mode_xlsx_with_specific_teacher_without_teacher_all(self):
+        second_teacher = Teacher.objects.create(
+            team=self.team,
+            name="Julian",
+            max_weekly_hours=20,
+        )
+        second_subject = Subject.objects.create(
+            team=self.team,
+            name="Science",
+            weekly_hours=3,
+            duration=1.0,
+            type=SubjectType.NORMAL,
+            teacher=second_teacher,
+            group=self.group,
+            classroom=self.classroom,
+        )
+
+        self.create_schedule(
+            name="Sesion Ana",
+            teacher=self.teacher,
+            subject=self.subject,
+            observations=AUTO_GENERATED_OBSERVATION,
+        )
+        self.create_schedule(
+            name="Sesion Julian",
+            teacher=second_teacher,
+            subject=second_subject,
+            observations=AUTO_GENERATED_OBSERVATION,
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "xlsx",
+                "source": "generated",
+                "selection_mode": "cards",
+                "group_all": "0",
+                "teacher_all": "0",
+                "classroom_all": "0",
+                "subject_all": "0",
+                "teacher_ids": str(second_teacher.id),
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             response["Content-Type"],
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+        self.assertIn(".xlsx", response["Content-Disposition"])
         workbook = load_workbook(filename=BytesIO(response.content))
         self.assertGreaterEqual(len(workbook.sheetnames), 1)
         first_sheet = workbook[workbook.sheetnames[0]]
@@ -396,6 +450,112 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         joined = " ".join(values)
         self.assertIn("Julian", joined)
         self.assertNotIn("Ana Perez", joined)
+
+    def test_export_rejects_invalid_format_with_supported_formats(self):
+        response = self.client.get(
+            reverse("schedule-export"),
+            {"export_format": "ods", "source": "generated", "scope": "all"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data["detail"],
+            "export_format must be one of: csv, xlsx, pdf.",
+        )
+
+    def test_export_cards_mode_csv_with_only_tc_sessions(self):
+        TCSession.objects.create(
+            teacher=self.teacher,
+            team=self.team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "csv",
+                "source": "generated",
+                "selection_mode": "cards",
+                "group_all": "0",
+                "teacher_all": "0",
+                "classroom_all": "0",
+                "include_tc": "1",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        csv_text = response.content.decode("utf-8-sig")
+        self.assertIn("Guardia", csv_text)
+        self.assertIn("Ana Perez", csv_text)
+
+    @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
+    def test_export_cards_mode_xlsx_with_only_tc_sessions(self):
+        TCSession.objects.create(
+            teacher=self.teacher,
+            team=self.team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "xlsx",
+                "source": "generated",
+                "selection_mode": "cards",
+                "group_all": "0",
+                "teacher_all": "0",
+                "classroom_all": "0",
+                "include_tc": "1",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        workbook = load_workbook(filename=BytesIO(response.content))
+        joined = " ".join(
+            str(value)
+            for sheet in workbook.worksheets
+            for row in sheet.iter_rows(values_only=True)
+            for value in row
+            if value is not None
+        )
+        self.assertIn("Guardia", joined)
+        self.assertIn("Ana Perez", joined)
+
+    @skipIf(not REPORTLAB_AVAILABLE, "reportlab is not installed")
+    def test_export_cards_mode_pdf_with_only_tc_sessions(self):
+        TCSession.objects.create(
+            teacher=self.teacher,
+            team=self.team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "pdf",
+                "source": "generated",
+                "selection_mode": "cards",
+                "group_all": "0",
+                "teacher_all": "0",
+                "classroom_all": "0",
+                "include_tc": "1",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertTrue(response.content.startswith(b"%PDF"))
 
     def test_update_schedule(self):
         schedule = self.create_schedule()
@@ -465,7 +625,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("subject", response.data)
 
     def test_generate_basic_schedule(self):
-        Classroom.objects.all().delete()
         AuditEntry.objects.all().delete()
 
         response = self.generate_schedule()
@@ -526,6 +685,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
         )
 
         response = self.generate_schedule()
@@ -553,6 +713,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=group_2,
+            classroom=self.classroom,
         )
 
         response = self.generate_schedule()
@@ -569,7 +730,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Carlos Torres",
             max_weekly_hours=20,
-            working_hours=8,
         )
         Subject.objects.create(
             team=self.team,
@@ -579,6 +739,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=self.group,
+            classroom=self.classroom,
         )
 
         response = self.generate_schedule()
@@ -651,7 +812,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Lucia Martin",
             max_weekly_hours=20,
-            working_hours=12,
         )
         other_classroom = Classroom.objects.create(name="Aula 2A", team=self.team)
         other_group = Group.objects.create(
@@ -667,6 +827,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=other_teacher,
             group=other_group,
+            classroom=other_classroom,
         )
 
         source_schedule = self.create_schedule(
@@ -745,6 +906,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
+            classroom=self.classroom,
         )
 
         source_schedule = self.create_schedule(
@@ -1017,6 +1179,19 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
                 {self.user.id, self.other_user.id},
             )
 
+        audit_entry = AuditEntry.objects.filter(
+            entity_type="schedule",
+            action_type=AuditActionType.CREATE,
+            entity_name="Horario Compartido",
+        ).latest("id")
+        self.assertEqual(
+            audit_entry.detail, 'Se guardó el horario "Horario Compartido".'
+        )
+        self.assertEqual(
+            audit_entry.changed_fields,
+            [{"campo": "Sesiones guardadas", "valor_nuevo": 2}],
+        )
+
     def test_saved_endpoint_returns_all_team_saved_schedules(self):
         start_time = timezone.now() + timedelta(days=1)
         end_time = start_time + timedelta(hours=1)
@@ -1099,6 +1274,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=group_2,
+            classroom=self.classroom,
         )
         self.teacher.max_weekly_hours = 7
         self.teacher.save(update_fields=["max_weekly_hours"])
@@ -1122,6 +1298,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
         )
 
         # 5h (Math) + 21h (Science) = 26h, above PRIMARY weekly limit (25h).
@@ -1191,13 +1368,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
 
         self.assertEqual(timeout_seconds, 900.0)  # 15 min * 60 s
 
-    def test_generate_assigns_only_subject_mandatory_classroom(self):
+    def test_generate_assigns_only_subject_classroom(self):
         assigned = Classroom.objects.create(
             name="Aula Asignada",
             team=self.team,
         )
-        self.subject.mandatory_classroom = assigned
-        self.subject.save(update_fields=["mandatory_classroom"])
+        self.subject.classroom = assigned
+        self.subject.save(update_fields=["classroom"])
 
         response = self.generate_schedule()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1209,15 +1386,15 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         self.assertEqual(generated_classroom_ids, {assigned.id})
 
-    def test_generate_uses_mandatory_classroom_when_set(self):
+    def test_generate_uses_classroom_when_set(self):
         self.classroom.name = "Aula 1A"
         self.classroom.save(update_fields=["name"])
         music_room = Classroom.objects.create(
             name="Aula de Musica",
             team=self.team,
         )
-        self.subject.mandatory_classroom = music_room
-        self.subject.save(update_fields=["mandatory_classroom"])
+        self.subject.classroom = music_room
+        self.subject.save(update_fields=["classroom"])
 
         response = self.generate_schedule()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1229,7 +1406,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
         self.assertEqual(generated_classroom_ids, {music_room.id})
 
-    def test_generate_uses_any_classroom_when_subject_has_no_restrictions(self):
+    def test_generate_uses_subject_classroom_by_default(self):
         response = self.generate_schedule()
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1238,9 +1415,9 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
                 "classroom_id", flat=True
             )
         )
-        self.assertIn(self.classroom.id, generated_classroom_ids)
+        self.assertEqual(generated_classroom_ids, {self.classroom.id})
 
-    def test_generate_spreads_sessions_for_shared_mandatory_classroom(self):
+    def test_generate_spreads_sessions_for_shared_classroom(self):
         self.subject.weekly_hours = 1
         self.subject.save(update_fields=["weekly_hours"])
 
@@ -1248,7 +1425,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Elena Ruiz",
             max_weekly_hours=20,
-            working_hours=8,
         )
         group_2 = Group.objects.create(
             name="2A",
@@ -1263,11 +1439,12 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=group_2,
+            classroom=self.classroom,
         )
-        self.subject.mandatory_classroom = self.classroom
-        self.subject.save(update_fields=["mandatory_classroom"])
-        other_subject.mandatory_classroom = self.classroom
-        other_subject.save(update_fields=["mandatory_classroom"])
+        self.subject.classroom = self.classroom
+        self.subject.save(update_fields=["classroom"])
+        other_subject.classroom = self.classroom
+        other_subject.save(update_fields=["classroom"])
 
         response = self.generate_schedule()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1398,14 +1575,13 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
     def test_generate_returns_classroom_bottleneck_diagnostic(self):
         self.subject.weekly_hours = 1
         self.subject.save(update_fields=["weekly_hours"])
-        self.subject.mandatory_classroom = self.classroom
-        self.subject.save(update_fields=["mandatory_classroom"])
+        self.subject.classroom = self.classroom
+        self.subject.save(update_fields=["classroom"])
 
         other_teacher = Teacher.objects.create(
             team=self.team,
             name="Lucia Lopez",
             max_weekly_hours=20,
-            working_hours=8,
         )
         other_group = Group.objects.create(
             name="2A",
@@ -1420,9 +1596,10 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=other_teacher,
             group=other_group,
+            classroom=self.classroom,
         )
-        other_subject.mandatory_classroom = self.classroom
-        other_subject.save(update_fields=["mandatory_classroom"])
+        other_subject.classroom = self.classroom
+        other_subject.save(update_fields=["classroom"])
 
         slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
         self.teacher.time_preferences = {
@@ -1535,7 +1712,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Lucia Lopez",
             max_weekly_hours=20,
-            working_hours=8,
         )
         Subject.objects.create(
             team=self.team,
@@ -1545,6 +1721,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=teacher_2,
             group=self.group,
+            classroom=self.classroom,
         )
 
         slot_pref_index = build_slot_preference_index(slots=build_weekly_slots())
@@ -1753,6 +1930,7 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=secondary_group,
+            classroom=self.classroom,
         )
 
         today = timezone.now().date()
@@ -1803,7 +1981,6 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             team=self.team,
             name="Ana Perez",
             max_weekly_hours=40,
-            working_hours=12,
         )
         self.classroom = Classroom.objects.create(name="Aula 1A", team=self.team)
         self.group = Group.objects.create(
@@ -1819,9 +1996,10 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=self.group,
+            classroom=self.classroom,
         )
-        self.subject.mandatory_classroom = self.classroom
-        self.subject.save(update_fields=["mandatory_classroom"])
+        self.subject.classroom = self.classroom
+        self.subject.save(update_fields=["classroom"])
 
     def test_build_windows_from_stage_config_keeps_primary_half_slot_split_by_break(
         self,
@@ -1981,9 +2159,10 @@ class ScheduleSlotConfigurationTests(AuthenticatedAdminAPIMixin, APITestCase):
             type=SubjectType.NORMAL,
             teacher=self.teacher,
             group=other_group,
+            classroom=self.classroom,
         )
-        other_subject.mandatory_classroom = self.classroom
-        other_subject.save(update_fields=["mandatory_classroom"])
+        other_subject.classroom = self.classroom
+        other_subject.save(update_fields=["classroom"])
 
         sessions = [
             {
@@ -2347,7 +2526,7 @@ class TestTCAssigner(TestCase):
         teacher_no_gap.team = self.team
         teacher_no_gap.save()
 
-        # Give teacher_with_gap a class at slot 0 and slot 2 of Monday → slot 1 is a dead gap
+        # Give teacher_with_gap a class at slot 0 and slot 2 of Monday -> slot 1 is a dead gap
         non_recess = [s for s in self.slots if not s.get("is_recess")]
         monday_slots = [s for s in non_recess if s["start"].weekday() == 0]
         if len(monday_slots) < 3:
@@ -2383,7 +2562,7 @@ class TestTCAssigner(TestCase):
 
     def test_horas_exactas_priorizadas_sobre_hueco_muerto(self):
         """Teacher with weekly_hours_exact=True and deficit beats dead-gap teacher."""
-        # teacher_exact: exact-hours mode, barely any schedule hours → big deficit
+        # teacher_exact: exact-hours mode, barely any schedule hours -> big deficit
         teacher_exact = Teacher.objects.create(
             team=self.team,
             name="Exact Priority",
