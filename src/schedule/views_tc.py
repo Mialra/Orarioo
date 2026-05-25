@@ -82,55 +82,6 @@ def _slot_duration(start_time, end_time):
     return end_delta - start_delta
 
 
-def _build_hours_warning(teacher, team, extra_minutes):
-    """Return a warning string if adding extra_minutes violates weekly_hours_exact, else None."""
-    if not teacher.weekly_hours_exact:
-        return None
-    max_minutes = teacher.max_weekly_hours * 60 + teacher.max_weekly_minutes
-    existing_tc_minutes = _sum_tc_minutes(teacher, team)
-    schedule_minutes = _sum_schedule_minutes(teacher, team)
-    total_after = schedule_minutes + existing_tc_minutes + extra_minutes
-    if total_after > max_minutes:
-        total_hours = total_after // 60
-        return (
-            f"El docente {teacher.name} pasaría a tener {total_hours}h, "
-            f"superando sus horas exactas de {teacher.max_weekly_hours}h."
-        )
-    return None
-
-
-def _build_delete_hours_warning(teacher, team, removed_minutes):
-    """Return a warning string if removing removed_minutes violates weekly_hours_exact, else None."""
-    if not teacher.weekly_hours_exact:
-        return None
-    max_minutes = teacher.max_weekly_hours * 60 + teacher.max_weekly_minutes
-    existing_tc_minutes = _sum_tc_minutes(teacher, team)
-    schedule_minutes = _sum_schedule_minutes(teacher, team)
-    total_after = schedule_minutes + existing_tc_minutes - removed_minutes
-    if total_after < max_minutes:
-        total_hours = total_after // 60
-        return (
-            f"El docente {teacher.name} pasa a tener {total_hours}h. "
-            f"Sus horas exactas son {teacher.max_weekly_hours}h."
-        )
-    return None
-
-
-def _sum_tc_minutes(teacher, team):
-    total = 0
-    for tc in TCSession.objects.filter(teacher=teacher, team=team):
-        total += _slot_duration(tc.start_time, tc.end_time).seconds // 60
-    return total
-
-
-def _sum_schedule_minutes(teacher, team):
-    total = 0
-    for sch in Schedule.objects.filter(teacher=teacher, team=team):
-        delta = sch.end_time - sch.start_time
-        total += int(delta.total_seconds()) // 60
-    return total
-
-
 # ---------------------------------------------------------------------------
 # List
 # ---------------------------------------------------------------------------
@@ -310,9 +261,6 @@ class TCSessionCreateView(APIView):
         if conflict:
             return conflict
 
-        duration_minutes = _slot_duration(start_time, end_time).seconds // 60
-        warning = _build_hours_warning(teacher, team, duration_minutes)
-
         observations = (
             f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}" if timetable_name else ""
         )
@@ -325,10 +273,7 @@ class TCSessionCreateView(APIView):
             observations=observations,
         )
 
-        response_data = {"tc_session": TCSessionSerializer(tc).data}
-        if warning:
-            response_data["warning"] = warning
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response({"tc_session": TCSessionSerializer(tc).data}, status=status.HTTP_201_CREATED)
 
 
 # ---------------------------------------------------------------------------
@@ -346,14 +291,8 @@ class TCSessionDeleteView(APIView):
         except TCSession.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        duration_minutes = _slot_duration(tc.start_time, tc.end_time).seconds // 60
-        warning = _build_delete_hours_warning(tc.teacher, team, duration_minutes)
         tc.delete()
-
-        response_data = {"deleted": True}
-        if warning:
-            response_data["warning"] = warning
-        return Response(response_data, status=status.HTTP_200_OK)
+        return Response({"deleted": True}, status=status.HTTP_200_OK)
 
 
 # ---------------------------------------------------------------------------
