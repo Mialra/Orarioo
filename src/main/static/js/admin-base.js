@@ -31,7 +31,7 @@
      */
     function createEntityManager(config) {
         if (!core.initCrudModule) {
-            throw new Error("Admin CRUD core is not available.");
+            throw new Error("El módulo de administración no está disponible.");
         }
         return core.initCrudModule(config);
     }
