@@ -7,6 +7,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from auditableEntity.audit import format_changed_fields_for_export, get_field_label
 from auditableEntity.models import AuditableEntity, AuditActionType, AuditEntry
 from classroom.models import Classroom
 from common.export_utils import REPORTLAB_AVAILABLE
@@ -31,6 +32,24 @@ class AuditableEntityTests(SimpleTestCase):
         self.assertIn("updated_at", field_names)
         self.assertIn("created_by", field_names)
         self.assertIn("updated_by", field_names)
+
+    def test_team_field_label_is_exported_in_spanish(self):
+        self.assertEqual(get_field_label("team"), "Equipo")
+        self.assertEqual(get_field_label("active_team"), "Equipo")
+        self.assertEqual(get_field_label("collaboration_team"), "Equipo")
+
+        export_text = format_changed_fields_for_export(
+            [
+                {
+                    "campo": get_field_label("team"),
+                    "valor_anterior": "Equipo A",
+                    "valor_nuevo": "Equipo B",
+                }
+            ]
+        )
+
+        self.assertIn("Equipo: cambió de Equipo A a Equipo B.", export_text)
+        self.assertNotIn("Team", export_text)
 
 
 class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):

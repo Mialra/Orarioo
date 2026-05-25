@@ -1017,6 +1017,17 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
                 {self.user.id, self.other_user.id},
             )
 
+        audit_entry = AuditEntry.objects.filter(
+            entity_type="schedule",
+            action_type=AuditActionType.CREATE,
+            entity_name="Horario Compartido",
+        ).latest("id")
+        self.assertEqual(audit_entry.detail, 'Se guardó el horario "Horario Compartido".')
+        self.assertEqual(
+            audit_entry.changed_fields,
+            [{"campo": "Sesiones guardadas", "valor_nuevo": 2}],
+        )
+
     def test_saved_endpoint_returns_all_team_saved_schedules(self):
         start_time = timezone.now() + timedelta(days=1)
         end_time = start_time + timedelta(hours=1)

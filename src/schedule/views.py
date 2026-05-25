@@ -1077,6 +1077,20 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
             target_users=target_users,
         )
         self._persist_saved_tc_sessions(timetable_name=timetable_name, team=active_team)
+        create_audit_entry(
+            model=Schedule,
+            entity_id=schedules[0].id,
+            entity_name=timetable_name,
+            action_type=AuditActionType.CREATE,
+            detail=f'Se guardó el horario "{timetable_name}".',
+            changed_fields=[
+                {
+                    "campo": "Sesiones guardadas",
+                    "valor_nuevo": len(schedules),
+                }
+            ],
+            team=active_team,
+        )
 
         serialized = self.get_serializer(schedules, many=True)
         return Response(

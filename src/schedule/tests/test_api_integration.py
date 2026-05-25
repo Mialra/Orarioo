@@ -241,6 +241,9 @@ class ScheduleGenerationFlowTest(AuthenticatedAdminAPIMixin, APITestCase):
             self.team,
             "AuditEntry must be scoped to the requesting team",
         )
+        self.assertEqual(entry.detail, "Se generó un horario.")
+        self.assertNotIn("Auto ", entry.detail)
+        self.assertNotIn("sesiones", entry.detail)
 
     def test_generate_without_teacher_returns_error(self):
         """POST generate with no teachers must return 400 with a diagnostic code."""

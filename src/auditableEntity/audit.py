@@ -98,6 +98,9 @@ FIELD_LABELS = {
     "classroom": "Aula",
     "subject": "Asignatura",
     "users": "Usuarios",
+    "team": "Equipo",
+    "active_team": "Equipo",
+    "collaboration_team": "Equipo",
     "schedule_config": "Configuración de tramos",
 }
 DISPLAY_VALUE_TRANSLATIONS = {
