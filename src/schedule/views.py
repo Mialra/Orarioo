@@ -294,9 +294,9 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         export_format = (
             (request.query_params.get("export_format") or "csv").strip().lower()
         )
-        if export_format not in {"csv", "pdf"}:
+        if export_format not in {"csv", "xlsx", "pdf"}:
             return None, Response(
-                {"detail": "export_format must be one of: csv, pdf."},
+                {"detail": "export_format must be one of: csv, xlsx, pdf."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -402,7 +402,7 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
         )
         source = params["source"]
         if source == "generated":
-            tc_qs = tc_qs.filter(observations="")
+            tc_qs = tc_qs.exclude(observations__startswith=SAVED_TIMETABLE_PREFIX)
         elif source == "saved":
             if saved_name:
                 tc_qs = tc_qs.filter(
@@ -454,8 +454,10 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
 
         if params["format"] == "csv":
             if params.get("scope") == "cards":
-                excel_filename = filename.rsplit(".", 1)[0] + ".xlsx"
-                return build_excel_response(units, excel_filename)
+                rows = []
+                for unit in units:
+                    rows.extend(unit["rows"])
+                return build_csv_response_for_schedule(rows, filename)
             rows = build_export_rows(queryset)
             if tc_sessions:
                 tc_rows = build_tc_export_rows(tc_sessions)
@@ -464,6 +466,8 @@ class ScheduleViewSet(TeamScopedAuditableModelViewSet):
                     key=lambda r: (_DAY_ORDER.get(r["day"], 99), r["start"]),
                 )
             return build_csv_response_for_schedule(rows, filename)
+        if params["format"] == "xlsx":
+            return build_excel_response(units, filename)
         return build_pdf_units_response(units, filename)
 
     def generate(self, request):

@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timedelta
+﻿from datetime import datetime, time, timedelta
 from io import BytesIO
 from types import SimpleNamespace
 from unittest import skipIf
@@ -29,6 +29,7 @@ from schedule.algorithm.slots import (
 from schedule.algorithm.tc_assigner import assign_tc_sessions
 from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule, TCSession
+from schedule.views_export import REPORTLAB_AVAILABLE
 from subject.models import Subject, SubjectTimePreferenceState, SubjectType
 from teacher.models import Teacher, TeacherTimePreferenceState
 
@@ -334,7 +335,6 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertIn("Mathematics", csv_text)
         self.assertNotIn("Language 2A", csv_text)
 
-    @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
     def test_export_cards_mode_with_specific_teacher_without_teacher_all(self):
         second_teacher = Teacher.objects.create(
             team=self.team,
@@ -380,10 +380,63 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        self.assertIn(".csv", response["Content-Disposition"])
+        csv_text = response.content.decode("utf-8-sig")
+        self.assertIn("Julian", csv_text)
+        self.assertNotIn("Ana Perez", csv_text)
+
+    @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
+    def test_export_cards_mode_xlsx_with_specific_teacher_without_teacher_all(self):
+        second_teacher = Teacher.objects.create(
+            team=self.team,
+            name="Julian",
+            max_weekly_hours=20,
+            working_hours=12,
+        )
+        second_subject = Subject.objects.create(
+            team=self.team,
+            name="Science",
+            weekly_hours=3,
+            duration=1.0,
+            type=SubjectType.NORMAL,
+            teacher=second_teacher,
+            group=self.group,
+        )
+
+        self.create_schedule(
+            name="Sesion Ana",
+            teacher=self.teacher,
+            subject=self.subject,
+            observations=AUTO_GENERATED_OBSERVATION,
+        )
+        self.create_schedule(
+            name="Sesion Julian",
+            teacher=second_teacher,
+            subject=second_subject,
+            observations=AUTO_GENERATED_OBSERVATION,
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "xlsx",
+                "source": "generated",
+                "selection_mode": "cards",
+                "group_all": "0",
+                "teacher_all": "0",
+                "classroom_all": "0",
+                "subject_all": "0",
+                "teacher_ids": str(second_teacher.id),
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             response["Content-Type"],
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+        self.assertIn(".xlsx", response["Content-Disposition"])
         workbook = load_workbook(filename=BytesIO(response.content))
         self.assertGreaterEqual(len(workbook.sheetnames), 1)
         first_sheet = workbook[workbook.sheetnames[0]]
@@ -396,6 +449,112 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         joined = " ".join(values)
         self.assertIn("Julian", joined)
         self.assertNotIn("Ana Perez", joined)
+
+    def test_export_rejects_invalid_format_with_supported_formats(self):
+        response = self.client.get(
+            reverse("schedule-export"),
+            {"export_format": "ods", "source": "generated", "scope": "all"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data["detail"],
+            "export_format must be one of: csv, xlsx, pdf.",
+        )
+
+    def test_export_cards_mode_csv_with_only_tc_sessions(self):
+        TCSession.objects.create(
+            teacher=self.teacher,
+            team=self.team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "csv",
+                "source": "generated",
+                "selection_mode": "cards",
+                "group_all": "0",
+                "teacher_all": "0",
+                "classroom_all": "0",
+                "include_tc": "1",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        csv_text = response.content.decode("utf-8-sig")
+        self.assertIn("Guardia", csv_text)
+        self.assertIn("Ana Perez", csv_text)
+
+    @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
+    def test_export_cards_mode_xlsx_with_only_tc_sessions(self):
+        TCSession.objects.create(
+            teacher=self.teacher,
+            team=self.team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "xlsx",
+                "source": "generated",
+                "selection_mode": "cards",
+                "group_all": "0",
+                "teacher_all": "0",
+                "classroom_all": "0",
+                "include_tc": "1",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        workbook = load_workbook(filename=BytesIO(response.content))
+        joined = " ".join(
+            str(value)
+            for sheet in workbook.worksheets
+            for row in sheet.iter_rows(values_only=True)
+            for value in row
+            if value is not None
+        )
+        self.assertIn("Guardia", joined)
+        self.assertIn("Ana Perez", joined)
+
+    @skipIf(not REPORTLAB_AVAILABLE, "reportlab is not installed")
+    def test_export_cards_mode_pdf_with_only_tc_sessions(self):
+        TCSession.objects.create(
+            teacher=self.teacher,
+            team=self.team,
+            day=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+
+        response = self.client.get(
+            reverse("schedule-export"),
+            {
+                "export_format": "pdf",
+                "source": "generated",
+                "selection_mode": "cards",
+                "group_all": "0",
+                "teacher_all": "0",
+                "classroom_all": "0",
+                "include_tc": "1",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertTrue(response.content.startswith(b"%PDF"))
 
     def test_update_schedule(self):
         schedule = self.create_schedule()
@@ -2358,7 +2517,7 @@ class TestTCAssigner(TestCase):
         teacher_no_gap.team = self.team
         teacher_no_gap.save()
 
-        # Give teacher_with_gap a class at slot 0 and slot 2 of Monday → slot 1 is a dead gap
+        # Give teacher_with_gap a class at slot 0 and slot 2 of Monday -> slot 1 is a dead gap
         non_recess = [s for s in self.slots if not s.get("is_recess")]
         monday_slots = [s for s in non_recess if s["start"].weekday() == 0]
         if len(monday_slots) < 3:
@@ -2394,7 +2553,7 @@ class TestTCAssigner(TestCase):
 
     def test_horas_exactas_priorizadas_sobre_hueco_muerto(self):
         """Teacher with weekly_hours_exact=True and deficit beats dead-gap teacher."""
-        # teacher_exact: exact-hours mode, barely any schedule hours → big deficit
+        # teacher_exact: exact-hours mode, barely any schedule hours -> big deficit
         teacher_exact = Teacher.objects.create(
             team=self.team,
             name="Exact Priority",

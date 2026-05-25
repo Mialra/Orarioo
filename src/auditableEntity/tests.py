@@ -1,4 +1,5 @@
 from datetime import timedelta
+from io import BytesIO
 from unittest import skipIf
 
 from django.test import SimpleTestCase
@@ -19,6 +20,13 @@ from schedule.models import Schedule
 from subject.models import Subject, SubjectType
 from teacher.models import Teacher
 from user.models import CollaborationTeam
+
+try:
+    from openpyxl import load_workbook
+
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 
 
 class AuditableEntityTests(SimpleTestCase):
@@ -403,6 +411,87 @@ class AuditEntryApiTests(AuthenticatedAdminAPIMixin, APITestCase):
         self.assertNotIn("Aula descartada", csv_text)
         self.assertIn("Preferidas: Lunes a las 09:30.", csv_text)
         self.assertIn("Disponibles: Lunes a las 10:30.", csv_text)
+
+    @skipIf(not OPENPYXL_AVAILABLE, "openpyxl is not installed")
+    def test_audit_entries_export_xlsx_applies_filters(self):
+        now = timezone.now()
+        own_entry = AuditEntry.objects.create(
+            entity_type="teacher",
+            entity_id=31,
+            entity_name="Profesor exportable",
+            action_type=AuditActionType.CREATE,
+            detail='Se creÃ³ el profesor "Profesor exportable".',
+            changed_fields=[
+                {
+                    "campo": "Preferencias horarias",
+                    "valor_nuevo": {
+                        "MON_09:30": "PREFER_YES",
+                        "MON_10:30": "AVAILABLE",
+                    },
+                }
+            ],
+            actor=self.user,
+            actor_name=self.user.get_full_name(),
+            team=self.team,
+        )
+        own_entry.occurred_at = now
+        own_entry.save(update_fields=["occurred_at"])
+        AuditEntry.objects.create(
+            entity_type="classroom",
+            entity_id=32,
+            entity_name="Aula descartada",
+            action_type=AuditActionType.UPDATE,
+            detail='Se modificÃ³ el aula "Aula descartada".',
+            actor=self.user,
+            actor_name=self.user.get_full_name(),
+            team=self.team,
+        )
+
+        response = self.client.get(
+            reverse("auditentry-export"),
+            {
+                "export_format": "xlsx",
+                "tipo_entidad": "profesor",
+                "tipo_accion": "CREATE",
+                "usuario_id": self.user.id,
+                "fecha_desde": now.date().isoformat(),
+                "columns": "Fecha",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+            getattr(response, "data", response.content[:200]),
+        )
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertIn(".xlsx", response["Content-Disposition"])
+        workbook = load_workbook(filename=BytesIO(response.content))
+        sheet = workbook.active
+        rows = list(sheet.iter_rows(values_only=True))
+        self.assertEqual(rows[0], ("Fecha", "Resumen", "Detalle"))
+        joined = " ".join(str(value) for row in rows for value in row if value)
+        self.assertIn(now.strftime("%d/%m/%Y"), joined)
+        self.assertNotIn("'" + now.strftime("%d/%m/%Y"), joined)
+        self.assertIn("Profesor exportable", joined)
+        self.assertNotIn("Aula descartada", joined)
+        self.assertIn("Preferidas: Lunes a las 09:30.", joined)
+
+    def test_audit_entries_export_rejects_invalid_format_with_supported_formats(self):
+        response = self.client.get(
+            reverse("auditentry-export"),
+            {"export_format": "ods"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("export_format", response.data)
+        self.assertEqual(
+            response.data["export_format"][0],
+            "Debe ser uno de: csv, xlsx, pdf.",
+        )
 
     @skipIf(not REPORTLAB_AVAILABLE, "reportlab is not installed")
     def test_audit_entries_export_pdf_returns_pdf(self):
