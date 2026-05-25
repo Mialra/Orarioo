@@ -4,6 +4,8 @@ Exposes solve_session_assignment as the single entry point.  All internal
 functions build decision variables, add constraints and extract the solution.
 """
 
+import ctypes
+import ctypes.util
 import gc
 import logging
 
@@ -181,6 +183,7 @@ def _cp_sat_session_assignment(
         on_phase2_start=on_phase2_start,
     )
     gc.collect()
+    _trim_process_memory()
     return result
 
 
@@ -386,6 +389,11 @@ def _cp_sat_session_assignment_impl(
     )
     if phase2_skip is not None:
         return phase2_skip
+
+    # Free Phase 1 solver before allocating Phase 2 to halve peak RSS.
+    del feasible_solver
+    gc.collect()
+    _trim_process_memory()
 
     optimization_solver = _build_solver(
         timeout_seconds=optimization_timeout,
@@ -872,6 +880,21 @@ def _classroom_compatibility_error(*, session):
         "Could not assign a classroom to at least one generated session. "
         "No available classroom matches subject '{subject_name}'."
     ).format(subject_name=subject_name)
+
+
+def _trim_process_memory():
+    """Ask glibc to return freed heap pages to the OS, lowering process RSS.
+
+    gc.collect() releases Python/C++ objects but glibc keeps freed memory in
+    its allocator pool.  malloc_trim(0) flushes that pool back to the OS so the
+    next RSS check sees the true post-collection baseline.  No-op on non-Linux.
+    """
+    try:
+        libc_name = ctypes.util.find_library("c")
+        if libc_name:
+            ctypes.CDLL(libc_name).malloc_trim(0)
+    except Exception:
+        pass
 
 
 def _log_process_memory(phase_label):
