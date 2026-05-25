@@ -57,7 +57,7 @@ def test_create_subject(subjects_page: Page):
     # Index 0 = placeholder ("Selecciona…"), index 1 = first real item
     teacher_ok = _select_custom_option(page, "admin-subject-teacher", 1)
     group_ok = _select_custom_option(page, "admin-subject-group", 1)
-    classroom_ok = _select_custom_option(page, "admin-subject-mandatory-classroom", 1)
+    classroom_ok = _select_custom_option(page, "admin-subject-classroom", 1)
 
     if not (teacher_ok and group_ok and classroom_ok):
         pytest.skip("No hay suficientes datos (profesor/grupo/aula) para crear asignatura")

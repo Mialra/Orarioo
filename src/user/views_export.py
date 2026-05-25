@@ -44,28 +44,39 @@ def _get_export_cooldown_seconds():
     return max(60, int(getattr(settings, "DATA_EXPORT_COOLDOWN_SECONDS", 600)))
 
 
+_EXPORT_WINDOW_LIMIT = 2  # exports allowed per cooldown window before rate-limiting
+
+
 def _check_export_cooldown(user_id):
-    """Check whether a user is still within the post-export cooldown period.
+    """Check whether a user has exhausted their export quota for the current window.
     Input: user_id - int/str primary key of the requesting user
     Output: tuple (limited: bool, retry_after: int seconds remaining in cooldown)
     """
     cooldown = _get_export_cooldown_seconds()
     key = f"gdpr_export_cooldown:{user_id}"
-    last_ts = cache.get(key)
-    if last_ts is None:
+    data = cache.get(key)
+    if not isinstance(data, dict):
         return False, 0
-    elapsed = int(time.time()) - int(last_ts)
+    count = data.get("count", 0)
+    if count < _EXPORT_WINDOW_LIMIT:
+        return False, 0
+    elapsed = int(time.time()) - int(data.get("ts", int(time.time())))
     retry_after = cooldown - elapsed
     return (retry_after > 0), max(1, retry_after)
 
 
 def _start_export_cooldown(user_id):
-    """Record the current time as the last successful export, starting the cooldown.
+    """Increment the export counter for the current window, opening one if needed.
     Input: user_id - int/str primary key of the requesting user
     Output: None
     """
     cooldown = _get_export_cooldown_seconds()
-    cache.set(f"gdpr_export_cooldown:{user_id}", int(time.time()), timeout=cooldown)
+    key = f"gdpr_export_cooldown:{user_id}"
+    data = cache.get(key)
+    if not isinstance(data, dict):
+        data = {"count": 0, "ts": int(time.time())}
+    data["count"] = data.get("count", 0) + 1
+    cache.set(key, data, timeout=cooldown)
 
 
 def _build_export_payload(user):
