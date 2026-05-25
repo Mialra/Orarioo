@@ -54,7 +54,9 @@ def _teacher_has_schedule_at(teacher_id, team, day, start_time, timetable_name=N
     return qs.exists()
 
 
-def _teacher_has_tc_at(teacher_id, team, day, start_time, exclude_id=None, timetable_name=None):
+def _teacher_has_tc_at(
+    teacher_id, team, day, start_time, exclude_id=None, timetable_name=None
+):
     """Return True if the teacher already has a TCSession at (day, start_time) for the team.
 
     If timetable_name is given, checks only that saved timetable's TC sessions.
@@ -256,7 +258,9 @@ def _parse_tc_create_params(request, team):
     }, None
 
 
-def _check_tc_slot_conflicts(teacher, team, day, start_time, end_time, timetable_name=None):
+def _check_tc_slot_conflicts(
+    teacher, team, day, start_time, end_time, timetable_name=None
+):
     """Return a conflict Response if the slot is taken, else None."""
     if _teacher_has_schedule_at(teacher.id, team, day, start_time, timetable_name):
         return Response(
@@ -265,7 +269,9 @@ def _check_tc_slot_conflicts(teacher, team, day, start_time, end_time, timetable
             },
             status=status.HTTP_409_CONFLICT,
         )
-    if _teacher_has_tc_at(teacher.id, team, day, start_time, timetable_name=timetable_name):
+    if _teacher_has_tc_at(
+        teacher.id, team, day, start_time, timetable_name=timetable_name
+    ):
         return Response(
             {
                 "detail": f"{teacher.name} ya tiene una guardia TC el {_DAY_LABELS[day]} a las {start_time:%H:%M}."
@@ -298,14 +304,18 @@ class TCSessionCreateView(APIView):
         end_time = params["end_time"]
         timetable_name = params["timetable_name"]
 
-        conflict = _check_tc_slot_conflicts(teacher, team, day, start_time, end_time, timetable_name)
+        conflict = _check_tc_slot_conflicts(
+            teacher, team, day, start_time, end_time, timetable_name
+        )
         if conflict:
             return conflict
 
         duration_minutes = _slot_duration(start_time, end_time).seconds // 60
         warning = _build_hours_warning(teacher, team, duration_minutes)
 
-        observations = f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}" if timetable_name else ""
+        observations = (
+            f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}" if timetable_name else ""
+        )
         tc = TCSession.objects.create(
             teacher=teacher,
             day=day,
@@ -391,13 +401,15 @@ class TCSessionSwapView(APIView):
         # checks only look at schedules belonging to the same timetable.
         saved_prefix = f"{SAVED_TIMETABLE_PREFIX}: "
         swap_timetable_name = (
-            tc_a.observations[len(saved_prefix):]
+            tc_a.observations[len(saved_prefix) :]
             if tc_a.observations.startswith(saved_prefix)
             else None
         )
 
         # Check that teacher A can occupy slot B
-        if _teacher_has_schedule_at(tc_a.teacher_id, team, tc_b.day, tc_b.start_time, swap_timetable_name):
+        if _teacher_has_schedule_at(
+            tc_a.teacher_id, team, tc_b.day, tc_b.start_time, swap_timetable_name
+        ):
             return Response(
                 {
                     "detail": (
@@ -409,7 +421,9 @@ class TCSessionSwapView(APIView):
             )
 
         # Check that teacher B can occupy slot A
-        if _teacher_has_schedule_at(tc_b.teacher_id, team, tc_a.day, tc_a.start_time, swap_timetable_name):
+        if _teacher_has_schedule_at(
+            tc_b.teacher_id, team, tc_a.day, tc_a.start_time, swap_timetable_name
+        ):
             return Response(
                 {
                     "detail": (

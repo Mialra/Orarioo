@@ -949,9 +949,7 @@ def create_subjects(teachers, groups, team):  # noqa: C901
         lower_name = row["name"].lower()
         classroom = None
         if "educación física" in lower_name or "psicomotricidad" in lower_name:
-            classroom = Classroom.objects.filter(
-                team=team, name="Gimnasio"
-            ).first()
+            classroom = Classroom.objects.filter(team=team, name="Gimnasio").first()
         elif "tecnología" in lower_name:
             classroom = Classroom.objects.filter(
                 team=team, name="Aula de Tecnología"
@@ -965,9 +963,7 @@ def create_subjects(teachers, groups, team):  # noqa: C901
                 team=team, name="Aula de Plástica"
             ).first()
         elif "biología" in lower_name or "física y química" in lower_name:
-            classroom = Classroom.objects.filter(
-                team=team, name="Laboratorio"
-            ).first()
+            classroom = Classroom.objects.filter(team=team, name="Laboratorio").first()
 
         if classroom is None:
             classroom = default_room

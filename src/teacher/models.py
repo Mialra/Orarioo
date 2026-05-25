@@ -44,6 +44,7 @@ class Teacher(TeamScopedModel, AuditableEntity):
             raise ValidationError(
                 {"max_weekly_hours": "Total weekly load cannot be zero."}
             )
+
     def __str__(self):
         """Return the teacher's name as its string representation.
         Input: self - Teacher instance

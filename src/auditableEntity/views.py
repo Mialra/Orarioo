@@ -330,9 +330,7 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
         """
         export_format = (raw_value or "csv").strip().lower()
         if export_format not in {"csv", "xlsx", "pdf"}:
-            raise ValidationError(
-                {"export_format": "Debe ser uno de: csv, xlsx, pdf."}
-            )
+            raise ValidationError({"export_format": "Debe ser uno de: csv, xlsx, pdf."})
         return export_format
 
     @staticmethod
@@ -445,9 +443,7 @@ class AuditEntryViewSet(viewsets.ReadOnlyModelViewSet):
             return build_csv_response(headers, rows, filename)
 
         if export_format == "xlsx":
-            rows = self._build_export_rows(
-                queryset, optional_indices=optional_indices
-            )
+            rows = self._build_export_rows(queryset, optional_indices=optional_indices)
             return self._build_excel_response(headers, rows, filename)
 
         if not REPORTLAB_AVAILABLE:

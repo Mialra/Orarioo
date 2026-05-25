@@ -292,9 +292,7 @@ class BasicScheduleGenerator:
                         "teacher_id": subject.teacher_id,
                         "group": subject.group,
                         "subject": subject,
-                        "allowed_classroom_ids": (
-                            {subject.classroom_id}
-                        ),
+                        "allowed_classroom_ids": ({subject.classroom_id}),
                         "name": subject.name,
                     }
                 )

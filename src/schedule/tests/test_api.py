@@ -1184,7 +1184,9 @@ class ScheduleApiTests(AuthenticatedAdminAPIMixin, APITestCase):
             action_type=AuditActionType.CREATE,
             entity_name="Horario Compartido",
         ).latest("id")
-        self.assertEqual(audit_entry.detail, 'Se guardó el horario "Horario Compartido".')
+        self.assertEqual(
+            audit_entry.detail, 'Se guardó el horario "Horario Compartido".'
+        )
         self.assertEqual(
             audit_entry.changed_fields,
             [{"campo": "Sesiones guardadas", "valor_nuevo": 2}],
