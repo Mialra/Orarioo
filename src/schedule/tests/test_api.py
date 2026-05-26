@@ -2809,7 +2809,7 @@ class TestTCSessionCreateView(AuthenticatedAdminAPIMixin, APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn("warning", response.data)
+        self.assertIn("tc_session", response.data)
 
 
 class TestTCSessionDeleteView(AuthenticatedAdminAPIMixin, APITestCase):
@@ -2861,7 +2861,7 @@ class TestTCSessionDeleteView(AuthenticatedAdminAPIMixin, APITestCase):
             reverse("tc-session-delete", kwargs={"pk": tc.pk})
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("warning", response.data)
+        self.assertTrue(response.data["deleted"])
 
     def test_eliminar_tc_session_otro_equipo(self):
         _, other_team = self.create_isolated_user(email_prefix="tc-del-other")
