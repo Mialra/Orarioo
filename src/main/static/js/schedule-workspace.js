@@ -19,7 +19,7 @@
     classroom_conflict: "El aula ya está ocupada en ese hueco horario.",
     teacher_unavailable: "El profesor no está disponible en ese hueco horario.",
     subject_unavailable: "La asignatura no está disponible en ese hueco horario.",
-    duration_mismatch: "No se puede intercambiar: las sesiones tienen distinta duración.",
+    duration_mismatch: "No se puede mover la sesión: el hueco destino tiene distinta duración. Comprueba que ambas sesiones tengan la misma duración.",
     stage_window_violation: "El hueco horario no está permitido para la etapa de esta sesión.",
   };
 
@@ -262,6 +262,17 @@
       }
 
       var mode = targetScheduleId ? "swap" : "move";
+
+      // For moves onto empty cells, reject immediately if the target row has a
+      // different duration than the session being dragged.
+      if (mode === "move") {
+        var srcDurMin = utils.parseHmToMinutes(dragState.sourceEnd) - utils.parseHmToMinutes(dragState.sourceStart);
+        var tgtDurMin = utils.parseHmToMinutes(targetEnd) - utils.parseHmToMinutes(targetStart);
+        if (srcDurMin !== tgtDurMin) {
+          return { valid: false, reason: "duration_mismatch" };
+        }
+      }
+
       var mappedAll = buildMappedSessionsAll();
       var mappedById = new Map(
         mappedAll.map(function (item) {
@@ -501,6 +512,34 @@
         return;
       }
 
+      // Auto-scroll the page while dragging near the viewport edges.
+      var _autoScrollRAF = null;
+      var _autoScrollClientY = 0;
+
+      function _startAutoScroll() {
+        if (_autoScrollRAF !== null) { return; }
+        function step() {
+          var y = _autoScrollClientY;
+          var threshold = 80;
+          var speed = 12;
+          var vh = window.innerHeight;
+          if (y < threshold && y > 0) {
+            window.scrollBy(0, -speed * (1 - y / threshold));
+          } else if (y > vh - threshold && y < vh) {
+            window.scrollBy(0, speed * (1 - (vh - y) / threshold));
+          }
+          _autoScrollRAF = requestAnimationFrame(step);
+        }
+        _autoScrollRAF = requestAnimationFrame(step);
+      }
+
+      function _stopAutoScroll() {
+        if (_autoScrollRAF !== null) {
+          cancelAnimationFrame(_autoScrollRAF);
+          _autoScrollRAF = null;
+        }
+      }
+
       outputEl.addEventListener("dragstart", function (event) {
         var target = event.target;
         if (!(target instanceof HTMLElement)) {
@@ -545,9 +584,11 @@
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", String(sourceScheduleId));
         }
+        _startAutoScroll();
       });
 
       outputEl.addEventListener("dragover", function (event) {
+        _autoScrollClientY = event.clientY;
         if (!config.getDragState().sourceScheduleId) {
           return;
         }
@@ -608,6 +649,7 @@
               DROP_REASON_MESSAGES[preview.reason] || "Movimiento no válido con las reglas actuales del horario.",
             );
           }
+          _stopAutoScroll();
           outputEl.querySelectorAll(".schedule-board-card-dragging").forEach(function (card) {
             card.classList.remove("schedule-board-card-dragging");
           });
@@ -616,6 +658,7 @@
         }
 
         await applyDropChange(preview);
+        _stopAutoScroll();
         outputEl.querySelectorAll(".schedule-board-card-dragging").forEach(function (card) {
           card.classList.remove("schedule-board-card-dragging");
         });
@@ -623,6 +666,7 @@
       });
 
       outputEl.addEventListener("dragend", function () {
+        _stopAutoScroll();
         outputEl.querySelectorAll(".schedule-board-card-dragging").forEach(function (card) {
           card.classList.remove("schedule-board-card-dragging");
         });

@@ -349,7 +349,7 @@ class TCSessionSwapView(APIView):
 
         # Check that teacher A can occupy slot B
         if _teacher_has_schedule_at(
-            tc_a.teacher_id, team, tc_b.day, tc_b.start_time, swap_timetable_name
+            tc_a.teacher_id, team, tc_b.day, tc_b.start_time, tc_b.end_time, swap_timetable_name
         ):
             return Response(
                 {
@@ -363,7 +363,7 @@ class TCSessionSwapView(APIView):
 
         # Check that teacher B can occupy slot A
         if _teacher_has_schedule_at(
-            tc_b.teacher_id, team, tc_a.day, tc_a.start_time, swap_timetable_name
+            tc_b.teacher_id, team, tc_a.day, tc_a.start_time, tc_a.end_time, swap_timetable_name
         ):
             return Response(
                 {

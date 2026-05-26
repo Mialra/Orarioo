@@ -894,7 +894,7 @@ def _trim_process_memory():
         if libc_name:
             ctypes.CDLL(libc_name).malloc_trim(0)
     except Exception:
-        pass
+        logger.debug("Could not trim process memory with malloc_trim.", exc_info=True)
 
 
 def _log_process_memory(phase_label):

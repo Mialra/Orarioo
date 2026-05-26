@@ -131,19 +131,15 @@
   }
 
   /**
-   * Builds the canonical row set from all stages in scheduleConfig.
-   * Deduplicates by "HH:MM-HH:MM" key; a slot that is a session in any stage is never marked recess.
-   * Input: scheduleConfig - schedule_config dict from /api/schedule-config/
-   * Output: sorted array of { start, end, isRecess, cells } row objects
+   * Builds canonical session-slot rows from all stages (recess rows excluded).
+   * Used only in TC/teacher view to show the full possible assignment grid.
    */
   function buildCanonicalRowsFromConfig(scheduleConfig) {
     var byKey = new Map();
     Object.values(scheduleConfig).forEach(function (stageCfg) {
       var windows = buildWindowsFromStageConfig(stageCfg);
       windows.forEach(function (w) {
-        if (w.isRecess) {
-          return;
-        }
+        if (w.isRecess) { return; }
         var key = w.start + "-" + w.end;
         if (!byKey.has(key)) {
           byKey.set(key, { start: w.start, end: w.end, isRecess: false, cells: createEmptyDayCells() });
@@ -154,29 +150,72 @@
   }
 
   /**
-   * Groups mapped sessions into board rows; always starts from a complete base grid.
-   * When scheduleConfig has stages, uses their canonical slot windows as the base so
-   * teachers with sessions in multiple stages see a consistent, non-overlapping grid.
-   * When scheduleConfig is absent or empty, uses DEFAULT_BOARD_ROWS so teachers with
-   * few sessions still see the full day and can add TC sessions anywhere.
-   * Input: mappedSessions - array of board session objects from mapSessionForBoard
-   *        scheduleConfig - optional schedule_config dict from /api/schedule-config/
-   * Output: sorted array of { start, end, isRecess, cells } row objects
+   * Groups mapped sessions into board rows.
+   * tcMode=false (group/classroom/subject view): rows built from actual session times;
+   *   recess rows injected from config only where sessions exist on both sides and
+   *   the break doesn't overlap an existing session — original behaviour restored.
+   * tcMode=true  (teacher TC view): full canonical session grid as base, blocked-day
+   *   detection, and phantom-row filtering.
    */
-  function buildBoardRows(mappedSessions, scheduleConfig) {
-    var byRange = new Map();
+  function buildBoardRows(mappedSessions, scheduleConfig, tcMode) {
+    var byRange;
+    var hasConfig = !!(scheduleConfig && Object.keys(scheduleConfig).length > 0);
 
-    var baseRows = (scheduleConfig && Object.keys(scheduleConfig).length > 0)
-      ? buildCanonicalRowsFromConfig(scheduleConfig)
-      : DEFAULT_BOARD_ROWS.map(function (r) { return { start: r[0], end: r[1], isRecess: false }; });
-
-    baseRows.forEach(function (row) {
-      byRange.set(row.start + "-" + row.end, {
-        start: row.start, end: row.end,
-        isRecess: !!row.isRecess,
-        cells: createEmptyDayCells(),
+    if (!tcMode) {
+      // ── Non-TC view: original behaviour from 5d1fa7a ─────────────────────
+      byRange = new Map();
+      mappedSessions.forEach(function (session) {
+        var key = session.startHm + "-" + session.endHm;
+        if (!byRange.has(key)) {
+          byRange.set(key, { start: session.startHm, end: session.endHm, isRecess: false, cells: createEmptyDayCells() });
+        }
+        byRange.get(key).cells[session.dayName].push(session);
       });
-    });
+
+      if (hasConfig) {
+        var sessionRanges = [];
+        byRange.forEach(function (row) {
+          if (!row.isRecess) { sessionRanges.push({ start: row.start, end: row.end }); }
+        });
+        Object.values(scheduleConfig).forEach(function (stageCfg) {
+          var breakList = Array.isArray(stageCfg.breaks) ? stageCfg.breaks : [];
+          if (!breakList.length && stageCfg.break_start && stageCfg.break_end) {
+            breakList = [{ start: stageCfg.break_start, end: stageCfg.break_end }];
+          }
+          breakList.forEach(function (b) {
+            if (!b.start || !b.end) { return; }
+            var overlapsSession = sessionRanges.some(function (r) { return r.start < b.end && b.start < r.end; });
+            var hasSessionBefore = sessionRanges.some(function (r) { return r.end <= b.start; });
+            if (overlapsSession || !hasSessionBefore) { return; }
+            var key = b.start + "-" + b.end;
+            if (!byRange.has(key)) {
+              byRange.set(key, { start: b.start, end: b.end, isRecess: true, cells: createEmptyDayCells() });
+            }
+          });
+        });
+      }
+
+      var rows = Array.from(byRange.values()).sort(utils.compareRowsByTime);
+      if (rows.length) { return rows; }
+      return DEFAULT_BOARD_ROWS.map(function (range) {
+        return { start: range[0], end: range[1], isRecess: false, cells: createEmptyDayCells() };
+      });
+    }
+
+    // ── TC teacher view ───────────────────────────────────────────────────────
+    byRange = new Map();
+
+    if (hasConfig) {
+      buildCanonicalRowsFromConfig(scheduleConfig, false).forEach(function (row) {
+        byRange.set(row.start + "-" + row.end, {
+          start: row.start, end: row.end, isRecess: false, cells: createEmptyDayCells(),
+        });
+      });
+    } else {
+      DEFAULT_BOARD_ROWS.forEach(function (r) {
+        byRange.set(r[0] + "-" + r[1], { start: r[0], end: r[1], isRecess: false, cells: createEmptyDayCells() });
+      });
+    }
 
     mappedSessions.forEach(function (session) {
       var key = session.startHm + "-" + session.endHm;
@@ -195,20 +234,21 @@
       BOARD_DAYS.forEach(function (dayName) {
         if ((row.cells[dayName] || []).length === 0) {
           var blocked = mappedSessions.some(function (s) {
-            return s.dayName === dayName
-              && s.startHm < row.end
-              && s.endHm > row.start;
+            return s.dayName === dayName && s.startHm < row.end && s.endHm > row.start;
           });
-          if (blocked) {
-            row.blockedDays[dayName] = true;
-          }
+          if (blocked) { row.blockedDays[dayName] = true; }
         }
       });
     });
 
-    if (rows.length) {
-      return rows;
-    }
+    rows = rows.filter(function (row) {
+      var hasAnySessions = BOARD_DAYS.some(function (d) { return (row.cells[d] || []).length > 0; });
+      if (hasAnySessions) { return true; }
+      var allBlocked = BOARD_DAYS.every(function (d) { return row.blockedDays[d]; });
+      return !allBlocked;
+    });
+
+    if (rows.length) { return rows; }
 
     return DEFAULT_BOARD_ROWS.map(function (range) {
       return { start: range[0], end: range[1], isRecess: false, cells: createEmptyDayCells() };
@@ -459,7 +499,11 @@
         return left.start - right.start;
       });
 
-    var rows = buildBoardRows(mappedSessions, safeOptions.scheduleConfig || null);
+    var rows = buildBoardRows(
+      mappedSessions,
+      safeOptions.scheduleConfig || null,
+      safeOptions.enableTcCreate === true
+    );
 
     var rowHtml = rows
       .map(function (row) {
