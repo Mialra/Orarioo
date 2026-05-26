@@ -7,9 +7,11 @@ from collections import defaultdict
 from common.errors.exceptions import NON_FIELD_ERRORS_KEY
 from common.stages import EducationalStage, canonical_group_stage
 from schedule.algorithm.errors import ScheduleGenerationError
-from schedule.algorithm.slots import (build_slot_preference_index,
-                                      build_stage_allowed_slot_index,
-                                      session_stage_code)
+from schedule.algorithm.slots import (
+    build_slot_preference_index,
+    build_stage_allowed_slot_index,
+    session_stage_code,
+)
 from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 

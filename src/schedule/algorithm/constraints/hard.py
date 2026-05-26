@@ -5,12 +5,14 @@ must be satisfied for a schedule to be considered feasible.
 """
 
 from common.stages import EducationalStage, canonical_group_stage
-from schedule.algorithm.errors import (ScheduleCapacityError,
-                                       ScheduleGenerationError)
-from schedule.algorithm.slots import (build_slot_day_index,
-                                      build_slot_preference_index,
-                                      build_stage_allowed_slot_index,
-                                      session_stage_code, slot_time_bounds)
+from schedule.algorithm.errors import ScheduleCapacityError, ScheduleGenerationError
+from schedule.algorithm.slots import (
+    build_slot_day_index,
+    build_slot_preference_index,
+    build_stage_allowed_slot_index,
+    session_stage_code,
+    slot_time_bounds,
+)
 from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 

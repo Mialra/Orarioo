@@ -20,17 +20,26 @@ from django.conf import settings
 
 from schedule.algorithm.constraints import (
     add_group_daily_capacity_constraints,
-    add_group_no_intraday_gap_constraints, add_recess_slot_hard_constraints,
-    add_stage_slot_hard_constraints, add_subject_time_hard_constraints,
-    add_teacher_time_hard_constraints, apply_soft_constraints)
+    add_group_no_intraday_gap_constraints,
+    add_recess_slot_hard_constraints,
+    add_stage_slot_hard_constraints,
+    add_subject_time_hard_constraints,
+    add_teacher_time_hard_constraints,
+    apply_soft_constraints,
+)
 from schedule.algorithm.constraints.soft import evaluate_soft_score
 from schedule.algorithm.diagnostics import (
-    BOTTLENECK_RANK, analyze_schedule_infeasibility,
-    collect_generation_diagnostics, raise_schedule_generation_diagnostics)
+    BOTTLENECK_RANK,
+    analyze_schedule_infeasibility,
+    collect_generation_diagnostics,
+    raise_schedule_generation_diagnostics,
+)
 from schedule.algorithm.errors import ScheduleGenerationError
-from schedule.algorithm.slots import (build_real_time_intervals,
-                                      build_stage_allowed_slot_index,
-                                      session_stage_code)
+from schedule.algorithm.slots import (
+    build_real_time_intervals,
+    build_stage_allowed_slot_index,
+    session_stage_code,
+)
 
 logger = logging.getLogger(__name__)
 

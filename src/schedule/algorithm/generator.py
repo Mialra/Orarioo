@@ -14,13 +14,16 @@ from classroom.models import Classroom
 from group.models import Group
 from schedule.algorithm.assignment import solve_session_assignment
 from schedule.algorithm.diagnostics import (
-    BOTTLENECK_RANK, collect_generation_diagnostics,
-    raise_schedule_generation_diagnostics)
-from schedule.algorithm.slots import (build_weekly_slots,
-                                      parse_schedule_config_to_slot_windows)
+    BOTTLENECK_RANK,
+    collect_generation_diagnostics,
+    raise_schedule_generation_diagnostics,
+)
+from schedule.algorithm.slots import (
+    build_weekly_slots,
+    parse_schedule_config_to_slot_windows,
+)
 from schedule.algorithm.tc_assigner import assign_tc_sessions
-from schedule.constants import (AUTO_GENERATED_OBSERVATION,
-                                SAVED_TIMETABLE_PREFIX)
+from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule, TCSession
 from subject.models import Subject
 from teacher.models import Teacher

@@ -11,13 +11,20 @@ from rest_framework import serializers
 from app.constants import STRING_MAX_LENGTH
 from common.errors import build_error_entry
 from common.stages import DEFAULT_STAGE_COLORS, STAGE_COLOR_CHOICES
-from common.validators import (normalize_optional_text, raise_non_field_error,
-                               raise_validation_error,
-                               validate_and_normalize_email,
-                               validate_and_normalize_required_text,
-                               validate_case_insensitive_unique)
-from user.models import (CollaborationTeam, CollaborationTeamInvitation,
-                         CollaborationTeamInvitationStatus, User)
+from common.validators import (
+    normalize_optional_text,
+    raise_non_field_error,
+    raise_validation_error,
+    validate_and_normalize_email,
+    validate_and_normalize_required_text,
+    validate_case_insensitive_unique,
+)
+from user.models import (
+    CollaborationTeam,
+    CollaborationTeamInvitation,
+    CollaborationTeamInvitationStatus,
+    User,
+)
 
 
 class CollaborationTeamSerializer(serializers.ModelSerializer):

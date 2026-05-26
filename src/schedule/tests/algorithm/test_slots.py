@@ -10,9 +10,11 @@ from datetime import time
 
 from django.test import SimpleTestCase
 
-from schedule.algorithm.slots import (build_real_time_intervals,
-                                      build_windows_from_stage_config,
-                                      slot_overlaps)
+from schedule.algorithm.slots import (
+    build_real_time_intervals,
+    build_windows_from_stage_config,
+    slot_overlaps,
+)
 from schedule.tests.algorithm.factories import make_slot, make_week_slots
 
 

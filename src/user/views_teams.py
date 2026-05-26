@@ -8,25 +8,35 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from auditableEntity.audit import (AUDITABLE_ENTITY_TYPES,
-                                   create_stage_audit_entries,
-                                   suppress_audit_events)
+from auditableEntity.audit import (
+    AUDITABLE_ENTITY_TYPES,
+    create_stage_audit_entries,
+    suppress_audit_events,
+)
 from auditableEntity.models import AuditActionType
 from common.errors.exceptions import ResourceConflictError, ValidationAppError
-from common.stages import (DEFAULT_STAGE_COLORS, EducationalStage,
-                           canonical_group_stage)
+from common.stages import DEFAULT_STAGE_COLORS, EducationalStage, canonical_group_stage
 from common.tenancy import get_active_team
 from group.models import Group
-from schedule.algorithm.slots import (STAGE_SLOT_WINDOWS,
-                                      parse_schedule_config_to_slot_windows)
-from user.models import (CollaborationTeam, CollaborationTeamInvitation,
-                         CollaborationTeamInvitationStatus, User)
-from user.serializers import (CollaborationTeamCreateSerializer,
-                              CollaborationTeamInvitationRespondSerializer,
-                              CollaborationTeamInvitationSerializer,
-                              CollaborationTeamInviteSerializer,
-                              OnboardingSerializer, ScheduleConfigSerializer,
-                              UserSerializer)
+from schedule.algorithm.slots import (
+    STAGE_SLOT_WINDOWS,
+    parse_schedule_config_to_slot_windows,
+)
+from user.models import (
+    CollaborationTeam,
+    CollaborationTeamInvitation,
+    CollaborationTeamInvitationStatus,
+    User,
+)
+from user.serializers import (
+    CollaborationTeamCreateSerializer,
+    CollaborationTeamInvitationRespondSerializer,
+    CollaborationTeamInvitationSerializer,
+    CollaborationTeamInviteSerializer,
+    OnboardingSerializer,
+    ScheduleConfigSerializer,
+    UserSerializer,
+)
 
 
 class SetActiveTeamView(APIView):

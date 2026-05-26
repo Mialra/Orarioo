@@ -3,16 +3,27 @@ Signal handlers that persist audit entries for auditable models and M2M changes.
 """
 
 from django.apps import apps
-from django.db.models.signals import (m2m_changed, post_delete, post_save,
-                                      pre_delete, pre_save)
+from django.db.models.signals import (
+    m2m_changed,
+    post_delete,
+    post_save,
+    pre_delete,
+    pre_save,
+)
 
-from auditableEntity.audit import (AUDITABLE_MODEL_LABELS, build_action_detail,
-                                   build_create_changed_fields,
-                                   build_delete_changed_fields,
-                                   build_m2m_changed_fields, build_m2m_detail,
-                                   build_update_changed_fields,
-                                   create_audit_entry, get_instance_name,
-                                   is_audit_suppressed, snapshot_instance)
+from auditableEntity.audit import (
+    AUDITABLE_MODEL_LABELS,
+    build_action_detail,
+    build_create_changed_fields,
+    build_delete_changed_fields,
+    build_m2m_changed_fields,
+    build_m2m_detail,
+    build_update_changed_fields,
+    create_audit_entry,
+    get_instance_name,
+    is_audit_suppressed,
+    snapshot_instance,
+)
 from auditableEntity.models import AuditActionType
 
 SIGNALS_REGISTERED = False

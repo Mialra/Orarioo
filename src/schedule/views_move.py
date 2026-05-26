@@ -10,11 +10,16 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 
-from schedule.algorithm.constraints.hard import (group_daily_limit,
-                                                 session_preference_state,
-                                                 teacher_preference_state)
-from schedule.algorithm.slots import (STAGE_SLOT_WINDOWS, session_stage_code,
-                                      slot_preference_key_from_datetime)
+from schedule.algorithm.constraints.hard import (
+    group_daily_limit,
+    session_preference_state,
+    teacher_preference_state,
+)
+from schedule.algorithm.slots import (
+    STAGE_SLOT_WINDOWS,
+    session_stage_code,
+    slot_preference_key_from_datetime,
+)
 from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 

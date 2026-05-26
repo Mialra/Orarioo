@@ -35,8 +35,7 @@ from datetime import timezone as dt_timezone  # noqa: E402
 from django.contrib.auth import get_user_model  # noqa: E402
 
 from classroom.models import Classroom  # noqa: E402
-from group.models import \
-    EducationalStage as GroupEducationalStage  # noqa: E402
+from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
 from group.models import Group  # noqa: E402
 from schedule.constants import SAVED_TIMETABLE_PREFIX  # noqa: E402
 from schedule.models import Schedule  # noqa: E402
@@ -997,7 +996,6 @@ def create_subjects(teachers, groups, team):  # noqa: C901
 def create_admin_saved_timetable(*, users, team):
     """Create one saved timetable owned by admin user for manual testing."""
     print("\n🗓️ Creating saved timetable for admin...")
-    
 
     admin_user = next(
         (user for user in users if user.email == "direccion.academica@test.com"), None

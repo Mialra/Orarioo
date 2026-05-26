@@ -20,9 +20,13 @@ from schedule.models import Schedule
 from subject.models import Subject
 from teacher.models import Teacher
 from user.admin import UserAdmin
-from user.models import (CollaborationTeam, CollaborationTeamInvitation,
-                         CollaborationTeamInvitationStatus, User,
-                         UserDataExportLog)
+from user.models import (
+    CollaborationTeam,
+    CollaborationTeamInvitation,
+    CollaborationTeamInvitationStatus,
+    User,
+    UserDataExportLog,
+)
 
 
 class UserModelTests(TestCase):

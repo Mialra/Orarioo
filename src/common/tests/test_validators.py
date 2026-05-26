@@ -10,12 +10,14 @@ Uses Django TestCase for DB-backed uniqueness tests; SimpleTestCase elsewhere.
 from django.test import SimpleTestCase, TestCase
 from rest_framework.exceptions import ValidationError
 
-from common.validators.validators import (normalize_optional_text,
-                                          normalize_time_preferences,
-                                          validate_and_normalize_email,
-                                          validate_and_normalize_required_text,
-                                          validate_case_insensitive_unique,
-                                          validate_time_preferences)
+from common.validators.validators import (
+    normalize_optional_text,
+    normalize_time_preferences,
+    validate_and_normalize_email,
+    validate_and_normalize_required_text,
+    validate_case_insensitive_unique,
+    validate_time_preferences,
+)
 from teacher.models import Teacher
 from user.models import CollaborationTeam
 

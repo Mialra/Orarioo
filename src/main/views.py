@@ -7,9 +7,11 @@ from urllib.parse import unquote
 from django.shortcuts import redirect, render
 
 from common.stages import STAGE_COLOR_CHOICES
-from user.views_teams import (_default_schedule_config,
-                              _stage_colors_from_config,
-                              _stage_labels_from_config)
+from user.views_teams import (
+    _default_schedule_config,
+    _stage_colors_from_config,
+    _stage_labels_from_config,
+)
 
 _SCHEDULE_SCRIPTS = [
     "js/schedule-utils.js",

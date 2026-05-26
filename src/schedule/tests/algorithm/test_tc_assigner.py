@@ -11,11 +11,17 @@ from datetime import time
 
 from django.test import SimpleTestCase
 
-from schedule.algorithm.tc_assigner import (_build_unique_tc_slots,
-                                            _compute_exact_hours_deficit,
-                                            _is_dead_gap, _overlaps_any)
-from schedule.tests.algorithm.factories import (make_slot, make_teacher_stub,
-                                                make_week_slots)
+from schedule.algorithm.tc_assigner import (
+    _build_unique_tc_slots,
+    _compute_exact_hours_deficit,
+    _is_dead_gap,
+    _overlaps_any,
+)
+from schedule.tests.algorithm.factories import (
+    make_slot,
+    make_teacher_stub,
+    make_week_slots,
+)
 
 
 class BuildUniqueTcSlotsTest(SimpleTestCase):

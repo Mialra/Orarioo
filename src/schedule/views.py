@@ -23,26 +23,36 @@ from common.errors.exceptions import ValidationAppError
 from group.models import Group
 from schedule.algorithm.evaluator import ScheduleEvaluator
 from schedule.algorithm.slots import parse_schedule_config_to_slot_windows
-from schedule.constants import (AUTO_GENERATED_OBSERVATION,
-                                SAVED_TIMETABLE_PREFIX)
+from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule, ScheduleGenerationJob
 from schedule.serializers import ScheduleSerializer
-from schedule.views_export import (_DAY_ORDER, build_csv_response_for_schedule,
-                                   build_excel_response, build_export_filename,
-                                   build_export_rows, build_export_units,
-                                   build_pdf_units_response,
-                                   build_tc_export_rows,
-                                   build_teacher_workloads,
-                                   resolve_saved_schedule_name)
-from schedule.views_generate import (parse_bool_param,
-                                     parse_generation_options,
-                                     parse_positive_int)
-from schedule.views_move import (WEEKDAY_TO_DAY_NAME,
-                                 build_affected_slot_descriptors,
-                                 build_move_assignments, is_no_changes_move,
-                                 normalize_move_mode, parse_move_slot,
-                                 resolve_slot_datetimes_for_source_week,
-                                 validate_minimal_move_constraints)
+from schedule.views_export import (
+    _DAY_ORDER,
+    build_csv_response_for_schedule,
+    build_excel_response,
+    build_export_filename,
+    build_export_rows,
+    build_export_units,
+    build_pdf_units_response,
+    build_tc_export_rows,
+    build_teacher_workloads,
+    resolve_saved_schedule_name,
+)
+from schedule.views_generate import (
+    parse_bool_param,
+    parse_generation_options,
+    parse_positive_int,
+)
+from schedule.views_move import (
+    WEEKDAY_TO_DAY_NAME,
+    build_affected_slot_descriptors,
+    build_move_assignments,
+    is_no_changes_move,
+    normalize_move_mode,
+    parse_move_slot,
+    resolve_slot_datetimes_for_source_week,
+    validate_minimal_move_constraints,
+)
 from subject.models import SubjectTimePreferenceState
 from teacher.models import Teacher, TeacherTimePreferenceState
 from user.models import User
@@ -57,7 +67,9 @@ def build_stage_windows_for_client(schedule_config=None):
     """
     from common.stages import GROUP_STAGE_TO_CANONICAL
     from schedule.algorithm.slots import (
-        STAGE_SLOT_WINDOWS, parse_schedule_config_to_slot_windows)
+        STAGE_SLOT_WINDOWS,
+        parse_schedule_config_to_slot_windows,
+    )
 
     slot_windows = (
         parse_schedule_config_to_slot_windows(schedule_config) or STAGE_SLOT_WINDOWS

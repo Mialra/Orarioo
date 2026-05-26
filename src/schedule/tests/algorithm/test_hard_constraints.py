@@ -9,12 +9,17 @@ No database access — all objects are SimpleNamespace stubs.
 from django.test import SimpleTestCase
 
 from schedule.algorithm.constraints.hard import (
-    group_daily_limit, group_weekly_limit, validate_group_and_teacher_capacity)
-from schedule.algorithm.errors import (ScheduleCapacityError,
-                                       ScheduleGenerationError)
-from schedule.tests.algorithm.factories import (make_group_stub, make_session,
-                                                make_teacher_stub,
-                                                make_week_slots)
+    group_daily_limit,
+    group_weekly_limit,
+    validate_group_and_teacher_capacity,
+)
+from schedule.algorithm.errors import ScheduleCapacityError, ScheduleGenerationError
+from schedule.tests.algorithm.factories import (
+    make_group_stub,
+    make_session,
+    make_teacher_stub,
+    make_week_slots,
+)
 
 
 class GroupLimitsTest(SimpleTestCase):

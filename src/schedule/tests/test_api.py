@@ -17,16 +17,17 @@ from group.models import EducationalStage, Group
 from schedule.algorithm import assignment as schedule_assignment
 from schedule.algorithm.diagnostics import collect_generation_diagnostics
 from schedule.algorithm.generator import BasicScheduleGenerator
-from schedule.algorithm.slots import (STAGE_PRIMARY,
-                                      build_slot_preference_index,
-                                      build_weekly_slots,
-                                      build_windows_from_stage_config,
-                                      parse_schedule_config_to_slot_windows,
-                                      slot_instance_key,
-                                      slot_preference_key_from_datetime)
+from schedule.algorithm.slots import (
+    STAGE_PRIMARY,
+    build_slot_preference_index,
+    build_weekly_slots,
+    build_windows_from_stage_config,
+    parse_schedule_config_to_slot_windows,
+    slot_instance_key,
+    slot_preference_key_from_datetime,
+)
 from schedule.algorithm.tc_assigner import assign_tc_sessions
-from schedule.constants import (AUTO_GENERATED_OBSERVATION,
-                                SAVED_TIMETABLE_PREFIX)
+from schedule.constants import AUTO_GENERATED_OBSERVATION, SAVED_TIMETABLE_PREFIX
 from schedule.models import Schedule, TCSession
 from schedule.views_export import REPORTLAB_AVAILABLE
 from subject.models import Subject, SubjectTimePreferenceState, SubjectType
@@ -2412,8 +2413,10 @@ class TestTCAssigner(TestCase):
             start_time=time(11, 30),
             end_time=time(12, 0),
         )
-        from schedule.algorithm.tc_assigner import (_compute_busy_intervals,
-                                                    _overlaps_any)
+        from schedule.algorithm.tc_assigner import (
+            _compute_busy_intervals,
+            _overlaps_any,
+        )
 
         busy = _compute_busy_intervals([schedule])
         self.assertTrue(

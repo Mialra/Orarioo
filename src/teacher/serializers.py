@@ -5,8 +5,7 @@ Serializer for teacher CRUD operations with hour-range validation and audit fiel
 from rest_framework import serializers
 
 from common.errors import build_error_entry
-from common.serializer_utils import (AUDIT_READ_ONLY_FIELD_NAMES,
-                                     with_audit_fields)
+from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
 from common.serializers import TeamScopedModelSerializerMixin
 from common.validators import raise_validation_error, validate_time_preferences
 from namedEntity.serializers import NamedEntityNameValidationMixin
