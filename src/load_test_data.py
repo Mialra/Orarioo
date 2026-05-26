@@ -997,6 +997,7 @@ def create_subjects(teachers, groups, team):  # noqa: C901
 def create_admin_saved_timetable(*, users, team):
     """Create one saved timetable owned by admin user for manual testing."""
     print("\n🗓️ Creating saved timetable for admin...")
+    
 
     admin_user = next(
         (user for user in users if user.email == "direccion.academica@test.com"), None
