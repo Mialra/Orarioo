@@ -37,6 +37,58 @@
     session_duration: 60,
   };
 
+  function padTwo(n) {
+    return String(n).padStart(2, "0");
+  }
+
+  function buildStageStartOptions(selected) {
+    var html = "";
+    for (var h = 0; h < 24; h++) {
+      var mins = [0, 15, 30, 45];
+      for (var mi = 0; mi < mins.length; mi++) {
+        var val = padTwo(h) + ":" + padTwo(mins[mi]);
+        html += '<option value="' + val + '"' + (val === selected ? " selected" : "") + ">" + val + "</option>";
+      }
+    }
+    return html;
+  }
+
+  function buildStageEndOptions(startVal, selected) {
+    var startParts = (startVal || "00:00").split(":");
+    var startMins = parseInt(startParts[1], 10);
+    var validMins = startMins === 0 || startMins === 30 ? [0, 30] : [15, 45];
+    var startTotal = parseInt(startParts[0], 10) * 60 + startMins;
+    var html = "";
+    for (var h = 0; h < 24; h++) {
+      for (var mi = 0; mi < validMins.length; mi++) {
+        var m = validMins[mi];
+        var total = h * 60 + m;
+        if (total <= startTotal) {
+          continue;
+        }
+        var val = padTwo(h) + ":" + padTwo(m);
+        html += '<option value="' + val + '"' + (val === selected ? " selected" : "") + ">" + val + "</option>";
+      }
+    }
+    return html;
+  }
+
+  function refreshStageEndOptions(item) {
+    var startEl = item && item.querySelector(".ob-stage-start");
+    var endEl = item && item.querySelector(".ob-stage-end");
+    if (!startEl || !endEl) {
+      return;
+    }
+    var currentEnd = endEl.value;
+    endEl.innerHTML = buildStageEndOptions(startEl.value, currentEnd);
+    if (!endEl.value) {
+      var firstOpt = endEl.querySelector("option");
+      if (firstOpt) {
+        endEl.value = firstOpt.value;
+      }
+    }
+  }
+
   var form = document.getElementById("onboarding-form");
   var layout = document.querySelector(".auth-layout");
   var card = document.querySelector(".onboarding-card");
@@ -327,12 +379,13 @@
   function buildBreakRow(breakCfg) {
     var currentBreak = breakCfg || {};
     return (
-      '<div class="row g-2 align-items-end ob-break-row mb-2">' +
+      '<div class="ob-break-row mb-2">' +
+      '<div class="row g-2 align-items-end">' +
       '<div class="col">' +
       '<label class="form-label small fw-semibold mb-1">Hora de inicio</label>' +
-      '<input type="time" class="form-control form-control-sm ob-break-start" value="' +
-      escapeHtml(currentBreak.start || "") +
-      '">' +
+      '<select class="form-select form-select-sm ob-break-start">' +
+      buildStageStartOptions(currentBreak.start || "") +
+      "</select>" +
       "</div>" +
       '<div class="col-auto d-flex align-items-end pb-1">' +
       '<span class="badge bg-light text-muted border px-2 py-2"' +
@@ -342,6 +395,8 @@
       '<div class="col-auto pt-3">' +
       '<button type="button" class="btn btn-sm btn-outline-danger ob-remove-break" aria-label="Eliminar recreo">&times;</button>' +
       "</div>" +
+      "</div>" +
+      '<div class="ob-break-error text-danger small mt-1 d-none"></div>' +
       "</div>"
     );
   }
@@ -444,16 +499,16 @@
       '<div class="col-6">' +
       '<label class="form-label fw-semibold mb-0">Entrada</label>' +
       '<span class="text-danger" aria-hidden="true">*</span>' +
-      '<input type="time" class="form-control form-control-sm ob-stage-start" value="' +
-      escapeHtml(start) +
-      '">' +
+      '<select class="form-select form-select-sm ob-stage-start">' +
+      buildStageStartOptions(start) +
+      "</select>" +
       "</div>" +
       '<div class="col-6">' +
       '<label class="form-label fw-semibold mb-0">Salida</label>' +
       '<span class="text-danger" aria-hidden="true">*</span>' +
-      '<input type="time" class="form-control form-control-sm ob-stage-end" value="' +
-      escapeHtml(end) +
-      '">' +
+      '<select class="form-select form-select-sm ob-stage-end">' +
+      buildStageEndOptions(start, end) +
+      "</select>" +
       "</div>" +
       "</div>" +
       '<div class="ob-breaks-section">' +
@@ -585,7 +640,9 @@
         if (!list) {
           return;
         }
-        list.insertAdjacentHTML("beforeend", buildBreakRow({}));
+        var stageStartEl = item && item.querySelector(".ob-stage-start");
+        var defaultBreakStart = stageStartEl ? stageStartEl.value : "";
+        list.insertAdjacentHTML("beforeend", buildBreakRow({ start: defaultBreakStart }));
         bindAccordionEvents();
         refreshBreakEmptyState(item);
         updateStageSummary(item);
@@ -619,9 +676,17 @@
       };
     });
 
-    stagesContainer.querySelectorAll(".ob-stage-start, .ob-stage-end").forEach(function (input) {
-      input.oninput = function () {
-        updateStageSummary(input.closest("[data-stage]"));
+    stagesContainer.querySelectorAll(".ob-stage-start").forEach(function (sel) {
+      sel.onchange = function () {
+        var item = sel.closest("[data-stage]");
+        refreshStageEndOptions(item);
+        updateStageSummary(item);
+      };
+    });
+
+    stagesContainer.querySelectorAll(".ob-stage-end").forEach(function (sel) {
+      sel.onchange = function () {
+        updateStageSummary(sel.closest("[data-stage]"));
       };
     });
   }
@@ -631,18 +696,43 @@
     if (!item) {
       return breaks;
     }
+    var stageStartEl = item.querySelector(".ob-stage-start");
+    var stageEndEl = item.querySelector(".ob-stage-end");
+    var stageStart = stageStartEl ? stageStartEl.value : "";
+    var stageEnd = stageEndEl ? stageEndEl.value : "";
+    var stageStartMins = stageStart ? parseInt(stageStart.split(":")[0], 10) * 60 + parseInt(stageStart.split(":")[1], 10) : 0;
+    var stageEndMins = stageEnd ? parseInt(stageEnd.split(":")[0], 10) * 60 + parseInt(stageEnd.split(":")[1], 10) : 24 * 60;
+
     var rows = Array.prototype.slice.call(item.querySelectorAll(".ob-break-row"));
+    var hasError = false;
     for (var i = 0; i < rows.length; i += 1) {
       var row = rows[i];
+      var errorEl = row.querySelector(".ob-break-error");
       var startEl = row.querySelector(".ob-break-start");
       var startVal = startEl ? startEl.value : "";
+      if (errorEl) {
+        errorEl.textContent = "";
+        errorEl.classList.add("d-none");
+      }
       if (!startVal) {
         continue;
       }
       var parts = startVal.split(":");
-      var total = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10) + 30;
-      var endVal = String(Math.floor(total / 60) % 24).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0");
+      var breakStartMins = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+      var breakEndMins = breakStartMins + 30;
+      if (stageStart && stageEnd && (breakStartMins < stageStartMins || breakEndMins > stageEndMins)) {
+        if (errorEl) {
+          errorEl.textContent = "El recreo (" + startVal + "–" + padTwo(Math.floor(breakEndMins / 60) % 24) + ":" + padTwo(breakEndMins % 60) + ") debe estar dentro del horario del tramo (" + stageStart + "–" + stageEnd + ").";
+          errorEl.classList.remove("d-none");
+        }
+        hasError = true;
+        continue;
+      }
+      var endVal = padTwo(Math.floor(breakEndMins / 60) % 24) + ":" + padTwo(breakEndMins % 60);
       breaks.push({ start: startVal, end: endVal });
+    }
+    if (hasError) {
+      return null;
     }
     return breaks;
   }

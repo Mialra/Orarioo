@@ -459,6 +459,10 @@ def _validate_hhmm(value, field_label):
         raise serializers.ValidationError(
             {field_label: f"'{value}' no es una hora válida en formato HH:MM."}
         )
+    if int(m) not in (0, 15, 30, 45):
+        raise serializers.ValidationError(
+            {field_label: f"'{value}' — los minutos deben ser 00, 15, 30 o 45."}
+        )
     return value
 
 
