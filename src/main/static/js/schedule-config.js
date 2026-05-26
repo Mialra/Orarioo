@@ -44,6 +44,62 @@
     ALEVELS: "purple",
   };
 
+  // ── Time-select helpers ───────────────────────────────────────────
+
+  function scPadTwo(n) {
+    return String(n).padStart(2, "0");
+  }
+
+  function scBuildStartOptions(selected) {
+    let html = "";
+    for (let h = 0; h < 24; h++) {
+      for (const m of [0, 15, 30, 45]) {
+        const val = scPadTwo(h) + ":" + scPadTwo(m);
+        html += `<option value="${val}"${val === selected ? " selected" : ""}>${val}</option>`;
+      }
+    }
+    return html;
+  }
+
+  function scBuildEndOptions(startVal, selected) {
+    const startParts = (startVal || "00:00").split(":");
+    const startMins = parseInt(startParts[1], 10);
+    const validMins = startMins === 0 || startMins === 30 ? [0, 30] : [15, 45];
+    const startTotal = parseInt(startParts[0], 10) * 60 + startMins;
+    let html = "";
+    for (let h = 0; h < 24; h++) {
+      for (const m of validMins) {
+        const total = h * 60 + m;
+        if (total <= startTotal) {
+          continue;
+        }
+        const val = scPadTwo(h) + ":" + scPadTwo(m);
+        html += `<option value="${val}"${val === selected ? " selected" : ""}>${val}</option>`;
+      }
+    }
+    return html;
+  }
+
+  function scRefreshEndOptions(startVal, currentEnd) {
+    if (!elements.endTimeInput) {
+      return;
+    }
+    elements.endTimeInput.innerHTML = scBuildEndOptions(startVal, currentEnd);
+    if (!elements.endTimeInput.value) {
+      const first = elements.endTimeInput.querySelector("option");
+      if (first) {
+        elements.endTimeInput.value = first.value;
+      }
+    }
+  }
+
+  function scInitSelects(startVal, endVal) {
+    if (elements.startTimeInput) {
+      elements.startTimeInput.innerHTML = scBuildStartOptions(startVal);
+    }
+    scRefreshEndOptions(startVal, endVal);
+  }
+
   // ── State ─────────────────────────────────────────────────────────
 
   /** Full schedule config object currently in sync with the server. */
@@ -330,13 +386,11 @@
   function buildBreakRow(cfg) {
     const current = cfg || {};
 
-    const startInput = dom.createElement("input", {
-      className: "form-control form-control-sm sc-break-start",
-      attrs: { type: "time", "aria-label": "Inicio del recreo" },
+    const startInput = dom.createElement("select", {
+      className: "form-select form-select-sm sc-break-start",
+      attrs: { "aria-label": "Inicio del recreo" },
     });
-    if (current.start) {
-      startInput.value = current.start;
-    }
+    startInput.innerHTML = scBuildStartOptions(current.start || "");
 
     const durationBadge = dom.createElement("span", {
       className: "badge bg-light text-muted border px-2 py-2",
@@ -409,7 +463,8 @@
     if (!elements.breaksList) {
       return;
     }
-    elements.breaksList.appendChild(buildBreakRow({}));
+    const defaultStart = elements.startTimeInput ? elements.startTimeInput.value : "";
+    elements.breaksList.appendChild(buildBreakRow({ start: defaultStart }));
     refreshBreaksEmptyState();
     if (window.lucide && typeof window.lucide.createIcons === "function") {
       window.lucide.createIcons();
@@ -439,8 +494,18 @@
     if (!elements.breaksList) {
       return [];
     }
+    const stageStart = elements.startTimeInput ? elements.startTimeInput.value : "";
+    const stageEnd = elements.endTimeInput ? elements.endTimeInput.value : "";
+    const stageStartMins = stageStart
+      ? parseInt(stageStart.split(":")[0], 10) * 60 + parseInt(stageStart.split(":")[1], 10)
+      : 0;
+    const stageEndMins = stageEnd
+      ? parseInt(stageEnd.split(":")[0], 10) * 60 + parseInt(stageEnd.split(":")[1], 10)
+      : 24 * 60;
+
     const rows = Array.from(elements.breaksList.querySelectorAll(".sc-break-row"));
     const breaks = [];
+    const outOfRange = [];
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const startEl = row.querySelector(".sc-break-start");
@@ -448,8 +513,28 @@
       if (!start) {
         continue;
       }
+      const breakStartMins = parseInt(start.split(":")[0], 10) * 60 + parseInt(start.split(":")[1], 10);
+      const breakEndMins = breakStartMins + BREAK_DURATION_MINUTES;
+      if (stageStart && stageEnd && (breakStartMins < stageStartMins || breakEndMins > stageEndMins)) {
+        const end = addMinutesToTime(start, BREAK_DURATION_MINUTES);
+        outOfRange.push(start + "–" + end);
+        continue;
+      }
       const end = addMinutesToTime(start, BREAK_DURATION_MINUTES);
       breaks.push({ start: start, end: end });
+    }
+    if (outOfRange.length > 0) {
+      if (elements.breaksError) {
+        elements.breaksError.textContent =
+          "El recreo " +
+          outOfRange.join(", ") +
+          " debe estar dentro del horario del tramo (" +
+          stageStart +
+          "–" +
+          stageEnd +
+          ").";
+      }
+      return null;
     }
     return breaks;
   }
@@ -604,12 +689,7 @@
     if (elements.nameInput) {
       elements.nameInput.value = "";
     }
-    if (elements.startTimeInput) {
-      elements.startTimeInput.value = "09:00";
-    }
-    if (elements.endTimeInput) {
-      elements.endTimeInput.value = "14:00";
-    }
+    scInitSelects("09:00", "14:00");
     renderColorOptions("blue");
     renderBreaksList([]);
     clearFormErrors();
@@ -685,12 +765,9 @@
       if (elements.nameInput) {
         elements.nameInput.value = cfg ? cfg.label || "" : "";
       }
-      if (elements.startTimeInput) {
-        elements.startTimeInput.value = cfg ? cfg.start_time || "09:00" : "09:00";
-      }
-      if (elements.endTimeInput) {
-        elements.endTimeInput.value = cfg ? cfg.end_time || "14:00" : "14:00";
-      }
+      const editStart = cfg ? cfg.start_time || "09:00" : "09:00";
+      const editEnd = cfg ? cfg.end_time || "14:00" : "14:00";
+      scInitSelects(editStart, editEnd);
       renderColorOptions(getStageColor(code, cfg));
       renderBreaksList(cfg ? cfg.breaks || [] : []);
       clearFormErrors();
@@ -937,6 +1014,13 @@
     elements.deleteConfirmBtn.addEventListener("click", deleteStage);
   }
 
+  // Regenerate end-time options when start changes
+  if (elements.startTimeInput) {
+    elements.startTimeInput.addEventListener("change", function () {
+      scRefreshEndOptions(elements.startTimeInput.value, elements.endTimeInput ? elements.endTimeInput.value : "");
+    });
+  }
+
   // Reset form state when the create/edit modal is fully hidden
   if (elements.modal) {
     elements.modal.addEventListener("hidden.bs.modal", function () {
@@ -955,6 +1039,7 @@
 
   // ── Init ──────────────────────────────────────────────────────────
 
+  scInitSelects("09:00", "14:00");
   renderColorOptions("blue");
   loadConfig();
 })();

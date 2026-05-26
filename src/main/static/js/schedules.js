@@ -685,17 +685,18 @@
           .filter(Boolean),
       ),
     );
+    const teacherWorkloadsByName =
+      safeOptions.teacherWorkloadsByName || buildTeacherWorkloadsByNameFromSessions(sessions);
     const teacherNames = Array.from(
       new Set(
         (sessions || [])
           .map(function (s) {
             return s.teacher_name;
           })
-          .filter(Boolean),
+          .filter(Boolean)
+          .concat(Object.keys(teacherWorkloadsByName)),
       ),
     );
-    const teacherWorkloadsByName =
-      safeOptions.teacherWorkloadsByName || buildTeacherWorkloadsByNameFromSessions(sessions);
     const teacherLabelsByName = teacherNames.reduce(function (acc, teacherName) {
       const workload = teacherWorkloadsByName && teacherWorkloadsByName[teacherName];
       const hoursLabel =

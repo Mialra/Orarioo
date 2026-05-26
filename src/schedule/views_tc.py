@@ -34,8 +34,10 @@ def _is_teacher_unavailable(teacher, day, start_time, end_time):
     return False
 
 
-def _teacher_has_schedule_at(teacher_id, team, day, start_time, timetable_name=None):
-    """Return True if the teacher already has a Schedule at (day, start_time) for the team.
+def _teacher_has_schedule_at(
+    teacher_id, team, day, start_time, end_time, timetable_name=None
+):
+    """Return True if the teacher has any Schedule that overlaps [start_time, end_time) on day.
 
     If timetable_name is given, checks only that saved timetable's schedules.
     Otherwise checks only the current draft (excludes all saved timetables).
@@ -45,7 +47,8 @@ def _teacher_has_schedule_at(teacher_id, team, day, start_time, timetable_name=N
         teacher_id=teacher_id,
         team=team,
         start_time__iso_week_day=day + 1,
-        start_time__time=start_time,
+        start_time__time__lt=end_time,
+        end_time__time__gt=start_time,
     )
     if timetable_name:
         qs = qs.filter(observations=f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}")
@@ -55,9 +58,9 @@ def _teacher_has_schedule_at(teacher_id, team, day, start_time, timetable_name=N
 
 
 def _teacher_has_tc_at(
-    teacher_id, team, day, start_time, exclude_id=None, timetable_name=None
+    teacher_id, team, day, start_time, end_time, exclude_id=None, timetable_name=None
 ):
-    """Return True if the teacher already has a TCSession at (day, start_time) for the team.
+    """Return True if the teacher has any TCSession that overlaps [start_time, end_time) on day.
 
     If timetable_name is given, checks only that saved timetable's TC sessions.
     Otherwise checks only draft TC sessions (observations="").
@@ -68,7 +71,8 @@ def _teacher_has_tc_at(
         team=team,
         observations=obs,
         day=day,
-        start_time=start_time,
+        start_time__lt=end_time,
+        end_time__gt=start_time,
     )
     if exclude_id is not None:
         qs = qs.exclude(pk=exclude_id)
@@ -80,55 +84,6 @@ def _slot_duration(start_time, end_time):
     start_delta = timedelta(hours=start_time.hour, minutes=start_time.minute)
     end_delta = timedelta(hours=end_time.hour, minutes=end_time.minute)
     return end_delta - start_delta
-
-
-def _build_hours_warning(teacher, team, extra_minutes):
-    """Return a warning string if adding extra_minutes violates weekly_hours_exact, else None."""
-    if not teacher.weekly_hours_exact:
-        return None
-    max_minutes = teacher.max_weekly_hours * 60 + teacher.max_weekly_minutes
-    existing_tc_minutes = _sum_tc_minutes(teacher, team)
-    schedule_minutes = _sum_schedule_minutes(teacher, team)
-    total_after = schedule_minutes + existing_tc_minutes + extra_minutes
-    if total_after > max_minutes:
-        total_hours = total_after // 60
-        return (
-            f"El docente {teacher.name} pasaría a tener {total_hours}h, "
-            f"superando sus horas exactas de {teacher.max_weekly_hours}h."
-        )
-    return None
-
-
-def _build_delete_hours_warning(teacher, team, removed_minutes):
-    """Return a warning string if removing removed_minutes violates weekly_hours_exact, else None."""
-    if not teacher.weekly_hours_exact:
-        return None
-    max_minutes = teacher.max_weekly_hours * 60 + teacher.max_weekly_minutes
-    existing_tc_minutes = _sum_tc_minutes(teacher, team)
-    schedule_minutes = _sum_schedule_minutes(teacher, team)
-    total_after = schedule_minutes + existing_tc_minutes - removed_minutes
-    if total_after < max_minutes:
-        total_hours = total_after // 60
-        return (
-            f"El docente {teacher.name} pasa a tener {total_hours}h. "
-            f"Sus horas exactas son {teacher.max_weekly_hours}h."
-        )
-    return None
-
-
-def _sum_tc_minutes(teacher, team):
-    total = 0
-    for tc in TCSession.objects.filter(teacher=teacher, team=team):
-        total += _slot_duration(tc.start_time, tc.end_time).seconds // 60
-    return total
-
-
-def _sum_schedule_minutes(teacher, team):
-    total = 0
-    for sch in Schedule.objects.filter(teacher=teacher, team=team):
-        delta = sch.end_time - sch.start_time
-        total += int(delta.total_seconds()) // 60
-    return total
 
 
 # ---------------------------------------------------------------------------
@@ -262,19 +217,21 @@ def _check_tc_slot_conflicts(
     teacher, team, day, start_time, end_time, timetable_name=None
 ):
     """Return a conflict Response if the slot is taken, else None."""
-    if _teacher_has_schedule_at(teacher.id, team, day, start_time, timetable_name):
+    if _teacher_has_schedule_at(
+        teacher.id, team, day, start_time, end_time, timetable_name
+    ):
         return Response(
             {
-                "detail": f"{teacher.name} ya tiene una clase el {_DAY_LABELS[day]} a las {start_time:%H:%M}."
+                "detail": f"{teacher.name} ya tiene una clase que solapa con el tramo {start_time:%H:%M}–{end_time:%H:%M} el {_DAY_LABELS[day]}."
             },
             status=status.HTTP_409_CONFLICT,
         )
     if _teacher_has_tc_at(
-        teacher.id, team, day, start_time, timetable_name=timetable_name
+        teacher.id, team, day, start_time, end_time, timetable_name=timetable_name
     ):
         return Response(
             {
-                "detail": f"{teacher.name} ya tiene una guardia TC el {_DAY_LABELS[day]} a las {start_time:%H:%M}."
+                "detail": f"{teacher.name} ya tiene una guardia TC que solapa con el tramo {start_time:%H:%M}–{end_time:%H:%M} el {_DAY_LABELS[day]}."
             },
             status=status.HTTP_409_CONFLICT,
         )
@@ -310,9 +267,6 @@ class TCSessionCreateView(APIView):
         if conflict:
             return conflict
 
-        duration_minutes = _slot_duration(start_time, end_time).seconds // 60
-        warning = _build_hours_warning(teacher, team, duration_minutes)
-
         observations = (
             f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}" if timetable_name else ""
         )
@@ -325,10 +279,9 @@ class TCSessionCreateView(APIView):
             observations=observations,
         )
 
-        response_data = {"tc_session": TCSessionSerializer(tc).data}
-        if warning:
-            response_data["warning"] = warning
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response(
+            {"tc_session": TCSessionSerializer(tc).data}, status=status.HTTP_201_CREATED
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -346,14 +299,8 @@ class TCSessionDeleteView(APIView):
         except TCSession.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        duration_minutes = _slot_duration(tc.start_time, tc.end_time).seconds // 60
-        warning = _build_delete_hours_warning(tc.teacher, team, duration_minutes)
         tc.delete()
-
-        response_data = {"deleted": True}
-        if warning:
-            response_data["warning"] = warning
-        return Response(response_data, status=status.HTTP_200_OK)
+        return Response({"deleted": True}, status=status.HTTP_200_OK)
 
 
 # ---------------------------------------------------------------------------
@@ -408,7 +355,12 @@ class TCSessionSwapView(APIView):
 
         # Check that teacher A can occupy slot B
         if _teacher_has_schedule_at(
-            tc_a.teacher_id, team, tc_b.day, tc_b.start_time, swap_timetable_name
+            tc_a.teacher_id,
+            team,
+            tc_b.day,
+            tc_b.start_time,
+            tc_b.end_time,
+            swap_timetable_name,
         ):
             return Response(
                 {
@@ -422,7 +374,12 @@ class TCSessionSwapView(APIView):
 
         # Check that teacher B can occupy slot A
         if _teacher_has_schedule_at(
-            tc_b.teacher_id, team, tc_a.day, tc_a.start_time, swap_timetable_name
+            tc_b.teacher_id,
+            team,
+            tc_a.day,
+            tc_a.start_time,
+            tc_a.end_time,
+            swap_timetable_name,
         ):
             return Response(
                 {

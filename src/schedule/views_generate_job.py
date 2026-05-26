@@ -7,6 +7,7 @@ from django.db import connection
 from django.utils import timezone
 
 from schedule.algorithm import BasicScheduleGenerator, ScheduleGenerationError
+from schedule.algorithm.assignment import _trim_process_memory
 from schedule.models import ScheduleGenerationJob
 
 logger = logging.getLogger(__name__)
@@ -86,3 +87,4 @@ def run_generation_job(
     finally:
         connection.close()
         gc.collect()
+        _trim_process_memory()
