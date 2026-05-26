@@ -4,10 +4,8 @@ Serializer mixin for name validation shared by all NamedEntity-backed serializer
 
 from app.constants import STRING_MAX_LENGTH
 from common.tenancy import get_active_team
-from common.validators import (
-    validate_and_normalize_required_text,
-    validate_case_insensitive_unique,
-)
+from common.validators import (validate_and_normalize_required_text,
+                               validate_case_insensitive_unique)
 
 
 class NamedEntityNameValidationMixin:

@@ -8,7 +8,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from auditableEntity.audit import format_changed_fields_for_export, get_field_label
+from auditableEntity.audit import (format_changed_fields_for_export,
+                                   get_field_label)
 from auditableEntity.models import AuditableEntity, AuditActionType, AuditEntry
 from classroom.models import Classroom
 from common.export_utils import REPORTLAB_AVAILABLE

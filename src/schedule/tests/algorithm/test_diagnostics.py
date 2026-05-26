@@ -9,21 +9,14 @@ No database access.
 
 from django.test import SimpleTestCase
 
-from schedule.algorithm.diagnostics import (
-    BOTTLENECK_RANK,
-    CAPACITY_RANK,
-    CONFIGURATION_RANK,
-    FALLBACK_RANK,
-    build_diagnostic,
-    collect_generation_diagnostics,
-    sort_diagnostics,
-)
-from schedule.tests.algorithm.factories import (
-    make_group_stub,
-    make_session,
-    make_teacher_stub,
-    make_week_slots,
-)
+from schedule.algorithm.diagnostics import (BOTTLENECK_RANK, CAPACITY_RANK,
+                                            CONFIGURATION_RANK, FALLBACK_RANK,
+                                            build_diagnostic,
+                                            collect_generation_diagnostics,
+                                            sort_diagnostics)
+from schedule.tests.algorithm.factories import (make_group_stub, make_session,
+                                                make_teacher_stub,
+                                                make_week_slots)
 
 
 class BuildDiagnosticTest(SimpleTestCase):

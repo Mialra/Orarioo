@@ -6,18 +6,15 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from user.views import CustomTokenObtainPairView, UserSelfUpdateView, UserViewSet
+from user.views import (CustomTokenObtainPairView, UserSelfUpdateView,
+                        UserViewSet)
 from user.views_account import UserAccountDeletionView
-from user.views_teams import (
-    CollaborationTeamCreateView,
-    CollaborationTeamInvitationListView,
-    CollaborationTeamInvitationRespondView,
-    CollaborationTeamInviteView,
-    CollaborationTeamLeaveView,
-    OnboardingView,
-    ScheduleConfigView,
-    SetActiveTeamView,
-)
+from user.views_teams import (CollaborationTeamCreateView,
+                              CollaborationTeamInvitationListView,
+                              CollaborationTeamInvitationRespondView,
+                              CollaborationTeamInviteView,
+                              CollaborationTeamLeaveView, OnboardingView,
+                              ScheduleConfigView, SetActiveTeamView)
 
 router = DefaultRouter()
 router.register(r"users", UserViewSet, basename="user")

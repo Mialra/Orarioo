@@ -9,20 +9,13 @@ No database access — all inputs are built from pure-dict factories.
 from django.test import SimpleTestCase
 
 from schedule.algorithm.constraints.soft import (
-    PREFER_NO_WEIGHT_PENALTY,
-    PREFER_YES_WEIGHT,
-    SUBJECT_DAY_SPREAD_WEIGHT,
-    TEACHER_GAP_WEIGHT_PENALTY,
-    TEACHER_PREFER_NO_WEIGHT_PENALTY,
-    TEACHER_PREFER_YES_WEIGHT,
-    evaluate_soft_score,
-)
-from schedule.tests.algorithm.factories import (
-    make_session,
-    make_subject_stub,
-    make_teacher_stub,
-    make_week_slots,
-)
+    PREFER_NO_WEIGHT_PENALTY, PREFER_YES_WEIGHT, SUBJECT_DAY_SPREAD_WEIGHT,
+    TEACHER_GAP_WEIGHT_PENALTY, TEACHER_PREFER_NO_WEIGHT_PENALTY,
+    TEACHER_PREFER_YES_WEIGHT, evaluate_soft_score)
+from schedule.tests.algorithm.factories import (make_session,
+                                                make_subject_stub,
+                                                make_teacher_stub,
+                                                make_week_slots)
 from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 

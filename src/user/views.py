@@ -19,13 +19,9 @@ from common.drf import AuditActorViewMixin, StandardPagination
 from common.tenancy import get_active_team
 from main.views import render_admin_dashboard
 from user.models import User
-from user.serializers import (
-    LoginSerializer,
-    UserChangePasswordSerializer,
-    UserCreateSerializer,
-    UserSerializer,
-    UserUpdateSerializer,
-)
+from user.serializers import (LoginSerializer, UserChangePasswordSerializer,
+                              UserCreateSerializer, UserSerializer,
+                              UserUpdateSerializer)
 
 logger = logging.getLogger(__name__)
 

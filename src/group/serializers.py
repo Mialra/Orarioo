@@ -4,7 +4,8 @@ Serializer for group CRUD operations with stage display and shared audit fields.
 
 from rest_framework import serializers
 
-from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
+from common.serializer_utils import (AUDIT_READ_ONLY_FIELD_NAMES,
+                                     with_audit_fields)
 from common.serializers import TeamScopedModelSerializerMixin
 from common.stages import DEFAULT_STAGE_COLORS, canonical_group_stage
 from common.tenancy import get_active_team

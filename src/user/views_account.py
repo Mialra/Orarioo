@@ -14,16 +14,11 @@ from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.token_blacklist.models import (
-    BlacklistedToken,
-    OutstandingToken,
-)
+from rest_framework_simplejwt.token_blacklist.models import (BlacklistedToken,
+                                                             OutstandingToken)
 
-from auditableEntity.audit import (
-    AuditActionType,
-    create_audit_entry,
-    suppress_audit_events,
-)
+from auditableEntity.audit import (AuditActionType, create_audit_entry,
+                                   suppress_audit_events)
 from auditableEntity.models import AuditEntry
 from securityIncident.models import SecurityIncident
 from user.models import CollaborationTeamInvitation, User, UserDataExportLog

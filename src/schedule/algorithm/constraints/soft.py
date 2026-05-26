@@ -4,16 +4,11 @@ All functions in this module build weighted objective terms that are maximised
 after a feasible solution has been found.  They never make the model infeasible.
 """
 
-from schedule.algorithm.constraints.hard import (
-    session_preference_state,
-    teacher_preference_state,
-)
-from schedule.algorithm.slots import (
-    build_slot_day_index,
-    build_slot_preference_index,
-    session_stage_code,
-    slot_time_bounds,
-)
+from schedule.algorithm.constraints.hard import (session_preference_state,
+                                                 teacher_preference_state)
+from schedule.algorithm.slots import (build_slot_day_index,
+                                      build_slot_preference_index,
+                                      session_stage_code, slot_time_bounds)
 from subject.models import SubjectTimePreferenceState
 from teacher.models import TeacherTimePreferenceState
 

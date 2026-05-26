@@ -5,7 +5,8 @@ Serializer for classroom CRUD operations with shared audit fields.
 from rest_framework import serializers
 
 from classroom.models import Classroom
-from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
+from common.serializer_utils import (AUDIT_READ_ONLY_FIELD_NAMES,
+                                     with_audit_fields)
 from common.serializers import TeamScopedModelSerializerMixin
 from namedEntity.serializers import NamedEntityNameValidationMixin
 

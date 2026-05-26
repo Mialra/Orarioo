@@ -6,7 +6,8 @@ from rest_framework import serializers
 
 from app.constants import MAX_LENGTH_EXTENDED
 from classroom.models import Classroom
-from common.serializer_utils import AUDIT_READ_ONLY_FIELD_NAMES, with_audit_fields
+from common.serializer_utils import (AUDIT_READ_ONLY_FIELD_NAMES,
+                                     with_audit_fields)
 from common.serializers import TeamScopedModelSerializerMixin
 from common.stages import DEFAULT_STAGE_COLORS, canonical_group_stage
 from common.validators import raise_validation_error, validate_time_preferences

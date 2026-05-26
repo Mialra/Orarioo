@@ -7,14 +7,8 @@ from django.urls import path
 from classroom.views import admin_classrooms
 from common.admin import build_admin_tab_view
 from group.views import admin_groups
-from main.views import (
-    dashboard,
-    onboarding,
-    privacy_policy,
-    root_redirect,
-    security_protocol,
-    terms_and_conditions,
-)
+from main.views import (dashboard, onboarding, privacy_policy, root_redirect,
+                        security_protocol, terms_and_conditions)
 from main.views_manual import UserManualPDFView
 from subject.views import admin_subjects
 from teacher.views import admin_teachers

@@ -34,7 +34,9 @@ def _is_teacher_unavailable(teacher, day, start_time, end_time):
     return False
 
 
-def _teacher_has_schedule_at(teacher_id, team, day, start_time, end_time, timetable_name=None):
+def _teacher_has_schedule_at(
+    teacher_id, team, day, start_time, end_time, timetable_name=None
+):
     """Return True if the teacher has any Schedule that overlaps [start_time, end_time) on day.
 
     If timetable_name is given, checks only that saved timetable's schedules.
@@ -215,7 +217,9 @@ def _check_tc_slot_conflicts(
     teacher, team, day, start_time, end_time, timetable_name=None
 ):
     """Return a conflict Response if the slot is taken, else None."""
-    if _teacher_has_schedule_at(teacher.id, team, day, start_time, end_time, timetable_name):
+    if _teacher_has_schedule_at(
+        teacher.id, team, day, start_time, end_time, timetable_name
+    ):
         return Response(
             {
                 "detail": f"{teacher.name} ya tiene una clase que solapa con el tramo {start_time:%H:%M}–{end_time:%H:%M} el {_DAY_LABELS[day]}."
@@ -275,7 +279,9 @@ class TCSessionCreateView(APIView):
             observations=observations,
         )
 
-        return Response({"tc_session": TCSessionSerializer(tc).data}, status=status.HTTP_201_CREATED)
+        return Response(
+            {"tc_session": TCSessionSerializer(tc).data}, status=status.HTTP_201_CREATED
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -349,7 +355,12 @@ class TCSessionSwapView(APIView):
 
         # Check that teacher A can occupy slot B
         if _teacher_has_schedule_at(
-            tc_a.teacher_id, team, tc_b.day, tc_b.start_time, tc_b.end_time, swap_timetable_name
+            tc_a.teacher_id,
+            team,
+            tc_b.day,
+            tc_b.start_time,
+            tc_b.end_time,
+            swap_timetable_name,
         ):
             return Response(
                 {
@@ -363,7 +374,12 @@ class TCSessionSwapView(APIView):
 
         # Check that teacher B can occupy slot A
         if _teacher_has_schedule_at(
-            tc_b.teacher_id, team, tc_a.day, tc_a.start_time, tc_a.end_time, swap_timetable_name
+            tc_b.teacher_id,
+            team,
+            tc_a.day,
+            tc_a.start_time,
+            tc_a.end_time,
+            swap_timetable_name,
         ):
             return Response(
                 {

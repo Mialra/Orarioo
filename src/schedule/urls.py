@@ -4,12 +4,8 @@ from django.urls import path
 
 from common.drf import build_crud_views
 from schedule.views import ScheduleViewSet
-from schedule.views_tc import (
-    TCSessionCreateView,
-    TCSessionDeleteView,
-    TCSessionListView,
-    TCSessionSwapView,
-)
+from schedule.views_tc import (TCSessionCreateView, TCSessionDeleteView,
+                               TCSessionListView, TCSessionSwapView)
 
 schedule_list, schedule_detail = build_crud_views(ScheduleViewSet)
 schedule_generate = ScheduleViewSet.as_view({"post": "generate"})

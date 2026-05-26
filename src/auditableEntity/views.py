@@ -13,20 +13,14 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from auditableEntity.audit import (
-    AUDITABLE_ENTITY_TYPES,
-    ENTITY_LABELS,
-    format_changed_fields_for_export,
-    get_action_label,
-)
+from auditableEntity.audit import (AUDITABLE_ENTITY_TYPES, ENTITY_LABELS,
+                                   format_changed_fields_for_export,
+                                   get_action_label)
 from auditableEntity.models import AuditActionType, AuditEntry
 from auditableEntity.serializers import AuditEntrySerializer
-from common.export_utils import (
-    REPORTLAB_AVAILABLE,
-    build_csv_response,
-    build_table_pdf_response,
-    sanitize_filename_stem,
-)
+from common.export_utils import (REPORTLAB_AVAILABLE, build_csv_response,
+                                 build_table_pdf_response,
+                                 sanitize_filename_stem)
 from common.tenancy import get_active_team
 from user.models import User
 

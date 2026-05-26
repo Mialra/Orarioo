@@ -35,7 +35,8 @@ from datetime import timezone as dt_timezone  # noqa: E402
 from django.contrib.auth import get_user_model  # noqa: E402
 
 from classroom.models import Classroom  # noqa: E402
-from group.models import EducationalStage as GroupEducationalStage  # noqa: E402
+from group.models import \
+    EducationalStage as GroupEducationalStage  # noqa: E402
 from group.models import Group  # noqa: E402
 from schedule.constants import SAVED_TIMETABLE_PREFIX  # noqa: E402
 from schedule.models import Schedule  # noqa: E402

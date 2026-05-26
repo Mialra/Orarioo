@@ -13,12 +13,9 @@ from rest_framework.exceptions import ErrorDetail, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
-from common.errors.exceptions import (
-    NON_FIELD_ERRORS_KEY,
-    AppError,
-    build_error_entry,
-    flatten_error_messages,
-)
+from common.errors.exceptions import (NON_FIELD_ERRORS_KEY, AppError,
+                                      build_error_entry,
+                                      flatten_error_messages)
 
 logger = logging.getLogger(__name__)
 
