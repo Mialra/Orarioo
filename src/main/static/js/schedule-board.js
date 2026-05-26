@@ -141,11 +141,12 @@
     Object.values(scheduleConfig).forEach(function (stageCfg) {
       var windows = buildWindowsFromStageConfig(stageCfg);
       windows.forEach(function (w) {
+        if (w.isRecess) {
+          return;
+        }
         var key = w.start + "-" + w.end;
         if (!byKey.has(key)) {
-          byKey.set(key, { start: w.start, end: w.end, isRecess: w.isRecess, cells: createEmptyDayCells() });
-        } else if (!w.isRecess) {
-          byKey.get(key).isRecess = false;
+          byKey.set(key, { start: w.start, end: w.end, isRecess: false, cells: createEmptyDayCells() });
         }
       });
     });
@@ -153,41 +154,58 @@
   }
 
   /**
-   * Groups mapped sessions into board rows; uses scheduleConfig canonical slots when available.
-   * When scheduleConfig is provided the row structure is derived from the configured stage
-   * slot windows (not from session times), so teachers with sessions in multiple stages
-   * always see a consistent, non-overlapping grid.
+   * Groups mapped sessions into board rows; always starts from a complete base grid.
+   * When scheduleConfig has stages, uses their canonical slot windows as the base so
+   * teachers with sessions in multiple stages see a consistent, non-overlapping grid.
+   * When scheduleConfig is absent or empty, uses DEFAULT_BOARD_ROWS so teachers with
+   * few sessions still see the full day and can add TC sessions anywhere.
    * Input: mappedSessions - array of board session objects from mapSessionForBoard
    *        scheduleConfig - optional schedule_config dict from /api/schedule-config/
    * Output: sorted array of { start, end, isRecess, cells } row objects
    */
   function buildBoardRows(mappedSessions, scheduleConfig) {
-    var byRange;
+    var byRange = new Map();
 
-    if (scheduleConfig) {
-      byRange = new Map();
-      buildCanonicalRowsFromConfig(scheduleConfig).forEach(function (row) {
-        byRange.set(row.start + "-" + row.end, row);
+    var baseRows = (scheduleConfig && Object.keys(scheduleConfig).length > 0)
+      ? buildCanonicalRowsFromConfig(scheduleConfig)
+      : DEFAULT_BOARD_ROWS.map(function (r) { return { start: r[0], end: r[1], isRecess: false }; });
+
+    baseRows.forEach(function (row) {
+      byRange.set(row.start + "-" + row.end, {
+        start: row.start, end: row.end,
+        isRecess: !!row.isRecess,
+        cells: createEmptyDayCells(),
       });
-      mappedSessions.forEach(function (session) {
-        var key = session.startHm + "-" + session.endHm;
-        if (!byRange.has(key)) {
-          byRange.set(key, { start: session.startHm, end: session.endHm, isRecess: false, cells: createEmptyDayCells() });
-        }
+    });
+
+    mappedSessions.forEach(function (session) {
+      var key = session.startHm + "-" + session.endHm;
+      if (!byRange.has(key)) {
+        byRange.set(key, { start: session.startHm, end: session.endHm, isRecess: false, cells: createEmptyDayCells() });
+      }
+      if (!byRange.get(key).isRecess) {
         byRange.get(key).cells[session.dayName].push(session);
-      });
-    } else {
-      byRange = new Map();
-      mappedSessions.forEach(function (session) {
-        var key = session.startHm + "-" + session.endHm;
-        if (!byRange.has(key)) {
-          byRange.set(key, { start: session.startHm, end: session.endHm, isRecess: false, cells: createEmptyDayCells() });
-        }
-        byRange.get(key).cells[session.dayName].push(session);
-      });
-    }
+      }
+    });
 
     var rows = Array.from(byRange.values()).sort(utils.compareRowsByTime);
+
+    rows.forEach(function (row) {
+      row.blockedDays = {};
+      BOARD_DAYS.forEach(function (dayName) {
+        if ((row.cells[dayName] || []).length === 0) {
+          var blocked = mappedSessions.some(function (s) {
+            return s.dayName === dayName
+              && s.startHm < row.end
+              && s.endHm > row.start;
+          });
+          if (blocked) {
+            row.blockedDays[dayName] = true;
+          }
+        }
+      });
+    });
+
     if (rows.length) {
       return rows;
     }
@@ -261,7 +279,7 @@
    */
   function renderEmptyCell(options) {
     var safeOptions = options || {};
-    if (safeOptions.enableTcCreate) {
+    if (safeOptions.enableTcCreate && !safeOptions.tcBlocked) {
       return (
         '<div class="schedule-board-slot-empty schedule-board-slot-empty--tc-add">' +
         '<button class="schedule-board-slot-tc-add" data-add-tc="true" title="Añadir guardia TC" aria-label="Añadir guardia TC">' +
@@ -463,6 +481,10 @@
         var dayCells = BOARD_DAYS.map(function (dayName) {
           var entries = row.cells[dayName] || [];
           var cellKey = utils.createBoardCellKey(dayName, row.start, row.end);
+          var isBlocked = row.blockedDays && row.blockedDays[dayName];
+          var emptyCellOptions = isBlocked
+            ? Object.assign({}, safeOptions, { tcBlocked: true })
+            : safeOptions;
           return (
             '<td class="schedule-board-cell" data-board-day="' +
             dayName +
@@ -479,7 +501,7 @@
                     return renderSessionCard(entry, safeOptions);
                   })
                   .join("")
-              : renderEmptyCell(safeOptions)) +
+              : renderEmptyCell(emptyCellOptions)) +
             "</td>"
           );
         }).join("");
