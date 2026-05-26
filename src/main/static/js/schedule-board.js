@@ -80,67 +80,110 @@
   }
 
   /**
-   * Groups mapped sessions into board rows keyed by time range; falls back to DEFAULT_BOARD_ROWS.
-   * Injects recess rows from scheduleConfig when provided.
+   * Computes all slot windows (session + recess) for one stage config, mirroring
+   * the Python build_windows_from_stage_config logic in slots.py.
+   * Input: cfg - stage config object { start_time, end_time, breaks?, break_start?, break_end? }
+   * Output: array of { start: "HH:MM", end: "HH:MM", isRecess: bool }
+   */
+  function buildWindowsFromStageConfig(cfg) {
+    function toMin(hhmm) {
+      var p = (hhmm || "00:00").split(":");
+      return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+    }
+    function fromMin(m) {
+      var h = Math.floor(m / 60);
+      var min = m % 60;
+      return (h < 10 ? "0" : "") + h + ":" + (min < 10 ? "0" : "") + min;
+    }
+
+    var startMin = toMin(cfg.start_time);
+    var endMin = toMin(cfg.end_time);
+    var durMin = 60;
+
+    var rawBreaks = Array.isArray(cfg.breaks) ? cfg.breaks : [];
+    if (!rawBreaks.length && cfg.break_start && cfg.break_end) {
+      rawBreaks = [{ start: cfg.break_start, end: cfg.break_end }];
+    }
+    var parsedBreaks = rawBreaks
+      .filter(function (b) { return b.start && b.end; })
+      .map(function (b) { return { start: toMin(b.start), end: toMin(b.end) }; })
+      .sort(function (a, b) { return a.start - b.start; });
+
+    var result = [];
+    var segStart = startMin;
+    parsedBreaks.forEach(function (b) {
+      var cursor = segStart;
+      while (cursor < b.start) {
+        var slotEnd = Math.min(cursor + durMin, b.start);
+        result.push({ start: fromMin(cursor), end: fromMin(slotEnd), isRecess: false });
+        cursor = slotEnd;
+      }
+      result.push({ start: fromMin(b.start), end: fromMin(b.end), isRecess: true });
+      segStart = b.end;
+    });
+    var cursor = segStart;
+    while (cursor < endMin) {
+      var slotEnd = Math.min(cursor + durMin, endMin);
+      result.push({ start: fromMin(cursor), end: fromMin(slotEnd), isRecess: false });
+      cursor = slotEnd;
+    }
+    return result;
+  }
+
+  /**
+   * Builds the canonical row set from all stages in scheduleConfig.
+   * Deduplicates by "HH:MM-HH:MM" key; a slot that is a session in any stage is never marked recess.
+   * Input: scheduleConfig - schedule_config dict from /api/schedule-config/
+   * Output: sorted array of { start, end, isRecess, cells } row objects
+   */
+  function buildCanonicalRowsFromConfig(scheduleConfig) {
+    var byKey = new Map();
+    Object.values(scheduleConfig).forEach(function (stageCfg) {
+      var windows = buildWindowsFromStageConfig(stageCfg);
+      windows.forEach(function (w) {
+        var key = w.start + "-" + w.end;
+        if (!byKey.has(key)) {
+          byKey.set(key, { start: w.start, end: w.end, isRecess: w.isRecess, cells: createEmptyDayCells() });
+        } else if (!w.isRecess) {
+          byKey.get(key).isRecess = false;
+        }
+      });
+    });
+    return Array.from(byKey.values()).sort(utils.compareRowsByTime);
+  }
+
+  /**
+   * Groups mapped sessions into board rows; uses scheduleConfig canonical slots when available.
+   * When scheduleConfig is provided the row structure is derived from the configured stage
+   * slot windows (not from session times), so teachers with sessions in multiple stages
+   * always see a consistent, non-overlapping grid.
    * Input: mappedSessions - array of board session objects from mapSessionForBoard
    *        scheduleConfig - optional schedule_config dict from /api/schedule-config/
    * Output: sorted array of { start, end, isRecess, cells } row objects
    */
   function buildBoardRows(mappedSessions, scheduleConfig) {
-    var byRange = new Map();
-
-    mappedSessions.forEach(function (session) {
-      var rangeKey = session.startHm + "-" + session.endHm;
-      if (!byRange.has(rangeKey)) {
-        byRange.set(rangeKey, {
-          start: session.startHm,
-          end: session.endHm,
-          isRecess: false,
-          cells: createEmptyDayCells(),
-        });
-      }
-      byRange.get(rangeKey).cells[session.dayName].push(session);
-    });
+    var byRange;
 
     if (scheduleConfig) {
-      var sessionRanges = [];
-      byRange.forEach(function (row) {
-        if (!row.isRecess) {
-          sessionRanges.push({ start: row.start, end: row.end });
-        }
+      byRange = new Map();
+      buildCanonicalRowsFromConfig(scheduleConfig).forEach(function (row) {
+        byRange.set(row.start + "-" + row.end, row);
       });
-
-      Object.values(scheduleConfig).forEach(function (stageCfg) {
-        var breakList = Array.isArray(stageCfg.breaks) ? stageCfg.breaks : [];
-        if (!breakList.length && stageCfg.break_start && stageCfg.break_end) {
-          breakList = [{ start: stageCfg.break_start, end: stageCfg.break_end }];
+      mappedSessions.forEach(function (session) {
+        var key = session.startHm + "-" + session.endHm;
+        if (!byRange.has(key)) {
+          byRange.set(key, { start: session.startHm, end: session.endHm, isRecess: false, cells: createEmptyDayCells() });
         }
-        breakList.forEach(function (b) {
-          if (!b.start || !b.end) {
-            return;
-          }
-          var overlapsSession = sessionRanges.some(function (r) {
-            return r.start < b.end && b.start < r.end;
-          });
-          var hasSessionBefore = sessionRanges.some(function (r) {
-            return r.end <= b.start;
-          });
-          var hasSessionAfter = sessionRanges.some(function (r) {
-            return r.start >= b.end;
-          });
-          if (overlapsSession || !hasSessionBefore) {
-            return;
-          }
-          var key = b.start + "-" + b.end;
-          if (!byRange.has(key)) {
-            byRange.set(key, {
-              start: b.start,
-              end: b.end,
-              isRecess: true,
-              cells: createEmptyDayCells(),
-            });
-          }
-        });
+        byRange.get(key).cells[session.dayName].push(session);
+      });
+    } else {
+      byRange = new Map();
+      mappedSessions.forEach(function (session) {
+        var key = session.startHm + "-" + session.endHm;
+        if (!byRange.has(key)) {
+          byRange.set(key, { start: session.startHm, end: session.endHm, isRecess: false, cells: createEmptyDayCells() });
+        }
+        byRange.get(key).cells[session.dayName].push(session);
       });
     }
 
@@ -398,7 +441,7 @@
         return left.start - right.start;
       });
 
-    var rows = buildBoardRows(mappedSessions, safeOptions.enableTcCreate ? null : (safeOptions.scheduleConfig || null));
+    var rows = buildBoardRows(mappedSessions, safeOptions.scheduleConfig || null);
 
     var rowHtml = rows
       .map(function (row) {

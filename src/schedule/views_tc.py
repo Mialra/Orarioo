@@ -34,8 +34,8 @@ def _is_teacher_unavailable(teacher, day, start_time, end_time):
     return False
 
 
-def _teacher_has_schedule_at(teacher_id, team, day, start_time, timetable_name=None):
-    """Return True if the teacher already has a Schedule at (day, start_time) for the team.
+def _teacher_has_schedule_at(teacher_id, team, day, start_time, end_time, timetable_name=None):
+    """Return True if the teacher has any Schedule that overlaps [start_time, end_time) on day.
 
     If timetable_name is given, checks only that saved timetable's schedules.
     Otherwise checks only the current draft (excludes all saved timetables).
@@ -45,7 +45,8 @@ def _teacher_has_schedule_at(teacher_id, team, day, start_time, timetable_name=N
         teacher_id=teacher_id,
         team=team,
         start_time__iso_week_day=day + 1,
-        start_time__time=start_time,
+        start_time__time__lt=end_time,
+        end_time__time__gt=start_time,
     )
     if timetable_name:
         qs = qs.filter(observations=f"{SAVED_TIMETABLE_PREFIX}: {timetable_name}")
@@ -55,9 +56,9 @@ def _teacher_has_schedule_at(teacher_id, team, day, start_time, timetable_name=N
 
 
 def _teacher_has_tc_at(
-    teacher_id, team, day, start_time, exclude_id=None, timetable_name=None
+    teacher_id, team, day, start_time, end_time, exclude_id=None, timetable_name=None
 ):
-    """Return True if the teacher already has a TCSession at (day, start_time) for the team.
+    """Return True if the teacher has any TCSession that overlaps [start_time, end_time) on day.
 
     If timetable_name is given, checks only that saved timetable's TC sessions.
     Otherwise checks only draft TC sessions (observations="").
@@ -68,7 +69,8 @@ def _teacher_has_tc_at(
         team=team,
         observations=obs,
         day=day,
-        start_time=start_time,
+        start_time__lt=end_time,
+        end_time__gt=start_time,
     )
     if exclude_id is not None:
         qs = qs.exclude(pk=exclude_id)
@@ -213,19 +215,19 @@ def _check_tc_slot_conflicts(
     teacher, team, day, start_time, end_time, timetable_name=None
 ):
     """Return a conflict Response if the slot is taken, else None."""
-    if _teacher_has_schedule_at(teacher.id, team, day, start_time, timetable_name):
+    if _teacher_has_schedule_at(teacher.id, team, day, start_time, end_time, timetable_name):
         return Response(
             {
-                "detail": f"{teacher.name} ya tiene una clase el {_DAY_LABELS[day]} a las {start_time:%H:%M}."
+                "detail": f"{teacher.name} ya tiene una clase que solapa con el tramo {start_time:%H:%M}–{end_time:%H:%M} el {_DAY_LABELS[day]}."
             },
             status=status.HTTP_409_CONFLICT,
         )
     if _teacher_has_tc_at(
-        teacher.id, team, day, start_time, timetable_name=timetable_name
+        teacher.id, team, day, start_time, end_time, timetable_name=timetable_name
     ):
         return Response(
             {
-                "detail": f"{teacher.name} ya tiene una guardia TC el {_DAY_LABELS[day]} a las {start_time:%H:%M}."
+                "detail": f"{teacher.name} ya tiene una guardia TC que solapa con el tramo {start_time:%H:%M}–{end_time:%H:%M} el {_DAY_LABELS[day]}."
             },
             status=status.HTTP_409_CONFLICT,
         )
