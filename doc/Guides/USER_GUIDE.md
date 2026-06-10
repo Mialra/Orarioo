@@ -46,7 +46,7 @@ Esta sección cubre todo lo relacionado con la creación de tu cuenta en Orarioo
 
 ℹ️ **Nota:** El botón **Crear cuenta** permanece desactivado hasta que ambas casillas de aceptación estén marcadas.
 
-![alt text](/doc/manuales/img/register.png)
+![alt text](/doc/guides/img/register.png)
 _Figura 1. Formulario de registro de nuevo usuario._
 
 ### 1.2 Inicio de sesión
@@ -73,7 +73,7 @@ La primera vez que creas un equipo, Orarioo te guía por un asistente de dos pas
 1. Introduce el **Nombre del centro**, por ejemplo: "IES Ejemplo".
 2. Haz clic en **Continuar →**.
 
-![alt text](/doc/manuales/img/onboarding_school.png)
+![alt text](/doc/guides/img/onboarding_school.png)
 _Figura 2. Paso 1 del asistente inicial: nombre del centro._
 
 ### 2.2 Paso 2: Configurar etapas educativas
@@ -98,7 +98,7 @@ Una vez configuradas todas las etapas, haz clic en **Guardar y continuar →**.
 
 ℹ️ **Nota:** Puedes saltar este paso haciendo clic en **Saltar paso** y configurar los tramos más adelante desde la sección **Administración**.
 
-![alt text](/doc/manuales/img/onboarding_stages.png)
+![alt text](/doc/guides/img/onboarding_stages.png)
 _Figura 3. Paso 2 del asistente inicial: configuración de etapas educativas y tramos horarios._
 
 ### 2.3 Modificar los tramos horarios después de la configuración inicial
@@ -140,7 +140,7 @@ Los equipos de colaboración son la unidad de trabajo en Orarioo. Todos los dato
 
 ℹ️ **Nota:** La invitación solo se enviará si el correo electrónico corresponde a una cuenta registrada en Orarioo.
 
-![alt text](/doc/manuales/img/invite_user.png)
+![alt text](/doc/guides/img/invite_user.png)
 _Figura 4. Formulario para invitar a un usuario al equipo._
 
 ### 3.4 Ver invitaciones recibidas y responder
@@ -149,7 +149,7 @@ _Figura 4. Formulario para invitar a un usuario al equipo._
 2. Selecciona **Ver invitaciones pendientes**. El número junto al botón indica cuántas tienes sin revisar.
 3. Para cada invitación pendiente, puedes **aceptar** o **rechazar**.
 
-![alt text](/doc/manuales/img/invite_pending.png)
+![alt text](/doc/guides/img/invite_pending.png)
 
 _Figura 5. Lista de invitaciones pendientes de respuesta._
 
@@ -178,7 +178,7 @@ Antes de generar un horario, debes dar de alta a todos los profesores del centro
 
 Accede a esta sección desde **Administración → Profesores** en la barra de navegación superior.
 
-![alt text](/doc/manuales/img/teachers_tab.png)
+![alt text](/doc/guides/img/teachers_tab.png)
 _Figura 6. Pantalla de administración de profesores._
 
 ### 4.1 Crear un profesor
@@ -204,7 +204,7 @@ _Figura 6. Pantalla de administración de profesores._
 
 ℹ️ **Nota:** El nombre de cada elemento (profesor, curso, asignatura o aula) debe ser único dentro del equipo. No pueden existir dos elementos del mismo tipo con el mismo nombre (la comparación no distingue mayúsculas de minúsculas).
 
-![alt text](/doc/manuales/img/teachers_create.png)
+![alt text](/doc/guides/img/teachers_create.png)
 
 _Figura 7. Modal de creación de profesor con cuadrícula de disponibilidad semanal._
 
@@ -231,7 +231,7 @@ Los cursos representan los cursos del centro (por ejemplo, "1º ESO A", "3º Pri
 
 Accede a esta sección desde **Administración → Cursos** en la barra de navegación superior.
 
-![alt text](/doc/manuales/img/groups_tab.png)
+![alt text](/doc/guides/img/groups_tab.png)
 _Figura 8. Pantalla de administración de cursos._
 
 ### 5.1 Crear un curso
@@ -242,7 +242,7 @@ _Figura 8. Pantalla de administración de cursos._
    - **Etapa educativa**: Infantil, Primaria, ESO, Bachillerato u otra etapa personalizada.
 3. Haz clic en **Crear**.
 
-![alt text](/doc/manuales/img/groups_create.png)
+![alt text](/doc/guides/img/groups_create.png)
 _Figura 9. Modal de creación de curso._
 
 ### 5.2 Listar, ver detalle, editar y eliminar cursos
@@ -259,7 +259,7 @@ Las aulas son los espacios físicos donde se imparten las clases. El generador l
 
 Accede a esta sección desde **Administración → Aulas** en la barra de navegación superior.
 
-![alt text](/doc/manuales/img/classrooms_tab.png)
+![alt text](/doc/guides/img/classrooms_tab.png)
 _Figura 10. Pantalla de administración de aulas._
 
 ### 6.1 Crear un aula
@@ -268,7 +268,7 @@ _Figura 10. Pantalla de administración de aulas._
 2. Introduce el **Nombre**: por ejemplo, "Aula 1º ESO" o "Laboratorio de Ciencias".
 3. Haz clic en **Crear**.
 
-![alt text](/doc/manuales/img/classrooms_create.png)
+![alt text](/doc/guides/img/classrooms_create.png)
 _Figura 11. Modal de creación de aula._
 
 ### 6.2 Listar, ver detalle, editar y eliminar aulas
@@ -283,7 +283,7 @@ Las asignaturas vinculan un profesor, un curso y un número de horas semanales. 
 
 Accede a esta sección desde **Administración → Asignaturas** en la barra de navegación superior.
 
-![alt text](/doc/manuales/img/subjects_tab.png)
+![alt text](/doc/guides/img/subjects_tab.png)
 _Figura 12. Pantalla de administración de asignaturas._
 
 ### 7.1 Crear una asignatura
@@ -298,7 +298,7 @@ _Figura 12. Pantalla de administración de asignaturas._
    - **Disponibilidad semanal**: mismo funcionamiento que la disponibilidad semanal para profesores (apartado 4.1).
 3. Haz clic en **Crear**.
 
-![alt text](/doc/manuales/img/subjects_create.png)
+![alt text](/doc/guides/img/subjects_create.png)
 
 _Figura 13. Modal de creación de asignatura con cuadrícula de disponibilidad._
 
@@ -316,7 +316,7 @@ Una vez dados de alta profesores, cursos, asignaturas y aulas, ya puedes generar
 
 Accede a esta sección desde la pestaña **Generador** en la barra de navegación superior.
 
-![alt text](/doc/manuales/img/dashboard.png)
+![alt text](/doc/guides/img/dashboard.png)
 _Figura 14. Panel de control del generador de horarios._
 
 ### 8.1 Lanzar la generación
@@ -331,7 +331,7 @@ El sistema lanzará la generación en segundo plano. Verás una barra de progres
 - **Fase 2 — Optimizando el horario:** con una solución válida encontrada, el algoritmo mejora la distribución durante el tiempo de optimización configurado.
 - **Fase 3 — Ultimando detalles:** validación final y preparación para mostrar el resultado.
 
-![alt text](/doc/manuales/img/schedule_generate.png)
+![alt text](/doc/guides/img/schedule_generate.png)
 
 _Figura 15. Barra de progreso de la generación con sus tres fases._
 
@@ -378,7 +378,7 @@ Estas opciones guían la fase de optimización. Desactiva aquellas que no consid
 
 - **Semilla (reproducibilidad):** introduce un número entero para obtener siempre el mismo horario con la misma configuración. Déjalo vacío para obtener un resultado diferente en cada generación.
 
-![alt text](/doc/manuales/img/schedule_configuration.png)
+![alt text](/doc/guides/img/schedule_configuration.png)
 
 _Figura 16. Modal de configuración de la generación del horario._
 
@@ -392,7 +392,7 @@ Una vez finalizada la generación con éxito, el horario aparece como **Borrador
 
 El horario quedará almacenado en la sección **Guardados**.
 
-![alt text](/doc/manuales/img/schedule_save.png)
+![alt text](/doc/guides/img/schedule_save.png)
 
 _Figura 17. Modal para guardar el horario generado._
 
@@ -404,7 +404,7 @@ En la sección **Guardados** puedes consultar, renombrar, eliminar y trabajar so
 
 Accede desde la pestaña **Guardados** en la barra de navegación superior.
 
-![alt text](/doc/manuales/img/schedule_tab.png)
+![alt text](/doc/guides/img/schedule_tab.png)
 _Figura 18. Pantalla de horarios guardados._
 
 ### 9.1 Listar horarios guardados
@@ -436,7 +436,7 @@ Haz clic sobre el nombre del horario guardado para acceder a su vista detallada.
 
 Una vez generado (o cargado desde los guardados), el horario se muestra en una tabla semanal interactiva donde puedes revisar las sesiones y ajustarlas manualmente.
 
-![alt text](/doc/manuales/img/schedule_view.png)
+![alt text](/doc/guides/img/schedule_view.png)
 _Figura 19. Vista principal del horario semanal interactivo._
 
 ### 10.1 Visualizar el horario
@@ -455,7 +455,7 @@ Debajo de la cuadrícula, la página muestra automáticamente un **listado de se
 
 ℹ️ **Nota:** Para consultar la carga horaria de los profesores, haz clic en el botón para filtrar por profesor. El listado resultante muestra las horas asignadas a ese profesor.
 
-![alt text](/doc/manuales/img/schedule_teachers_hours.png)
+![alt text](/doc/guides/img/schedule_teachers_hours.png)
 
 _Figura 20. Listado de sesiones filtrado por profesor para revisar su carga horaria._
 
@@ -467,7 +467,7 @@ _Figura 20. Listado de sesiones filtrado por profesor para revisar su carga hora
 
 ℹ️ **Nota:** Si no aparece ninguna opción verde, significa que no existe ningún intercambio válido para esa sesión con las restricciones actuales.
 
-![alt text](/doc/manuales/img/schedule_move_sessions.png)
+![alt text](/doc/guides/img/schedule_move_sessions.png)
 _Figura 21. Intercambio de sesiones: posiciones válidas resaltadas en verde._
 
 ### 10.3 Exportar el horario
@@ -487,7 +487,7 @@ _Figura 21. Intercambio de sesiones: posiciones válidas resaltadas en verde._
 
 ℹ️ **Nota:** Puedes combinar varios tipos de información en una misma exportación seleccionando más de una opción.
 
-![alt text](/doc/manuales/img/schedule_export.png)
+![alt text](/doc/guides/img/schedule_export.png)
 
 _Figura 22. Modal de exportación del horario._
 
@@ -497,7 +497,7 @@ Las guardias TC son horas en las que un profesor está disponible en el centro p
 
 **Asignación automática:** si en el modal de generación introduces un número mayor que 0 en el campo **Docentes de guardia (TC) por franja**, el algoritmo asignará guardias TC automáticamente tras generar el horario lectivo.
 
-![alt text](/doc/manuales/img/schedule_tc_view.png)
+![alt text](/doc/guides/img/schedule_tc_view.png)
 _Figura 23. Vista del horario con sesiones de guardia TC asignadas._
 
 **Crear una guardia manualmente:**
@@ -520,7 +520,7 @@ El registro de cambios guarda automáticamente un historial de todas las accione
 
 Accede desde la pestaña **Registro de cambios** en la barra de navegación superior.
 
-![alt text](/doc/manuales/img/audit_tab.png)
+![alt text](/doc/guides/img/audit_tab.png)
 _Figura 24. Pantalla del registro de cambios con filtros disponibles._
 
 ### 11.1 Filtrar el registro
@@ -551,7 +551,7 @@ Para limpiar todos los filtros y volver a ver el registro completo, haz clic en 
 
 ℹ️ **Nota:** La exportación incluirá únicamente los registros que coincidan con los filtros activos en ese momento.
 
-![alt text](/doc/manuales/img/audit_export.png)
+![alt text](/doc/guides/img/audit_export.png)
 
 _Figura 25. Modal de exportación del registro de cambios._
 
@@ -563,7 +563,7 @@ Esta sección cubre las acciones relacionadas con tu cuenta personal de usuario 
 
 Accede a esta sección desde tu avatar en la barra de navegación → **Mi perfil**.
 
-![alt text](/doc/manuales/img/profile_view.png)
+![alt text](/doc/guides/img/profile_view.png)
 _Figura 26. Página de perfil de usuario._
 
 ### 12.1 Actualizar el perfil de usuario
@@ -603,7 +603,7 @@ _Figura 26. Página de perfil de usuario._
 
 ℹ️ **Nota:** La eliminación es una anonimización: tus datos personales (nombre, email, contraseña) quedan borrados, pero los registros de auditoría del equipo conservan un identificador anonimizado por motivos de seguridad.
 
-![alt text](/doc/manuales/img/profile_delete.png)
+![alt text](/doc/guides/img/profile_delete.png)
 
 _Figura 27. Modal de confirmación de eliminación de cuenta._
 
