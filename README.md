@@ -318,4 +318,4 @@ flake8 . && black . && isort .
 - `develop` — integration branch
 - `feature/*` — new features
 - `fix/*` — bug fixes
-- `doc/*` — documentation
+- `doc` — documentation
